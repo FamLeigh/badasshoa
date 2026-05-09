@@ -1,0 +1,102 @@
+/* BadassHOA design tokens
+ * Stripe / Ramp / Mercury-inspired — confident color, generous whitespace, opinionated.
+ * Edit values here; never hardcode colors/spacing/radius elsewhere. */
+:root {
+    /* --- brand --- */
+    --color-navy:      #0f1f3d;
+    --color-navy-700:  #15295a;
+    --color-navy-500:  #1f3a82;
+    --color-navy-200:  #cfd6e4;
+
+    --color-orange:    #f05a28;
+    --color-orange-600:#d44617;
+    --color-orange-100:#ffe4d8;
+
+    --color-surface:   #f8f7f4;
+    --color-surface-2: #f1efe8;
+    --color-white:     #ffffff;
+
+    --color-text:      #1a1a2e;
+    --color-text-soft: #4a4a63;
+    --color-muted:     #7a7a8c;
+
+    --color-border:    #e5e2db;
+    --color-border-strong: #cfccc1;
+
+    --color-success:   #2e7d32;
+    --color-success-bg:#e6f4e7;
+    --color-error:     #c0392b;
+    --color-error-bg:  #fdecea;
+    --color-warning:   #b6822a;
+    --color-warning-bg:#fbf2dc;
+    --color-info:      #2660a8;
+    --color-info-bg:   #e6effa;
+
+    /* --- typography ---
+     * Single-family system: Inter for everything. Hierarchy comes from weight + size,
+     * not from a separate display face. Modern, ultra-readable, what Linear/Stripe/Vercel use. */
+    --font-display: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-body:    'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-mono:    ui-monospace, SFMono-Regular, Menlo, monospace;
+
+    --fs-xs:   0.75rem;     /* 12 */
+    --fs-sm:   0.875rem;    /* 14 */
+    --fs-md:   1rem;        /* 16 */
+    --fs-lg:   1.125rem;    /* 18 */
+    --fs-xl:   1.375rem;    /* 22 */
+    --fs-2xl:  1.75rem;     /* 28 */
+    --fs-3xl:  2.25rem;     /* 36 */
+    --fs-4xl:  3rem;        /* 48 */
+    --fs-5xl:  4rem;        /* 64 */
+    --fs-display: clamp(2.75rem, 6vw, 4.5rem);
+
+    --lh-tight:  1.1;
+    --lh-snug:   1.25;
+    --lh-normal: 1.5;
+    --lh-loose:  1.65;
+
+    /* --- spacing (4px base) --- */
+    --sp-1:  0.25rem;
+    --sp-2:  0.5rem;
+    --sp-3:  0.75rem;
+    --sp-4:  1rem;
+    --sp-5:  1.25rem;
+    --sp-6:  1.5rem;
+    --sp-8:  2rem;
+    --sp-10: 2.5rem;
+    --sp-12: 3rem;
+    --sp-16: 4rem;
+    --sp-20: 5rem;
+    --sp-24: 6rem;
+    --sp-32: 8rem;
+
+    /* --- radius --- */
+    --r-xs: 4px;
+    --r-sm: 6px;
+    --r-md: 10px;
+    --r-lg: 14px;
+    --r-xl: 20px;
+    --r-pill: 999px;
+
+    /* --- shadows --- */
+    --shadow-1: 0 1px 2px rgba(15,31,61,0.06), 0 1px 1px rgba(15,31,61,0.04);
+    --shadow-2: 0 4px 12px rgba(15,31,61,0.08), 0 2px 4px rgba(15,31,61,0.04);
+    --shadow-3: 0 12px 32px rgba(15,31,61,0.12), 0 4px 12px rgba(15,31,61,0.06);
+    --shadow-4: 0 24px 64px rgba(15,31,61,0.18), 0 8px 24px rgba(15,31,61,0.08);
+    --shadow-pop:0 0 0 4px rgba(240,90,40,0.18);
+
+    /* --- layout --- */
+    --container: 1180px;
+    --container-narrow: 760px;
+    --nav-h: 72px;
+
+    /* --- motion --- */
+    --t-fast: 120ms cubic-bezier(.2,.7,.3,1);
+    --t-med:  220ms cubic-bezier(.2,.7,.3,1);
+    --t-slow: 360ms cubic-bezier(.2,.7,.3,1);
+
+    /* --- z --- */
+    --z-nav: 50;
+    --z-overlay: 80;
+    --z-modal: 100;
+}

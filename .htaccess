@@ -1,0 +1,54 @@
+# BadassHOA — root Apache config
+# Works on MAMP local and Hostinger shared hosting (Apache 2.4 / LiteSpeed-compatible).
+
+DirectoryIndex index.php index.html
+Options -Indexes -MultiViews
+
+# --- Block dotfiles, configs, and migration SQL from web access -----------
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>
+
+<FilesMatch "^(config\.php|composer\.(json|lock)|package(-lock)?\.json|README\.md|CLAUDE\.md|DEPLOY\.md|badassHOA_claude_code_instructions\.md)$">
+    Require all denied
+</FilesMatch>
+
+<FilesMatch "\.(sql|md|log|sh|env)$">
+    Require all denied
+</FilesMatch>
+
+# Note: /storage/ and its subtree are blocked by storage/.htaccess (Require all denied).
+# We can't `<Directory>` here — that's a server-config-only directive. The .htaccess
+# inside storage/ is the right place for that scope.
+
+# --- Security headers ----------------------------------------------------
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options       "nosniff"
+    Header always set X-Frame-Options              "SAMEORIGIN"
+    Header always set Referrer-Policy              "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy           "camera=(), microphone=(), geolocation=()"
+    # HSTS: enable only after you've confirmed HTTPS works end-to-end on production.
+    # Header always set Strict-Transport-Security  "max-age=15552000; includeSubDomains"
+</IfModule>
+
+# --- Cache static assets aggressively (bust via filename if needed) -------
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType text/css                "access plus 30 days"
+    ExpiresByType application/javascript  "access plus 30 days"
+    ExpiresByType image/svg+xml           "access plus 30 days"
+    ExpiresByType image/png               "access plus 30 days"
+    ExpiresByType image/jpeg              "access plus 30 days"
+    ExpiresByType image/webp              "access plus 30 days"
+    ExpiresByType font/woff2              "access plus 1 year"
+</IfModule>
+
+# --- Force HTTPS on production -------------------------------------------
+# Hostinger usually does this at the platform level; uncomment if your plan doesn't.
+# <IfModule mod_rewrite.c>
+#     RewriteEngine On
+#     RewriteCond %{HTTPS} off
+#     RewriteCond %{HTTP_HOST} !^localhost [NC]
+#     RewriteCond %{HTTP_HOST} !^badasshoa\.com:8890$ [NC]
+#     RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]
+# </IfModule>

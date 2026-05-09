@@ -1,0 +1,51 @@
+<?php
+// Gatekeeper for serving files stored outside the web root.
+// /dashboard/file.php?type=document&id=42
+declare(strict_types=1);
+require __DIR__ . '/_bootstrap.php';
+
+$type = $_GET['type'] ?? '';
+$id   = (int)($_GET['id'] ?? 0);
+if (!$id) { http_response_code(404); die('Not found'); }
+
+if ($type === 'document') {
+    $stmt = db()->prepare('SELECT * FROM documents WHERE id = ? AND association_id = ?');
+    $stmt->execute([$id, $assocId]);
+    $row = $stmt->fetch();
+    if (!$row) { http_response_code(404); die('Not found'); }
+
+    // Access-level enforcement
+    $userRank = ROLE_RANK[$_SESSION['role'] ?? ''] ?? 0;
+    if ($row['access_level'] === 'board_only' && $userRank < ROLE_RANK['board_member']) {
+        http_response_code(403); die('Forbidden');
+    }
+    $relative = $row['file_path'];
+    $filename = $row['title'];
+    $type_h   = $row['file_type'];
+} elseif ($type === 'media') {
+    $stmt = db()->prepare('SELECT * FROM media WHERE id = ? AND association_id = ?');
+    $stmt->execute([$id, $assocId]);
+    $row = $stmt->fetch();
+    if (!$row) { http_response_code(404); die('Not found'); }
+    if ($row['visibility'] === 'private') {
+        $userRank = ROLE_RANK[$_SESSION['role'] ?? ''] ?? 0;
+        if ($userRank < ROLE_RANK['board_member']) { http_response_code(403); die('Forbidden'); }
+    }
+    $relative = $row['file_path'];
+    $filename = $row['file_name'] ?: basename($relative);
+    $type_h   = $row['file_type'];
+} else {
+    http_response_code(400); die('Bad request');
+}
+
+$absPath = storage_path($relative);
+if (!is_file($absPath)) { http_response_code(404); die('File missing'); }
+
+audit('file.served', ['type' => $type, 'id' => $id], $id, $type);
+
+header('Content-Type: ' . ($type_h ?: 'application/octet-stream'));
+header('Content-Length: ' . filesize($absPath));
+header('Content-Disposition: inline; filename="' . str_replace('"', '', $filename) . '"');
+header('X-Content-Type-Options: nosniff');
+header('Cache-Control: private, max-age=300');
+readfile($absPath);

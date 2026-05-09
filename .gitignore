@@ -1,0 +1,16 @@
+## Template .gitignore file from MAMP PRO
+
+# On macOS you should ignore .DS_Store files.
+.DS_Store
+
+# Tenant uploads and runtime logs (never commit these)
+/storage/uploads/*
+!/storage/uploads/.gitkeep
+/storage/logs/*
+!/storage/logs/.gitkeep
+
+# Local environment overrides — never commit real secrets
+/.env
+/.env.local
+/config.php
+/config.local.php

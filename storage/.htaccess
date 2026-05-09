@@ -1,0 +1,2 @@
+# Block all direct web access to /storage/. Files are served via PHP gatekeepers.
+Require all denied
