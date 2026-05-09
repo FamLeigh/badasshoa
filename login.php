@@ -70,13 +70,6 @@ require __DIR__ . '/includes/header.php';
             <span class="muted">No account? <a href="/signup.php">Sign up</a></span>
         </div>
 
-        <?php if ((config()['env'] ?? 'production') === 'local'): ?>
-        <div class="muted" style="margin-top: var(--sp-6); font-size: var(--fs-xs); border-top: 1px solid var(--color-border); padding-top: var(--sp-4);">
-            <strong>Demo logins (local only):</strong><br>
-            admin@badasshoa.com / changeme!  →  super admin<br>
-            board@demo.badasshoa.com / changeme!  →  demo board
-        </div>
-        <?php endif; ?>
     </div>
 </section>
 

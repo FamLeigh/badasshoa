@@ -3,19 +3,38 @@ require __DIR__ . '/_bootstrap.php';
 
 // Quick stats (tenant-scoped).
 $stats = [];
-$stats['units'] = (int)$association['unit_count'];
+// Registered units = distinct unit numbers with at least one non-inactive member
+$unitsStmt = db()->prepare(
+    "SELECT COUNT(DISTINCT unit_number) FROM users
+     WHERE association_id = ?
+       AND status <> 'inactive'
+       AND unit_number IS NOT NULL
+       AND unit_number <> ''"
+);
+$unitsStmt->execute([$assocId]);
+$stats['units'] = (int)$unitsStmt->fetchColumn();
 
-$members = db()->prepare('SELECT COUNT(*) FROM users WHERE association_id = ? AND status = "active"');
-$members->execute([$assocId]);
-$stats['members'] = (int)$members->fetchColumn();
+// Board members = users with any board-level role
+$boardCount = db()->prepare(
+    "SELECT COUNT(*) FROM users
+     WHERE association_id = ? AND status = 'active'
+       AND role IN ('board_admin','board_member','property_manager')"
+);
+$boardCount->execute([$assocId]);
+$stats['board_members'] = (int)$boardCount->fetchColumn();
 
-$recentAnn = db()->prepare('SELECT COUNT(*) FROM announcements WHERE association_id = ? AND published_at > (NOW() - INTERVAL 7 DAY)');
-$recentAnn->execute([$assocId]);
-$stats['recent_announcements'] = (int)$recentAnn->fetchColumn();
+// Total announcements (no time filter)
+$annCount = db()->prepare('SELECT COUNT(*) FROM announcements WHERE association_id = ?');
+$annCount->execute([$assocId]);
+$stats['announcements'] = (int)$annCount->fetchColumn();
 
 $docs = db()->prepare('SELECT COUNT(*) FROM documents WHERE association_id = ?');
 $docs->execute([$assocId]);
 $stats['documents'] = (int)$docs->fetchColumn();
+
+$comms = db()->prepare('SELECT COUNT(*) FROM committees WHERE association_id = ?');
+$comms->execute([$assocId]);
+$stats['committees'] = (int)$comms->fetchColumn();
 
 // Latest 5 announcements.
 $annStmt = db()->prepare(
@@ -50,11 +69,27 @@ require __DIR__ . '/../includes/header.php';
         </div>
     </div>
 
-    <div class="grid grid--4" style="margin-bottom: var(--sp-8);">
-        <div class="stat"><div class="stat__label">Units</div><div class="stat__value"><?= (int)$stats['units'] ?></div></div>
-        <div class="stat"><div class="stat__label">Active members</div><div class="stat__value"><?= (int)$stats['members'] ?></div></div>
-        <div class="stat"><div class="stat__label">Posts (7 days)</div><div class="stat__value"><?= (int)$stats['recent_announcements'] ?></div></div>
-        <div class="stat"><div class="stat__label">Documents</div><div class="stat__value"><?= (int)$stats['documents'] ?></div></div>
+    <div class="grid grid--5" style="margin-bottom: var(--sp-8);">
+        <a class="stat" href="/dashboard/directory.php">
+            <div class="stat__label">Units</div>
+            <div class="stat__value"><?= (int)$stats['units'] ?></div>
+        </a>
+        <a class="stat" href="/dashboard/directory.php">
+            <div class="stat__label">Board members</div>
+            <div class="stat__value"><?= (int)$stats['board_members'] ?></div>
+        </a>
+        <a class="stat" href="/dashboard/communications.php">
+            <div class="stat__label">Posts</div>
+            <div class="stat__value"><?= (int)$stats['announcements'] ?></div>
+        </a>
+        <a class="stat" href="/dashboard/documents.php">
+            <div class="stat__label">Documents</div>
+            <div class="stat__value"><?= (int)$stats['documents'] ?></div>
+        </a>
+        <a class="stat" href="/dashboard/committees.php">
+            <div class="stat__label">Committees</div>
+            <div class="stat__value"><?= (int)$stats['committees'] ?></div>
+        </a>
     </div>
 
     <div class="grid grid--2" style="align-items:start;">

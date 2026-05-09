@@ -4,43 +4,154 @@ require __DIR__ . '/_bootstrap.php';
 $user = current_user();
 $canManage = (ROLE_RANK[$user['role']] ?? 0) >= ROLE_RANK['board_admin'];
 $flashError = null;
+$importSummary = null;
+
+// --- CSV bulk import (board admin only) ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'import') {
+    csrf_check();
+    if (!$canManage) { http_response_code(403); die('Forbidden'); }
+
+    if (!isset($_FILES['csv']) || $_FILES['csv']['error'] !== UPLOAD_ERR_OK) {
+        $flashError = 'CSV upload failed.';
+    } elseif ($_FILES['csv']['size'] > 1 * 1024 * 1024) {
+        $flashError = 'Max CSV size is 1 MB.';
+    } else {
+        $fh = fopen($_FILES['csv']['tmp_name'], 'r');
+        if (!$fh) {
+            $flashError = 'Could not read CSV.';
+        } else {
+            $added = 0; $skipped = 0; $errors = [];
+            $row = 0;
+            $headerMap = null;
+
+            while (($cols = fgetcsv($fh)) !== false) {
+                $row++;
+                if ($cols === [null] || (count($cols) === 1 && trim((string)$cols[0]) === '')) continue;
+
+                // First non-empty row = header
+                if ($headerMap === null) {
+                    $headerMap = [];
+                    foreach ($cols as $i => $name) {
+                        $key = strtolower(trim(str_replace(' ', '_', (string)$name)));
+                        $headerMap[$key] = $i;
+                    }
+                    foreach (['unit_number','first_name','last_name','email'] as $req) {
+                        if (!isset($headerMap[$req])) {
+                            $flashError = "Missing required column: $req. Required: unit_number, first_name, last_name, email. Optional: phone, is_owner.";
+                            break 2;
+                        }
+                    }
+                    continue;
+                }
+
+                $get = fn(string $k) => isset($headerMap[$k], $cols[$headerMap[$k]]) ? trim((string)$cols[$headerMap[$k]]) : '';
+                $unit       = $get('unit_number');
+                $first      = $get('first_name');
+                $last       = $get('last_name');
+                $email      = $get('email');
+                $phone      = $get('phone');
+                $isOwnerRaw = strtolower($get('is_owner'));
+                $isOwner    = in_array($isOwnerRaw, ['1','y','yes','owner','true'], true) ? 1
+                            : (in_array($isOwnerRaw, ['0','n','no','renter','false'], true) ? 0 : 1);
+
+                if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    $errors[] = "Row $row: invalid email";
+                    continue;
+                }
+                $check = db()->prepare('SELECT id FROM users WHERE email = ?');
+                $check->execute([$email]);
+                if ($check->fetchColumn()) { $skipped++; continue; }
+
+                $tempPass = bin2hex(random_bytes(6));
+                $hash     = password_hash($tempPass, PASSWORD_BCRYPT, ['cost' => 12]);
+                $role     = $isOwner ? 'resident' : 'renter';
+                db()->prepare(
+                    'INSERT INTO users (association_id, first_name, last_name, email, phone, password_hash, role, unit_number, is_owner, status)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, "pending")'
+                )->execute([$assocId, $first, $last, $email, $phone ?: null, $hash, $role, $unit ?: null, $isOwner]);
+                $newId = (int)db()->lastInsertId();
+                send_mail($email, "You've been invited to {$association['name']}",
+                    "Hi $first,\n\nYou've been added to {$association['name']} on BadassHOA.\n\nSign in: " .
+                    (config()['app']['base_url'] ?? '') . "/login.php\nEmail: $email\nTemporary password: $tempPass\n(Change it on first sign-in.)\n");
+                audit('user.imported', ['email' => $email, 'unit' => $unit], $newId, 'user');
+                $added++;
+            }
+            fclose($fh);
+            $importSummary = ['added' => $added, 'skipped' => $skipped, 'errors' => $errors];
+            audit('directory.imported', $importSummary);
+        }
+    }
+}
 
 // --- Invite a new user ---
+
+// --- Add a new member ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'invite') {
     csrf_check();
     if (!$canManage) { http_response_code(403); die('Forbidden'); }
-    $first = trim((string)($_POST['first_name'] ?? ''));
-    $last  = trim((string)($_POST['last_name'] ?? ''));
-    $email = trim((string)($_POST['email'] ?? ''));
-    $role  = $_POST['role'] ?? 'resident';
-    $unit  = trim((string)($_POST['unit_number'] ?? ''));
+    $first   = trim((string)($_POST['first_name'] ?? ''));
+    $last    = trim((string)($_POST['last_name'] ?? ''));
+    $email   = trim((string)($_POST['email'] ?? ''));
+    $phone   = trim((string)($_POST['phone'] ?? ''));
+    $role    = $_POST['role'] ?? 'resident';
+    $unit    = trim((string)($_POST['unit_number'] ?? ''));
     $isOwner = isset($_POST['is_owner']) ? 1 : 0;
 
     $allowedRoles = ['resident','renter','board_member','board_admin','property_manager'];
     if (!in_array($role, $allowedRoles, true)) $role = 'resident';
+    $showOnLanding = isset($_POST['show_on_public_landing']) ? 1 : 0;
 
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $flashError = 'Valid email is required.';
-    } else {
-        $existing = db()->prepare('SELECT id FROM users WHERE email = ?');
-        $existing->execute([$email]);
-        if ($existing->fetchColumn()) {
-            $flashError = 'A user with that email already exists.';
+    // Optional password override — admin can type one or use Generate Random.
+    $pw1 = (string)($_POST['new_password'] ?? '');
+    $pw2 = (string)($_POST['new_password_confirm'] ?? '');
+    $customPassword = null;
+    if ($pw1 !== '' || $pw2 !== '') {
+        if ($pw1 !== $pw2) {
+            $flashError = "Passwords don't match.";
+        } elseif (strlen($pw1) < 8) {
+            $flashError = 'Password must be at least 8 characters.';
         } else {
-            // Generate a temp password; user resets via email link in real flow.
-            $tempPass = bin2hex(random_bytes(6));
-            $hash = password_hash($tempPass, PASSWORD_BCRYPT, ['cost' => 12]);
-            $stmt = db()->prepare(
-                'INSERT INTO users (association_id, first_name, last_name, email, password_hash, role, unit_number, is_owner, status)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, "pending")'
-            );
-            $stmt->execute([$assocId, $first, $last, $email, $hash, $role, $unit ?: null, $isOwner]);
-            $newId = (int)db()->lastInsertId();
-            send_mail($email, "You've been invited to {$association['name']}",
-                "Hi $first,\n\n{$user['first_name']} added you to {$association['name']} on BadassHOA.\n\nSign in with email: $email\nTemporary password: $tempPass\n(Change it on first sign-in.)\n");
-            audit('user.invited', ['email' => $email, 'role' => $role], $newId, 'user');
-            flash('success', "Invited $email.");
-            redirect('/dashboard/directory.php');
+            $customPassword = $pw1;
+        }
+    }
+
+    if (!$flashError) {
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $flashError = 'Valid email is required.';
+        } else {
+            $existing = db()->prepare('SELECT id FROM users WHERE email = ?');
+            $existing->execute([$email]);
+            if ($existing->fetchColumn()) {
+                $flashError = 'A user with that email already exists.';
+            } else {
+                $plaintextPassword = $customPassword ?? bin2hex(random_bytes(6));
+                $hash = password_hash($plaintextPassword, PASSWORD_BCRYPT, ['cost' => 12]);
+                // Status = active so they can log in immediately and change password via /forgot.php
+                // or /dashboard/settings.php.
+                $stmt = db()->prepare(
+                    'INSERT INTO users (association_id, first_name, last_name, email, phone, password_hash, role, unit_number, is_owner, show_on_public_landing, status)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "active")'
+                );
+                $stmt->execute([$assocId, $first, $last, $email, $phone ?: null, $hash, $role, $unit ?: null, $isOwner, $showOnLanding]);
+                $newId = (int)db()->lastInsertId();
+
+                $pwLine = $customPassword
+                    ? "Your password (set by " . trim(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? '')) . "):\n  $plaintextPassword"
+                    : "Temporary password:\n  $plaintextPassword\n\nPlease change it after you sign in (Settings → Change password).";
+
+                send_mail($email, "You've been added to {$association['name']}",
+                    "Hi $first,\n\n"
+                    . trim(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? '')) . " added you to {$association['name']} on BadassHOA.\n\n"
+                    . "Sign in: " . (config()['app']['base_url'] ?? '') . "/login.php\n"
+                    . "Email:  $email\n"
+                    . $pwLine . "\n");
+
+                audit('user.added', ['email' => $email, 'role' => $role, 'password_set_by_admin' => $customPassword !== null], $newId, 'user');
+                $msg = "Added $email.";
+                if ($customPassword) $msg .= " Share the password with them via a secure channel.";
+                flash('success', $msg);
+                redirect('/dashboard/directory.php');
+            }
         }
     }
 }
@@ -58,6 +169,109 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'deactiv
     redirect('/dashboard/directory.php');
 }
 
+// --- Edit handler ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit') {
+    csrf_check();
+    if (!$canManage) { http_response_code(403); die('Forbidden'); }
+
+    $id     = (int)($_POST['id'] ?? 0);
+    $first  = trim((string)($_POST['first_name'] ?? ''));
+    $last   = trim((string)($_POST['last_name'] ?? ''));
+    $email  = trim((string)($_POST['email'] ?? ''));
+    $phone  = trim((string)($_POST['phone'] ?? ''));
+    $unit   = trim((string)($_POST['unit_number'] ?? ''));
+    $role   = $_POST['role'] ?? 'resident';
+    $isOwner = isset($_POST['is_owner']) ? 1 : 0;
+    $status  = $_POST['status'] ?? 'active';
+
+    $allowedRoles  = ['resident','renter','board_member','board_admin','property_manager'];
+    $allowedStatus = ['active','pending','inactive'];
+    if (!in_array($role, $allowedRoles, true))   $role   = 'resident';
+    if (!in_array($status, $allowedStatus, true)) $status = 'active';
+    $showOnLanding = isset($_POST['show_on_public_landing']) ? 1 : 0;
+
+    // Verify the row belongs to this association.
+    $check = db()->prepare('SELECT 1 FROM users WHERE id = ? AND association_id = ?');
+    $check->execute([$id, $assocId]);
+    if (!$check->fetchColumn()) {
+        $flashError = 'User not found in this association.';
+    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $flashError = 'Valid email is required.';
+    } else {
+        // Email-uniqueness check (allow keeping same email)
+        $dupe = db()->prepare('SELECT id FROM users WHERE email = ? AND id <> ?');
+        $dupe->execute([$email, $id]);
+        if ($dupe->fetchColumn()) {
+            $flashError = 'Another user already has that email.';
+        } else {
+            // Refuse to demote / deactivate yourself, to avoid self-lockout
+            if ($id === (int)$user['id']) {
+                if ($status !== 'active' || ($role !== 'board_admin' && $user['role'] === 'board_admin')) {
+                    $flashError = "You can't change your own role or status. Ask another board admin.";
+                }
+            }
+            if (!$flashError) {
+                db()->beginTransaction();
+                try {
+                    db()->prepare(
+                        'UPDATE users SET first_name = ?, last_name = ?, email = ?, phone = ?,
+                                           unit_number = ?, role = ?, is_owner = ?, status = ?,
+                                           show_on_public_landing = ?
+                         WHERE id = ? AND association_id = ?'
+                    )->execute([
+                        $first, $last, $email, $phone ?: null,
+                        $unit ?: null, $role, $isOwner, $status, $showOnLanding,
+                        $id, $assocId,
+                    ]);
+
+                    // Upsert per-unit details. Saved against $assocId + $unit.
+                    if ($unit !== '') {
+                        $type        = $_POST['unit_type'] ?? 'condo';
+                        $allowedTypes = ['condo','townhouse','single_family','apartment','other'];
+                        if (!in_array($type, $allowedTypes, true)) $type = 'condo';
+
+                        $bedrooms = ($_POST['bedrooms']         ?? '') !== '' ? (int)$_POST['bedrooms']        : null;
+                        $baths    = ($_POST['baths']            ?? '') !== '' ? (float)$_POST['baths']         : null;
+                        $sqft     = ($_POST['square_footage']   ?? '') !== '' ? (int)$_POST['square_footage']  : null;
+                        $ownPct   = ($_POST['ownership_percent']?? '') !== '' ? (float)$_POST['ownership_percent'] : null;
+
+                        // Only write the row if at least one detail is set OR row already exists
+                        // (so we don't litter the table with empty rows for every unit_number assignment).
+                        $hasAnyDetail = $bedrooms !== null || $baths !== null || $sqft !== null || $ownPct !== null;
+                        $existsStmt = db()->prepare('SELECT id FROM units WHERE association_id = ? AND unit_number = ?');
+                        $existsStmt->execute([$assocId, $unit]);
+                        $existsId = $existsStmt->fetchColumn();
+
+                        if ($hasAnyDetail || $existsId) {
+                            db()->prepare(
+                                'INSERT INTO units (association_id, unit_number, type, bedrooms, baths, square_footage, ownership_percent)
+                                 VALUES (?, ?, ?, ?, ?, ?, ?)
+                                 ON DUPLICATE KEY UPDATE
+                                    type = VALUES(type),
+                                    bedrooms = VALUES(bedrooms),
+                                    baths = VALUES(baths),
+                                    square_footage = VALUES(square_footage),
+                                    ownership_percent = VALUES(ownership_percent)'
+                            )->execute([$assocId, $unit, $type, $bedrooms, $baths, $sqft, $ownPct]);
+                        }
+                    }
+
+                    db()->commit();
+                } catch (Throwable $e) {
+                    db()->rollBack();
+                    $flashError = 'Update failed: ' . $e->getMessage();
+                }
+
+                if (!$flashError) {
+                    audit('user.edited', ['email' => $email, 'role' => $role, 'status' => $status], $id, 'user');
+                    flash('success', 'Member updated.');
+                    redirect('/dashboard/directory.php');
+                }
+            }
+        }
+    }
+}
+
 // Board members
 $boardStmt = db()->prepare(
     "SELECT * FROM users
@@ -68,7 +282,8 @@ $boardStmt->execute([$assocId]);
 $board = $boardStmt->fetchAll();
 
 // Residents
-$qSearch = trim((string)($_GET['q'] ?? ''));
+$qSearch     = trim((string)($_GET['q'] ?? ''));
+$ownersOnly  = isset($_GET['owners_only']);
 $sql = "SELECT * FROM users WHERE association_id = ? AND status <> 'inactive'";
 $params = [$assocId];
 if ($qSearch !== '') {
@@ -76,12 +291,36 @@ if ($qSearch !== '') {
     $like = "%$qSearch%";
     array_push($params, $like, $like, $like, $like);
 }
-$sql .= ' ORDER BY unit_number+0, last_name, first_name';
+if ($ownersOnly) {
+    $sql .= ' AND is_owner = 1';
+}
+// Natural alphanumeric sort: numeric prefix first (so "101" < "101A"), then full string lex,
+// then name. Letter-prefixed units (CAST = 0) bubble to the top — acceptable since most
+// condos use number-prefixed units; document if it becomes an issue.
+$sql .= ' ORDER BY CAST(unit_number AS UNSIGNED), unit_number, last_name, first_name';
 $stmt = db()->prepare($sql);
 $stmt->execute($params);
 $residents = $stmt->fetchAll();
 
 $showInvite = ($_GET['action'] ?? '') === 'invite' && $canManage;
+$showImport = ($_GET['action'] ?? '') === 'import' && $canManage;
+
+// Edit view loads the target user + their unit's details
+$editUser   = null;
+$editUnit   = null;
+if (($_GET['action'] ?? '') === 'edit' && $canManage) {
+    $eid = (int)($_GET['id'] ?? 0);
+    $stmt = db()->prepare('SELECT * FROM users WHERE id = ? AND association_id = ?');
+    $stmt->execute([$eid, $assocId]);
+    $editUser = $stmt->fetch() ?: null;
+
+    if ($editUser && !empty($editUser['unit_number'])) {
+        $u = db()->prepare('SELECT * FROM units WHERE association_id = ? AND unit_number = ?');
+        $u->execute([$assocId, $editUser['unit_number']]);
+        $editUnit = $u->fetch() ?: null;
+    }
+}
+
 $page_title = 'Directory — ' . $association['name'];
 require __DIR__ . '/../includes/header.php';
 ?>
@@ -94,15 +333,195 @@ require __DIR__ . '/../includes/header.php';
             <p class="muted">Board members and residents.</p>
         </div>
         <?php if ($canManage): ?>
-            <a class="btn btn--primary" href="?action=invite">+ Invite member</a>
+            <div class="row" style="gap: var(--sp-2);">
+                <a class="btn btn--ghost" href="?action=import">⬆ Import CSV</a>
+                <a class="btn btn--primary" href="?action=invite">+ Add member</a>
+            </div>
         <?php endif; ?>
     </div>
 
     <?php if ($flashError): ?><div class="flash flash--error"><?= e($flashError) ?></div><?php endif; ?>
+    <?php if ($importSummary): ?>
+        <div class="flash flash--success">
+            Imported <strong><?= (int)$importSummary['added'] ?></strong> new member<?= $importSummary['added']===1?'':'s' ?>.
+            <?php if ($importSummary['skipped']): ?>Skipped <?= (int)$importSummary['skipped'] ?> existing email<?= $importSummary['skipped']===1?'':'s' ?>.<?php endif; ?>
+            <?php if (!empty($importSummary['errors'])): ?>
+                <details style="margin-top: var(--sp-2);">
+                    <summary><?= count($importSummary['errors']) ?> row<?= count($importSummary['errors'])===1?'':'s' ?> errored</summary>
+                    <ul style="margin: var(--sp-2) 0 0; font-size: var(--fs-sm);">
+                        <?php foreach ($importSummary['errors'] as $err): ?>
+                            <li><?= e($err) ?></li>
+                        <?php endforeach; ?>
+                    </ul>
+                </details>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($editUser): ?>
+    <div class="card card--padded" style="margin-bottom: var(--sp-6);">
+        <h3 class="card__title">Edit member</h3>
+        <form method="post" class="form">
+            <?= csrf_field() ?>
+            <input type="hidden" name="form" value="edit">
+            <input type="hidden" name="id" value="<?= (int)$editUser['id'] ?>">
+            <div class="form-row form-row--2">
+                <div class="field">
+                    <label class="field__label" for="ef">First name</label>
+                    <input class="input" id="ef" name="first_name" value="<?= e((string)$editUser['first_name']) ?>">
+                </div>
+                <div class="field">
+                    <label class="field__label" for="el">Last name</label>
+                    <input class="input" id="el" name="last_name" value="<?= e((string)$editUser['last_name']) ?>">
+                </div>
+            </div>
+            <div class="form-row form-row--2">
+                <div class="field">
+                    <label class="field__label" for="ee">Email</label>
+                    <input class="input" type="email" id="ee" name="email" required value="<?= e((string)$editUser['email']) ?>">
+                </div>
+                <div class="field">
+                    <label class="field__label" for="ep">Phone</label>
+                    <input class="input" id="ep" name="phone" value="<?= e((string)($editUser['phone'] ?? '')) ?>">
+                </div>
+            </div>
+            <div class="form-row form-row--2">
+                <div class="field">
+                    <label class="field__label" for="eu">Unit #</label>
+                    <input class="input" id="eu" name="unit_number" value="<?= e((string)($editUser['unit_number'] ?? '')) ?>" placeholder="101A">
+                </div>
+                <div class="field">
+                    <label class="field__label" for="er">Role</label>
+                    <select class="select" id="er" name="role">
+                        <?php foreach (['resident'=>'Resident','renter'=>'Renter','board_member'=>'Board member','board_admin'=>'Board admin','property_manager'=>'Property manager'] as $val => $label): ?>
+                            <option value="<?= e($val) ?>" <?= $editUser['role'] === $val ? 'selected' : '' ?>><?= e($label) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row form-row--2">
+                <div class="field">
+                    <label class="field__label" for="es">Status</label>
+                    <select class="select" id="es" name="status">
+                        <?php foreach (['active'=>'Active','pending'=>'Pending','inactive'=>'Inactive'] as $val => $label): ?>
+                            <option value="<?= e($val) ?>" <?= $editUser['status'] === $val ? 'selected' : '' ?>><?= e($label) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="field" style="justify-content: center;">
+                    <label class="field__label">&nbsp;</label>
+                    <label style="display:flex; align-items:center; gap: var(--sp-2);">
+                        <input type="checkbox" name="is_owner" <?= $editUser['is_owner'] ? 'checked' : '' ?>> Owner (uncheck for renter)
+                    </label>
+                </div>
+            </div>
+
+            <?php if (in_array($editUser['role'], ['board_admin','board_member','property_manager'], true)): ?>
+            <div class="field" style="margin-top: var(--sp-2); padding: var(--sp-3); background: var(--color-info-bg); border: 1px solid rgba(38,96,168,0.2); border-radius: var(--r-md);">
+                <label style="display:flex; align-items:center; gap: var(--sp-3); cursor: pointer;">
+                    <input type="checkbox" name="show_on_public_landing" value="1" <?= !empty($editUser['show_on_public_landing']) ? 'checked' : '' ?>>
+                    <div>
+                        <strong>Show this person in the public "Meet your board" section</strong>
+                        <div class="muted" style="font-size: var(--fs-sm);">
+                            Only their first name + last initial + role badge will be shown — never email or phone. Off by default for privacy.
+                        </div>
+                    </div>
+                </label>
+            </div>
+            <?php endif; ?>
+
+            <!-- Unit details (per-unit, shared across anyone living there) -->
+            <div style="margin-top: var(--sp-4); padding: var(--sp-4); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--r-md);">
+                <div style="margin-bottom: var(--sp-3);">
+                    <strong>🏠 Unit details</strong>
+                    <span class="muted" style="font-size: var(--fs-sm);">
+                        — properties of <em>the unit</em>, shared across anyone living there.
+                        <?php if ($editUnit): ?>
+                            <span style="color: var(--color-success);">Existing record found for unit <?= e((string)$editUnit['unit_number']) ?>.</span>
+                        <?php endif; ?>
+                    </span>
+                </div>
+                <div class="form-row form-row--2" style="grid-template-columns: 1fr 1fr 0.7fr 0.7fr; gap: var(--sp-3);">
+                    <div class="field">
+                        <label class="field__label" for="utype">Type</label>
+                        <select class="select" id="utype" name="unit_type">
+                            <?php
+                            $cur = $editUnit['type'] ?? 'condo';
+                            foreach ([
+                                'condo'         => 'Condo',
+                                'townhouse'     => 'Townhouse',
+                                'single_family' => 'Single-family home',
+                                'apartment'     => 'Apartment',
+                                'other'         => 'Other',
+                            ] as $val => $label): ?>
+                                <option value="<?= e($val) ?>" <?= $cur === $val ? 'selected' : '' ?>><?= e($label) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label class="field__label" for="usqft">Square footage</label>
+                        <input class="input" type="number" id="usqft" name="square_footage" min="0" max="100000" step="1" value="<?= e((string)($editUnit['square_footage'] ?? '')) ?>" placeholder="1500">
+                    </div>
+                    <div class="field">
+                        <label class="field__label" for="ubeds">Bedrooms</label>
+                        <input class="input" type="number" id="ubeds" name="bedrooms" min="0" max="20" step="1" value="<?= e((string)($editUnit['bedrooms'] ?? '')) ?>" placeholder="2">
+                    </div>
+                    <div class="field">
+                        <label class="field__label" for="ubaths">Baths</label>
+                        <input class="input" type="number" id="ubaths" name="baths" min="0" max="20" step="0.5" value="<?= e((string)($editUnit['baths'] ?? '')) ?>" placeholder="2.5">
+                    </div>
+                </div>
+                <div class="form-row form-row--2">
+                    <div class="field">
+                        <label class="field__label" for="uown">Ownership %</label>
+                        <input class="input" type="number" id="uown" name="ownership_percent" min="0" max="100" step="0.0001" value="<?= e((string)($editUnit['ownership_percent'] ?? '')) ?>" placeholder="2.0833">
+                        <div class="field__hint">Share of common expenses for this unit. Most associations base it on square footage.</div>
+                    </div>
+                    <div class="field"><!-- spacer --></div>
+                </div>
+            </div>
+
+            <div class="row" style="justify-content: flex-end;">
+                <a class="btn btn--ghost" href="/dashboard/directory.php">Cancel</a>
+                <button class="btn btn--primary" type="submit">Save changes</button>
+            </div>
+        </form>
+    </div>
+    <?php endif; ?>
+
+    <?php if ($showImport): ?>
+    <div class="card card--padded" style="margin-bottom: var(--sp-6);">
+        <h3 class="card__title">Import members from CSV</h3>
+        <p class="muted" style="font-size: var(--fs-sm);">
+            Required columns: <code>unit_number, first_name, last_name, email</code>.
+            Optional: <code>phone, is_owner</code> (1/0 or yes/no).
+            Each new member gets a temporary password emailed to them.
+        </p>
+        <pre style="background: var(--color-surface-2); padding: var(--sp-3); border-radius: var(--r-md); font-size: var(--fs-xs); overflow-x:auto;">unit_number,first_name,last_name,email,phone,is_owner
+101,Maria,Rodriguez,maria@example.com,555-0101,1
+102A,James,Lee,james@example.com,555-0102,1
+B2,Sam,Garcia,sam@example.com,,0</pre>
+        <form method="post" enctype="multipart/form-data" class="form">
+            <?= csrf_field() ?>
+            <input type="hidden" name="form" value="import">
+            <div class="field">
+                <label class="field__label" for="csv">CSV file (max 1 MB)</label>
+                <input class="input" type="file" id="csv" name="csv" accept=".csv,text/csv" required>
+            </div>
+            <div class="row" style="justify-content: flex-end;">
+                <a class="btn btn--ghost" href="/dashboard/directory.php">Cancel</a>
+                <button class="btn btn--primary" type="submit">Import</button>
+            </div>
+        </form>
+    </div>
+    <?php endif; ?>
 
     <?php if ($showInvite): ?>
     <div class="card card--padded" style="margin-bottom: var(--sp-6);">
-        <h3 class="card__title">Invite a member</h3>
+        <h3 class="card__title">Add a member</h3>
+        <p class="muted" style="font-size: var(--fs-sm);">
+            Creates an active member who can sign in immediately. They&rsquo;ll receive an email with their password.
+        </p>
         <form method="post" class="form">
             <?= csrf_field() ?>
             <input type="hidden" name="form" value="invite">
@@ -111,8 +530,17 @@ require __DIR__ . '/../includes/header.php';
                 <div class="field"><label class="field__label" for="ilast">Last name</label><input class="input" id="ilast" name="last_name"></div>
             </div>
             <div class="form-row form-row--2">
-                <div class="field"><label class="field__label" for="iemail">Email</label><input class="input" type="email" id="iemail" name="email" required></div>
-                <div class="field"><label class="field__label" for="iunit">Unit #</label><input class="input" id="iunit" name="unit_number" placeholder="101"></div>
+                <div class="field"><label class="field__label" for="iemail">Email</label><input class="input" type="email" id="iemail" name="email" required autocomplete="email"></div>
+                <div class="field"><label class="field__label" for="iphone">Phone</label><input class="input" id="iphone" name="phone" autocomplete="tel" placeholder="555-1234"></div>
+            </div>
+            <div class="form-row form-row--2">
+                <div class="field"><label class="field__label" for="iunit">Unit #</label><input class="input" id="iunit" name="unit_number" placeholder="101A"></div>
+                <div class="field" style="justify-content: flex-end;">
+                    <label class="field__label">&nbsp;</label>
+                    <label style="display:flex; align-items:center; gap: var(--sp-2);">
+                        <input type="checkbox" name="is_owner" checked> Owner (uncheck for renter)
+                    </label>
+                </div>
             </div>
             <div class="form-row form-row--2">
                 <div class="field">
@@ -125,18 +553,55 @@ require __DIR__ . '/../includes/header.php';
                         <option value="property_manager">Property manager</option>
                     </select>
                 </div>
-                <div class="field" style="justify-content: flex-end;">
+                <div class="field" style="justify-content: center;">
                     <label class="field__label">&nbsp;</label>
-                    <label style="display:flex; align-items:center; gap: var(--sp-2);">
-                        <input type="checkbox" name="is_owner" checked> Owner (uncheck for renter)
+                    <label style="display:flex; align-items:center; gap: var(--sp-2); font-size: var(--fs-sm);">
+                        <input type="checkbox" name="show_on_public_landing" value="1"> Show in "Meet your board" (board roles only)
                     </label>
                 </div>
             </div>
+
+            <!-- Optional password override -->
+            <div style="margin-top: var(--sp-2); padding: var(--sp-4); background: var(--color-warning-bg); border: 1px solid rgba(182,130,42,0.25); border-radius: var(--r-md);">
+                <div class="row row--between" style="margin-bottom: var(--sp-2); flex-wrap: wrap;">
+                    <strong style="color: var(--color-warning);">🔑 Set password (optional)</strong>
+                    <button type="button" class="btn btn--ghost" id="add-gen-pw" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);">Generate random</button>
+                </div>
+                <p class="muted" style="font-size: var(--fs-sm); margin: 0 0 var(--sp-3);">
+                    Leave blank and we&rsquo;ll generate a random one and email it. Or set a specific password &mdash; you&rsquo;ll need to share it with them via a secure channel.
+                </p>
+                <div class="form-row form-row--2">
+                    <div class="field">
+                        <label class="field__label" for="add-pw1">Password</label>
+                        <input class="input" type="text" id="add-pw1" name="new_password" minlength="8" autocomplete="new-password" placeholder="At least 8 characters" spellcheck="false">
+                    </div>
+                    <div class="field">
+                        <label class="field__label" for="add-pw2">Confirm</label>
+                        <input class="input" type="text" id="add-pw2" name="new_password_confirm" minlength="8" autocomplete="new-password" spellcheck="false">
+                    </div>
+                </div>
+            </div>
+
             <div class="row" style="justify-content: flex-end;">
                 <a class="btn btn--ghost" href="/dashboard/directory.php">Cancel</a>
-                <button class="btn btn--primary" type="submit">Send invite</button>
+                <button class="btn btn--primary" type="submit">Add member</button>
             </div>
         </form>
+        <script>
+            document.getElementById('add-gen-pw')?.addEventListener('click', function () {
+                var chars = 'abcdefghjkmnpqrstuvwxyz' + 'ABCDEFGHJKMNPQRSTUVWXYZ' + '23456789' + '!@#$%';
+                var pw = '';
+                if (window.crypto && window.crypto.getRandomValues) {
+                    var b = new Uint8Array(14);
+                    crypto.getRandomValues(b);
+                    for (var i = 0; i < b.length; i++) pw += chars.charAt(b[i] % chars.length);
+                } else {
+                    for (var i = 0; i < 14; i++) pw += chars.charAt(Math.floor(Math.random() * chars.length));
+                }
+                document.getElementById('add-pw1').value = pw;
+                document.getElementById('add-pw2').value = pw;
+            });
+        </script>
     </div>
     <?php endif; ?>
 
@@ -159,10 +624,13 @@ require __DIR__ . '/../includes/header.php';
     </div>
     <?php endif; ?>
 
-    <h2 style="font-size: var(--fs-xl);">Residents</h2>
-    <form method="get" class="row" style="margin-bottom: var(--sp-4);">
+    <h2 style="font-size: var(--fs-xl);">Residents <span class="muted" style="font-size: var(--fs-sm); font-weight: 400;">— sorted by unit number</span></h2>
+    <form method="get" class="row" style="margin-bottom: var(--sp-4); gap: var(--sp-3);">
         <input class="input" type="search" name="q" placeholder="Search name, email, unit" value="<?= e($qSearch) ?>" style="max-width: 320px;">
-        <button class="btn btn--ghost" type="submit">Search</button>
+        <label style="display:inline-flex; align-items:center; gap: var(--sp-2); font-size: var(--fs-sm);">
+            <input type="checkbox" name="owners_only" value="1" <?= $ownersOnly ? 'checked' : '' ?>> Owners only
+        </label>
+        <button class="btn btn--ghost" type="submit">Apply</button>
     </form>
 
     <div style="overflow-x:auto;">
@@ -183,7 +651,8 @@ require __DIR__ . '/../includes/header.php';
                 <td><?= e($r['email']) ?></td>
                 <td><?= e($r['phone'] ?: '—') ?></td>
                 <?php if ($canManage): ?>
-                <td style="text-align:right;">
+                <td style="text-align:right; white-space: nowrap;">
+                    <a class="btn btn--ghost" href="?action=edit&id=<?= (int)$r['id'] ?>">Edit</a>
                     <?php if ((int)$r['id'] !== (int)$user['id']): ?>
                     <form method="post" style="display:inline;" onsubmit="return confirm('Deactivate this user?');">
                         <?= csrf_field() ?>

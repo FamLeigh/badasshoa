@@ -23,9 +23,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'approve
         db()->beginTransaction();
         try {
             db()->prepare(
-                'INSERT INTO associations (name, subdomain, unit_count, plan, status)
-                 VALUES (?, ?, ?, ?, "trial")'
-            )->execute([$s['association_name'], $sub, (int)$s['unit_count'], $s['plan_selected'] ?: 'starter']);
+                'INSERT INTO associations
+                 (name, subdomain, address, city, state_region, postal_code, country, unit_count, plan, status)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, "trial")'
+            )->execute([
+                $s['association_name'], $sub,
+                $s['address'] ?: null, $s['city'] ?: null, $s['state_region'] ?: null,
+                $s['postal_code'] ?: null, $s['country'] ?: 'US',
+                (int)$s['unit_count'], $s['plan_selected'] ?: 'starter',
+            ]);
             $newAssocId = (int)db()->lastInsertId();
 
             $tempPass = bin2hex(random_bytes(6));
@@ -76,11 +82,83 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'set_sta
     redirect('/admin/associations.php');
 }
 
+// --- Full edit ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit_assoc') {
+    csrf_check();
+    $aid       = (int)($_POST['id'] ?? 0);
+    $name      = trim((string)($_POST['name'] ?? ''));
+    $subdomain = trim((string)($_POST['subdomain'] ?? ''));
+    $address   = trim((string)($_POST['address'] ?? ''));
+    $city      = trim((string)($_POST['city'] ?? ''));
+    $stateReg  = trim((string)($_POST['state_region'] ?? ''));
+    $postal    = trim((string)($_POST['postal_code'] ?? ''));
+    $country   = strtoupper(trim((string)($_POST['country'] ?? 'US')));
+    $units     = max(0, (int)($_POST['unit_count'] ?? 0));
+    $plan      = $_POST['plan'] ?? 'starter';
+    $status    = $_POST['status'] ?? 'trial';
+    $color     = trim((string)($_POST['primary_color'] ?? '#0f1f3d'));
+    $publicLanding = isset($_POST['public_landing_enabled']) ? 1 : 0;
+
+    if (!in_array($plan, ['starter','growth','professional','enterprise'], true)) $plan = 'starter';
+    if (!in_array($status, ['active','inactive','trial'], true))                   $status = 'trial';
+    if (!preg_match('/^#[0-9a-f]{6}$/i', $color))                                  $color = '#0f1f3d';
+    if (!preg_match('/^[A-Z]{2}$/', $country))                                     $country = 'US';
+    // Slug normalize
+    $subdomain = preg_replace('/[^a-z0-9-]/', '', strtolower($subdomain));
+    if ($subdomain === '') $subdomain = slugify($name);
+
+    $check = db()->prepare('SELECT 1 FROM associations WHERE id = ?');
+    $check->execute([$aid]);
+    if (!$check->fetchColumn()) {
+        $flashError = 'Association not found.';
+    } elseif ($name === '') {
+        $flashError = 'Association name is required.';
+    } else {
+        $dupe = db()->prepare('SELECT id FROM associations WHERE subdomain = ? AND id <> ?');
+        $dupe->execute([$subdomain, $aid]);
+        if ($dupe->fetchColumn()) {
+            $flashError = "Slug \"$subdomain\" is already taken by another association.";
+        } else {
+            db()->prepare(
+                'UPDATE associations
+                 SET name = ?, subdomain = ?, address = ?, city = ?, state_region = ?, postal_code = ?, country = ?,
+                     unit_count = ?, plan = ?, status = ?, primary_color = ?, public_landing_enabled = ?
+                 WHERE id = ?'
+            )->execute([
+                $name, $subdomain,
+                $address ?: null, $city ?: null, $stateReg ?: null, $postal ?: null, $country,
+                $units, $plan, $status, $color, $publicLanding, $aid,
+            ]);
+            audit('association.edited', ['name' => $name, 'plan' => $plan, 'status' => $status, 'public_landing' => $publicLanding], $aid, 'association');
+            flash('success', "Association \"$name\" updated.");
+            redirect('/admin/associations.php');
+        }
+    }
+}
+
 $signups = db()->query('SELECT * FROM signups WHERE status = "pending" ORDER BY created_at DESC')->fetchAll();
 $assocs  = db()->query(
     'SELECT a.*, (SELECT COUNT(*) FROM users WHERE association_id = a.id) AS user_count
      FROM associations a ORDER BY a.created_at DESC'
 )->fetchAll();
+
+// Edit target
+$editAssoc = null;
+if (($_GET['action'] ?? '') === 'edit') {
+    $eid = (int)($_GET['id'] ?? 0);
+    $stmt = db()->prepare('SELECT * FROM associations WHERE id = ?');
+    $stmt->execute([$eid]);
+    $editAssoc = $stmt->fetch() ?: null;
+}
+
+// Signup detail view
+$viewSignup = null;
+if (($_GET['action'] ?? '') === 'view_signup') {
+    $sid = (int)($_GET['id'] ?? 0);
+    $stmt = db()->prepare('SELECT * FROM signups WHERE id = ?');
+    $stmt->execute([$sid]);
+    $viewSignup = $stmt->fetch() ?: null;
+}
 
 $page_title = 'Associations — Admin';
 require __DIR__ . '/../includes/header.php';
@@ -92,6 +170,189 @@ require __DIR__ . '/../includes/header.php';
     <p class="muted">Approve signups and manage tenant status.</p>
 
     <?php if ($flashError): ?><div class="flash flash--error"><?= e($flashError) ?></div><?php endif; ?>
+
+    <?php if ($viewSignup): ?>
+    <div class="card card--padded" style="margin: var(--sp-6) 0;">
+        <div class="card__head">
+            <h3 class="card__title">Signup detail</h3>
+            <a class="muted" style="font-size: var(--fs-sm);" href="/admin/associations.php">← Back to list</a>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: var(--sp-6); font-size: var(--fs-sm);">
+            <div>
+                <div class="muted" style="font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600;">Association</div>
+                <div style="font-size: var(--fs-lg); font-weight: 700; margin: var(--sp-1) 0 var(--sp-3);"><?= e((string)$viewSignup['association_name']) ?></div>
+
+                <div class="muted" style="font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600;">Address</div>
+                <div style="margin: var(--sp-1) 0 var(--sp-3);">
+                    <?php if ($viewSignup['address']): ?><?= e((string)$viewSignup['address']) ?><br><?php endif; ?>
+                    <?php
+                    $line2 = trim(
+                        ($viewSignup['city'] ?? '')
+                        . (($viewSignup['city'] && $viewSignup['state_region']) ? ', ' : '')
+                        . ($viewSignup['state_region'] ?? '')
+                        . ' ' . ($viewSignup['postal_code'] ?? '')
+                    );
+                    if ($line2 !== '') echo e($line2) . '<br>';
+                    if ($viewSignup['country']) echo e((string)$viewSignup['country']);
+                    if (!$viewSignup['address'] && $line2 === '' && !$viewSignup['country']) echo '<span class="muted">— not provided —</span>';
+                    ?>
+                </div>
+
+                <div class="muted" style="font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600;">Units &amp; plan</div>
+                <div style="margin: var(--sp-1) 0 var(--sp-3);">
+                    <?= (int)$viewSignup['unit_count'] ?> units · <?= e((string)$viewSignup['plan_selected']) ?>
+                </div>
+            </div>
+            <div>
+                <div class="muted" style="font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600;">Contact</div>
+                <div style="margin: var(--sp-1) 0 var(--sp-3);">
+                    <strong><?= e((string)$viewSignup['contact_name']) ?></strong><br>
+                    <a href="mailto:<?= e((string)$viewSignup['contact_email']) ?>"><?= e((string)$viewSignup['contact_email']) ?></a>
+                    <?php if ($viewSignup['contact_phone']): ?>
+                        <br><a href="tel:<?= e((string)$viewSignup['contact_phone']) ?>"><?= e((string)$viewSignup['contact_phone']) ?></a>
+                    <?php endif; ?>
+                </div>
+
+                <div class="muted" style="font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600;">Submitted</div>
+                <div style="margin: var(--sp-1) 0 var(--sp-3);">
+                    <?= e(date('M j, Y g:i A', strtotime((string)$viewSignup['created_at']))) ?> UTC
+                </div>
+
+                <div class="muted" style="font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600;">Status</div>
+                <div style="margin: var(--sp-1) 0 var(--sp-3);">
+                    <?php
+                    $sCls = $viewSignup['status']==='approved' ? 'badge--success' : ($viewSignup['status']==='rejected' ? 'badge--error' : 'badge--warning');
+                    ?>
+                    <span class="badge <?= $sCls ?>"><?= e((string)$viewSignup['status']) ?></span>
+                </div>
+            </div>
+        </div>
+
+        <?php if ($viewSignup['notes']): ?>
+        <div style="margin-top: var(--sp-4); padding-top: var(--sp-4); border-top: 1px solid var(--color-border);">
+            <div class="muted" style="font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600;">Notes</div>
+            <div style="margin-top: var(--sp-2); white-space: pre-wrap;"><?= e((string)$viewSignup['notes']) ?></div>
+        </div>
+        <?php endif; ?>
+
+        <?php if ($viewSignup['status'] === 'pending'): ?>
+        <div class="row" style="justify-content: flex-end; gap: var(--sp-2); margin-top: var(--sp-6); padding-top: var(--sp-4); border-top: 1px solid var(--color-border);">
+            <form method="post" style="display:inline;" onsubmit="return confirm('Reject this signup?');">
+                <?= csrf_field() ?>
+                <input type="hidden" name="form" value="reject_signup">
+                <input type="hidden" name="id" value="<?= (int)$viewSignup['id'] ?>">
+                <button class="btn btn--ghost" type="submit">Reject</button>
+            </form>
+            <form method="post" style="display:inline;" onsubmit="return confirm('Approve this signup and provision the association?');">
+                <?= csrf_field() ?>
+                <input type="hidden" name="form" value="approve_signup">
+                <input type="hidden" name="id" value="<?= (int)$viewSignup['id'] ?>">
+                <button class="btn btn--primary" type="submit">Approve &amp; provision</button>
+            </form>
+        </div>
+        <?php endif; ?>
+    </div>
+    <?php endif; ?>
+
+    <?php if ($editAssoc): ?>
+    <div class="card card--padded" style="margin: var(--sp-6) 0;">
+        <div class="card__head">
+            <h3 class="card__title">Edit association</h3>
+            <a class="muted" style="font-size: var(--fs-sm);" href="/admin/associations.php">← Back to list</a>
+        </div>
+        <form method="post" class="form" data-address-lookup>
+            <?= csrf_field() ?>
+            <input type="hidden" name="form" value="edit_assoc">
+            <input type="hidden" name="id" value="<?= (int)$editAssoc['id'] ?>">
+            <div class="form-row form-row--2">
+                <div class="field">
+                    <label class="field__label" for="ea-name">Name</label>
+                    <input class="input" id="ea-name" name="name" required value="<?= e($editAssoc['name']) ?>">
+                </div>
+                <div class="field">
+                    <label class="field__label" for="ea-slug">Slug (URL-safe)</label>
+                    <input class="input" id="ea-slug" name="subdomain" required value="<?= e($editAssoc['subdomain']) ?>" pattern="[a-z0-9-]+">
+                    <div class="field__hint">Lowercase letters, numbers, and hyphens only. Must be unique across BadassHOA.</div>
+                </div>
+            </div>
+            <div class="field">
+                <label class="field__label" for="ea-addr">Street address</label>
+                <input class="input" id="ea-addr" name="address" value="<?= e((string)$editAssoc['address']) ?>" placeholder="123 Main St, Suite 100">
+            </div>
+            <div style="display:grid; grid-template-columns: 1.4fr 1fr 0.8fr; gap: var(--sp-3);">
+                <div class="field">
+                    <label class="field__label" for="ea-city">City</label>
+                    <input class="input" id="ea-city" name="city" value="<?= e((string)($editAssoc['city'] ?? '')) ?>">
+                </div>
+                <div class="field">
+                    <label class="field__label" for="ea-state">State / Province</label>
+                    <input class="input" id="ea-state" name="state_region" list="us-ca-states" value="<?= e((string)($editAssoc['state_region'] ?? '')) ?>" autocomplete="address-level1">
+                </div>
+                <div class="field">
+                    <label class="field__label" for="ea-postal">ZIP / Postal</label>
+                    <input class="input" id="ea-postal" name="postal_code" value="<?= e((string)($editAssoc['postal_code'] ?? '')) ?>" autocomplete="postal-code" placeholder="12345 or A1A 1A1">
+                </div>
+            </div>
+            <div class="form-row form-row--2">
+                <div class="field">
+                    <label class="field__label" for="ea-country">Country</label>
+                    <select class="select" id="ea-country" name="country">
+                        <?php $cur = strtoupper((string)($editAssoc['country'] ?? 'US'));
+                        foreach (['US'=>'United States','CA'=>'Canada','MX'=>'Mexico','GB'=>'United Kingdom','AU'=>'Australia'] as $code=>$lbl): ?>
+                            <option value="<?= e($code) ?>" <?= $cur===$code?'selected':'' ?>><?= e($lbl) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="field"><!-- spacer --></div>
+            </div>
+            <?= us_ca_states_datalist() ?>
+            <div class="form-row form-row--2">
+                <div class="field">
+                    <label class="field__label" for="ea-units">Unit count</label>
+                    <input class="input" type="number" min="0" max="10000" id="ea-units" name="unit_count" value="<?= (int)$editAssoc['unit_count'] ?>">
+                </div>
+                <div class="field">
+                    <label class="field__label" for="ea-color">Primary color</label>
+                    <input class="input" type="color" id="ea-color" name="primary_color" value="<?= e((string)$editAssoc['primary_color']) ?>">
+                </div>
+            </div>
+            <div class="form-row form-row--2">
+                <div class="field">
+                    <label class="field__label" for="ea-plan">Plan</label>
+                    <select class="select" id="ea-plan" name="plan">
+                        <?php foreach (['starter'=>'Starter','growth'=>'Growth','professional'=>'Professional','enterprise'=>'Enterprise'] as $val=>$lbl): ?>
+                            <option value="<?= e($val) ?>" <?= $editAssoc['plan']===$val?'selected':'' ?>><?= e($lbl) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="field">
+                    <label class="field__label" for="ea-status">Status</label>
+                    <select class="select" id="ea-status" name="status">
+                        <?php foreach (['active'=>'Active','trial'=>'Trial','inactive'=>'Inactive'] as $val=>$lbl): ?>
+                            <option value="<?= e($val) ?>" <?= $editAssoc['status']===$val?'selected':'' ?>><?= e($lbl) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </div>
+
+            <div class="field">
+                <label style="display:flex; align-items:center; gap: var(--sp-3); cursor: pointer; padding: var(--sp-3); background: var(--color-surface); border-radius: var(--r-sm);">
+                    <input type="checkbox" name="public_landing_enabled" value="1" <?= (int)($editAssoc['public_landing_enabled'] ?? 0) === 1 ? 'checked' : '' ?>>
+                    <div>
+                        <strong>Show public landing at <code>/<?= e((string)$editAssoc['subdomain']) ?>/</code></strong>
+                        <div class="muted" style="font-size: var(--fs-sm);">When enabled, an unauthenticated visitor at <a href="/<?= e((string)$editAssoc['subdomain']) ?>/" target="_blank" rel="noopener">/<?= e((string)$editAssoc['subdomain']) ?>/</a> sees a branded landing page with a sign-in CTA. Otherwise the URL bounces to /login.php.</div>
+                    </div>
+                </label>
+            </div>
+
+            <div class="row" style="justify-content: flex-end;">
+                <a class="btn btn--ghost" href="/admin/associations.php">Cancel</a>
+                <button class="btn btn--primary" type="submit">Save changes</button>
+            </div>
+        </form>
+    </div>
+    <?php endif; ?>
 
     <h2 id="signups" style="font-size: var(--fs-xl); margin-top: var(--sp-8);">Pending signups</h2>
     <?php if (!$signups): ?>
@@ -105,7 +366,19 @@ require __DIR__ . '/../includes/header.php';
         <tbody>
         <?php foreach ($signups as $s): ?>
             <tr>
-                <td><strong><?= e((string)$s['association_name']) ?></strong></td>
+                <td>
+                    <strong><?= e((string)$s['association_name']) ?></strong>
+                    <?php
+                    $loc = trim(
+                        ($s['city'] ?? '')
+                        . (($s['city'] && $s['state_region']) ? ', ' : '')
+                        . ($s['state_region'] ?? '')
+                    );
+                    ?>
+                    <?php if ($loc !== ''): ?>
+                        <div class="muted" style="font-size: var(--fs-xs);"><?= e($loc) ?></div>
+                    <?php endif; ?>
+                </td>
                 <td>
                     <?= e((string)$s['contact_name']) ?>
                     <div class="muted" style="font-size: var(--fs-xs);">
@@ -116,7 +389,8 @@ require __DIR__ . '/../includes/header.php';
                 <td><?= (int)$s['unit_count'] ?></td>
                 <td><?= e((string)$s['plan_selected']) ?></td>
                 <td><?= e(date('M j, Y', strtotime((string)$s['created_at']))) ?></td>
-                <td style="text-align:right;">
+                <td style="text-align:right; white-space: nowrap;">
+                    <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="?action=view_signup&id=<?= (int)$s['id'] ?>">View</a>
                     <form method="post" style="display:inline;" onsubmit="return confirm('Approve this signup and provision the association?');">
                         <?= csrf_field() ?>
                         <input type="hidden" name="form" value="approve_signup">
@@ -143,11 +417,16 @@ require __DIR__ . '/../includes/header.php';
     <?php else: ?>
     <div style="overflow-x:auto;">
     <table class="table">
-        <thead><tr><th>Name</th><th>Slug</th><th>Units</th><th>Users</th><th>Plan</th><th>Status</th><th>Created</th><th></th></tr></thead>
+        <thead><tr><th>Name</th><th>Slug</th><th>Units</th><th>Users</th><th>Plan</th><th>Status</th><th>Created</th><th style="text-align:right;">Actions</th></tr></thead>
         <tbody>
         <?php foreach ($assocs as $a): ?>
             <tr>
-                <td><strong><?= e((string)$a['name']) ?></strong></td>
+                <td>
+                    <strong><?= e((string)$a['name']) ?></strong>
+                    <?php if ($a['address']): ?>
+                        <div class="muted" style="font-size: var(--fs-xs);"><?= e(mb_strimwidth((string)$a['address'], 0, 60, '…')) ?></div>
+                    <?php endif; ?>
+                </td>
                 <td><code><?= e((string)$a['subdomain']) ?></code></td>
                 <td><?= (int)$a['unit_count'] ?></td>
                 <td><?= (int)$a['user_count'] ?></td>
@@ -159,7 +438,8 @@ require __DIR__ . '/../includes/header.php';
                     <span class="badge <?= $cls ?>"><?= e((string)$a['status']) ?></span>
                 </td>
                 <td><?= e(date('M j, Y', strtotime((string)$a['created_at']))) ?></td>
-                <td>
+                <td style="text-align:right; white-space: nowrap;">
+                    <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="?action=edit&id=<?= (int)$a['id'] ?>">Edit</a>
                     <form method="post" style="display:inline;">
                         <?= csrf_field() ?>
                         <input type="hidden" name="form" value="set_status">

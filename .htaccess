@@ -4,6 +4,18 @@
 DirectoryIndex index.php index.html
 Options -Indexes -MultiViews
 
+# --- Per-association public landing: /{slug}/ → landing.php?slug={slug} ----
+# Real files / directories take precedence (so /dashboard/, /admin/, /assets/,
+# /storage/, /login.php, /signup.php, /pricing.php, /changelog.php, etc. all
+# keep working). Only single-segment lowercase slugs hit the rewrite.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_URI}      !^/(landing|branding|public-media|public-document|contact)\.php
+    RewriteRule ^([a-z0-9][a-z0-9-]*)/?$  /landing.php?slug=$1  [QSA,L]
+</IfModule>
+
 # --- Block dotfiles, configs, and migration SQL from web access -----------
 <FilesMatch "^\.">
     Require all denied

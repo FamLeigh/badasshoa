@@ -146,10 +146,10 @@ Verified end-to-end on `https://badasshoa.com:8890/`:
 
 | Email | Password | Role |
 |---|---|---|
-| `admin@badasshoa.com` | `changeme!` | super_admin |
+| `me@kevinleigh.com` | `bhoaK0m3r2.6` | super_admin |
 | `board@demo.badasshoa.com` | `changeme!` | board_admin (Demo Condos) |
 
-Seeded by `migrations/001_initial.sql`.
+Seeded by `migrations/002_seed_dev.sql`.
 
 ### What's stubbed / what's next
 
@@ -161,6 +161,11 @@ Seeded by `migrations/001_initial.sql`.
 **Phase 1.5 — DONE (2026-05-09):**
 - ✅ **Password reset flow** — `/forgot.php` (anti-enumeration: same response for unknown emails) + `/reset.php` (SQL-side expiry check). Tokens are 32-byte random, stored as SHA-256 hashes, single-use, 1-hour TTL. Issuing a new token invalidates any prior unused tokens for the user.
 - ✅ **Change password while logged in** — card on `/dashboard/settings.php` that verifies current password, requires 8+ chars, also clears any outstanding reset tokens for that user.
+- ✅ **Public community landing pages** — per-association `/{slug}/` pages (path-based, .htaccess rewrites). Sections: hero (banner image), about (Quill), amenities, community photos, meet-your-board (per-user opt-in via `users.show_on_public_landing`), public documents, upcoming events, embedded OSM map, FAQ, announcements, contact form, social-link footer. All sections conditionally render based on data presence. Free APIs only: Photon (komoot.io) for geocoding + address autocomplete, Zippopotam.us for ZIP fallback, OpenStreetMap iframe for the map.
+- ✅ **Events** — `/dashboard/events.php` board CRUD with audience field (`all`/`members`/`board`); only `audience='all'` events appear on the public landing. Migration `013_map_and_events.sql`.
+- ✅ **Public file/branding endpoints** — `/branding.php`, `/public-media.php`, `/public-document.php`, `/contact.php` bypass auth and gate by visibility/access_level. `.htaccess` excludes these from the slug-rewrite catch-all.
+- ✅ **Changelog system** — JSON-backed (`/content/changelog.json`), public page at `/changelog.php`, super-admin CRUD at `/admin/changelog.php`. Mirrors the sister sellinglane project pattern.
+- ✅ **Address structure everywhere** — signup, settings, admin/associations all use `address / city / state_region / postal_code / country` with Photon autocomplete + Zippopotam ZIP fallback.
 
 **Phase 1.5 left over (small, low-risk, ship when ready):**
 - IP-based rate limiting on `/forgot.php` (currently anti-enumeration but no per-IP cap; an attacker on one IP could spam unlimited reset emails). Add a `request_attempts` table or reuse `login_attempts` with a `kind` column.
@@ -183,7 +188,64 @@ Seeded by `migrations/001_initial.sql`.
 
 ---
 
+## Public changelog convention
+
+Every meaningful change to BadassHOA gets logged at **`/content/changelog.json`** (the source of truth) and renders on:
+- **`/changelog.php`** — public marketing page (linked from the public footer)
+- **`/admin/changelog.php`** — super-admin CRUD UI (linked in the admin sidebar)
+
+**Categories** (defined in `includes/changelog.php` → `changelog_types()`):
+- `feature` — new capability shipping for the first time
+- `improvement` — existing thing made better
+- `fix` — bug fix
+- `design` — visual / UX change
+- `security` — auth, validation, or hardening change
+- `content` — copy / messaging update
+
+**For future sessions:** any time you ship something visible to the user (new feature, design tweak, copy change, bug fix), add an entry. Easiest path:
+1. Sign in as super admin → `/admin/changelog.php` → "+ New entry"
+2. Or edit `content/changelog.json` directly and commit it
+
+This file (CLAUDE.md) keeps an internal-only summary in the section below for cross-session continuity. The user-facing list lives in JSON.
+
+---
+
+## Where we left off (resume here next session)
+
+**Last session ended:** 2026-05-09 — events + map shipped; geocode-on-save bug fixed.
+
+**Demo state in DB right now:**
+- Association `id=1, slug=demo` (Bellair Condo Association) → 420 N Atlantic Ave, Daytona Beach FL — geocoded to lat 29.2297 / lon −81.0090, map iframe renders.
+- 3 seeded events: "Pool reopening party" (audience=`all`, public), "Annual HOA meeting" (audience=`members`, hidden from landing), "Closed board session" (audience=`board`, hidden).
+- Association `id=3, slug=test` exists but has no address geocoded — its map won't render until someone hits Save on its settings.
+
+**Demo logins (note Kevin renamed the board user):**
+- Super admin: `me@kevinleigh.com / bhoaK0m3r2.6`
+- Demo board: `me+bellair@kevinleigh.com / changeme!` (was `board@demo.badasshoa.com` before — references in old transcripts may use the old email)
+
+**Quick visual check:** `https://badasshoa.com:8890/demo/` is the public landing, no login required.
+
+**Candidates for next session** (in rough order of "user has been moving in this direction"):
+1. **Board meeting minutes** — separate from announcements, stored as a list of past meetings with date + uploaded PDF + optional summary. Renders in a "Board meetings" section on the landing if any are public.
+2. **Newsletter signup** — email-only opt-in form on the landing → `newsletter_subscribers(association_id, email, confirmed_at, unsubscribe_token)` table → CSV export for the board.
+3. **Property history / building info card** — year built, number of buildings, HOA fee range, pet policy, etc. Structured fields in `associations` + a "Quick facts" section on the landing.
+4. **Per-user TZ preference** on `/dashboard/settings.php` and a single display formatter — fixes the UTC-everywhere display polish item.
+5. **IP rate limiting on `/forgot.php`** — small, low-risk, listed under "Phase 1.5 left over."
+
+**Known small follow-ups not blocking anything:**
+- See "Phase 1.5 left over" list above (CSV import, audit log viewer, image thumbnails, etc).
+
+---
+
 ## Changelog
+
+- **2026-05-09 — Public community landing + events + map.**
+    - Per-association public landing at `/{slug}/` with hero, about, amenities, photos, board (opt-in), documents, events, map, FAQ, announcements, contact form, social footer
+    - `/dashboard/events.php` board CRUD with `all`/`members`/`board` audience filter; only public events surface on the landing
+    - Photon geocoding helper (`includes/functions.php::geocode_address()`) wired to `/dashboard/settings.php`; OSM iframe renders on the landing when lat/lon set
+    - **Bug fix:** geocode-on-save was only firing when address fields *changed*. Associations that already had an address but no stored coordinates never got geocoded and their map stayed hidden. Fixed in `dashboard/settings.php` — also re-geocodes when `latitude` or `longitude` is empty regardless of address change. Verified end-to-end on `/demo/`.
+    - Public endpoints `/branding.php`, `/public-media.php`, `/public-document.php`, `/contact.php` (CSRF + honeypot) excluded from the slug-rewrite in `.htaccess`
+    - Changelog system (JSON-backed) at `/changelog.php` + `/admin/changelog.php`
 
 - **2026-05-09 — Phase 1.5: password reset flow.**
     - Added `/forgot.php` and `/reset.php` for the email-link reset flow

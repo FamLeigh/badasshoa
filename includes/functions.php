@@ -99,14 +99,63 @@ function base_url(string $path = ''): string
     return '/' . ltrim($path, '/');
 }
 
+// --- Geocode an address via Photon (free, no API key) ------------------
+// Returns ['lat' => float, 'lon' => float] on success, null on failure.
+// Silent fail; never throws.
+function geocode_address(string $query, int $timeoutSeconds = 5): ?array
+{
+    $query = trim($query);
+    if ($query === '') return null;
+    $url = 'https://photon.komoot.io/api/?q=' . rawurlencode($query) . '&limit=1';
+    $ctx = stream_context_create([
+        'http' => ['timeout' => $timeoutSeconds, 'header' => "Accept: application/json\r\n"],
+        'ssl'  => ['verify_peer' => true, 'verify_peer_name' => true],
+    ]);
+    $body = @file_get_contents($url, false, $ctx);
+    if ($body === false) return null;
+    $data = json_decode($body, true);
+    if (!is_array($data) || empty($data['features'])) return null;
+    $coords = $data['features'][0]['geometry']['coordinates'] ?? null;
+    if (!is_array($coords) || count($coords) < 2) return null;
+    // Photon returns [lon, lat]
+    return ['lat' => (float)$coords[1], 'lon' => (float)$coords[0]];
+}
+
+// --- US states + Canadian provinces datalist (for address forms) -------
+function us_ca_states_datalist(string $id = 'us-ca-states'): string
+{
+    $states = [
+        // US states
+        'Alabama','Alaska','Arizona','Arkansas','California','Colorado','Connecticut','Delaware',
+        'District of Columbia','Florida','Georgia','Hawaii','Idaho','Illinois','Indiana','Iowa',
+        'Kansas','Kentucky','Louisiana','Maine','Maryland','Massachusetts','Michigan','Minnesota',
+        'Mississippi','Missouri','Montana','Nebraska','Nevada','New Hampshire','New Jersey',
+        'New Mexico','New York','North Carolina','North Dakota','Ohio','Oklahoma','Oregon',
+        'Pennsylvania','Rhode Island','South Carolina','South Dakota','Tennessee','Texas','Utah',
+        'Vermont','Virginia','Washington','West Virginia','Wisconsin','Wyoming',
+        // Canadian provinces & territories
+        'Alberta','British Columbia','Manitoba','New Brunswick','Newfoundland and Labrador',
+        'Nova Scotia','Northwest Territories','Nunavut','Ontario','Prince Edward Island',
+        'Quebec','Saskatchewan','Yukon',
+    ];
+    $out = '<datalist id="' . e($id) . '">';
+    foreach ($states as $name) {
+        $out .= '<option value="' . e($name) . '">';
+    }
+    $out .= '</datalist>';
+    return $out;
+}
+
 // --- pricing calc (single source of truth) ------------------------------
-// Unified formula: $20 base + $0.50/unit. Tiers gate features at unit-count thresholds.
+// 30-day free trial on every paid tier. Three pricing bands:
+//   1-10   units → $20/mo flat
+//   11-100 units → $0.50/unit (no base)
+//   101+   units → $0.75/unit (no base)
+// Enterprise is a feature differentiator (SSO, SLA, multi-property), not a price tier.
 function calc_monthly_price(int $units): array
 {
-    $u = max(0, $units);
-    $price = 20.0 + (0.50 * $u);
-    if ($u <= 50)  return ['tier' => 'starter',      'price' => $price, 'cta' => 'Start free'];
-    if ($u <= 150) return ['tier' => 'growth',       'price' => $price, 'cta' => 'Start trial'];
-    if ($u <= 300) return ['tier' => 'professional', 'price' => $price, 'cta' => 'Start trial'];
-    return                ['tier' => 'enterprise',  'price' => null,   'cta' => 'Contact sales'];
+    $u = max(1, $units);
+    if ($u <= 10)  return ['tier' => 'starter',      'price' => 20.0,        'cta' => 'Start 30-day free trial'];
+    if ($u <= 100) return ['tier' => 'growth',       'price' => 0.50 * $u,   'cta' => 'Start 30-day free trial'];
+    return                ['tier' => 'professional', 'price' => 0.75 * $u,   'cta' => 'Start 30-day free trial'];
 }

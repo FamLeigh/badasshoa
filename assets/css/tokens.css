@@ -88,7 +88,7 @@
     /* --- layout --- */
     --container: 1180px;
     --container-narrow: 760px;
-    --nav-h: 72px;
+    --nav-h: 88px;
 
     /* --- motion --- */
     --t-fast: 120ms cubic-bezier(.2,.7,.3,1);

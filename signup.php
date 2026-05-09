@@ -6,6 +6,10 @@ $errors = [];
 $values = [
     'association_name' => $_POST['association_name'] ?? '',
     'address'          => $_POST['address'] ?? '',
+    'city'             => $_POST['city'] ?? '',
+    'state_region'     => $_POST['state_region'] ?? '',
+    'postal_code'      => $_POST['postal_code'] ?? '',
+    'country'          => $_POST['country'] ?? 'US',
     'unit_count'       => $_POST['unit_count'] ?? '',
     'contact_name'     => $_POST['contact_name'] ?? '',
     'contact_email'    => $_POST['contact_email'] ?? '',
@@ -24,13 +28,23 @@ if ($submitted) {
     if (trim($values['contact_name']) === '')      $errors['contact_name']     = 'Required.';
     if (!filter_var($values['contact_email'], FILTER_VALIDATE_EMAIL)) $errors['contact_email'] = 'Valid email required.';
 
+    $country = strtoupper(trim((string)$values['country'])) ?: 'US';
+    if (!preg_match('/^[A-Z]{2}$/', $country)) $country = 'US';
+
     if (!$errors) {
         $stmt = db()->prepare(
-            'INSERT INTO signups (association_name, contact_name, contact_email, contact_phone, unit_count, plan_selected, status)
-             VALUES (?, ?, ?, ?, ?, ?, ?)'
+            'INSERT INTO signups
+             (association_name, address, city, state_region, postal_code, country,
+              contact_name, contact_email, contact_phone, unit_count, plan_selected, status)
+             VALUES (?, ?, ?, ?, ?, ?,  ?, ?, ?, ?, ?, ?)'
         );
         $stmt->execute([
             trim($values['association_name']),
+            trim($values['address']) ?: null,
+            trim($values['city']) ?: null,
+            trim($values['state_region']) ?: null,
+            trim($values['postal_code']) ?: null,
+            $country,
             trim($values['contact_name']),
             trim($values['contact_email']),
             trim($values['contact_phone']),
@@ -40,6 +54,13 @@ if ($submitted) {
         ]);
         $signupId = (int)db()->lastInsertId();
 
+        $fullAddress = trim(
+            (string)$values['address']
+            . (($values['city'] || $values['state_region'] || $values['postal_code']) ? "\n" : '')
+            . trim($values['city'] . (($values['city'] && $values['state_region']) ? ', ' : '') . $values['state_region'] . ' ' . $values['postal_code'])
+            . (($country !== 'US' || true) ? "\n" . $country : '')
+        );
+
         send_mail(
             $values['contact_email'],
             'Welcome to BadassHOA — your portal is being set up',
@@ -48,7 +69,10 @@ if ($submitted) {
         send_mail(
             (config()['app']['admin_email'] ?? 'admin@badasshoa.com'),
             "New signup: {$values['association_name']} ({$values['unit_count']} units)",
-            "Plan: {$values['plan']}\nContact: {$values['contact_name']} <{$values['contact_email']}> {$values['contact_phone']}\nAddress: {$values['address']}\nSignup ID: $signupId"
+            "Plan: {$values['plan']}\n"
+            . "Contact: {$values['contact_name']} <{$values['contact_email']}> {$values['contact_phone']}\n"
+            . "Address:\n$fullAddress\n"
+            . "Signup ID: $signupId"
         );
 
         audit('signup.submitted', ['signup_id' => $signupId, 'units' => (int)$values['unit_count']]);
@@ -78,7 +102,7 @@ require __DIR__ . '/includes/header.php';
         <?php else: ?>
 
             <div class="center" style="margin-bottom: var(--sp-8);">
-                <span class="badge badge--orange">Free 14-day trial</span>
+                <span class="badge badge--orange">Free 30-day trial &middot; no card required</span>
                 <h1 class="mt-2">Set up your association.</h1>
                 <p class="muted">Three quick steps. Under five minutes.</p>
             </div>
@@ -89,7 +113,7 @@ require __DIR__ . '/includes/header.php';
                 <div class="step" data-step>Confirm</div>
             </div>
 
-            <form class="card card--padded form" method="post" action="/signup.php" novalidate>
+            <form class="card card--padded form" method="post" action="/signup.php" novalidate data-address-lookup>
                 <?= csrf_field() ?>
                 <input type="hidden" name="plan" value="<?= e($values['plan']) ?>">
 
@@ -103,13 +127,39 @@ require __DIR__ . '/includes/header.php';
                         </div>
                         <div class="field">
                             <label class="field__label" for="address">Street address</label>
-                            <input class="input" id="address" name="address" value="<?= e($values['address']) ?>" placeholder="123 Main St, Anytown">
+                            <input class="input" id="address" name="address" autocomplete="street-address" value="<?= e($values['address']) ?>" placeholder="123 Main St, Suite 100">
                         </div>
-                        <div class="field">
-                            <label class="field__label" for="unit_count">Number of units</label>
-                            <input class="input" type="number" min="1" max="2000" id="unit_count" name="unit_count" required value="<?= e((string)$values['unit_count']) ?>" placeholder="48">
-                            <div class="field__hint">Determines your plan. We&rsquo;ll confirm pricing on the next step.</div>
-                            <?php if (!empty($errors['unit_count'])): ?><div class="field__error"><?= e($errors['unit_count']) ?></div><?php endif; ?>
+                        <div style="display:grid; grid-template-columns: 1.4fr 1fr 0.8fr; gap: var(--sp-3);">
+                            <div class="field">
+                                <label class="field__label" for="city">City</label>
+                                <input class="input" id="city" name="city" autocomplete="address-level2" value="<?= e($values['city']) ?>">
+                            </div>
+                            <div class="field">
+                                <label class="field__label" for="state_region">State / Province</label>
+                                <input class="input" id="state_region" name="state_region" list="us-ca-states" autocomplete="address-level1" value="<?= e($values['state_region']) ?>">
+                            </div>
+                            <div class="field">
+                                <label class="field__label" for="postal_code">ZIP / Postal</label>
+                                <input class="input" id="postal_code" name="postal_code" autocomplete="postal-code" value="<?= e($values['postal_code']) ?>" placeholder="12345 or A1A 1A1">
+                            </div>
+                        </div>
+                        <?= us_ca_states_datalist() ?>
+                        <div class="form-row form-row--2">
+                            <div class="field">
+                                <label class="field__label" for="country">Country</label>
+                                <select class="select" id="country" name="country">
+                                    <?php $cur = strtoupper((string)$values['country']);
+                                    foreach (['US'=>'United States','CA'=>'Canada','MX'=>'Mexico','GB'=>'United Kingdom','AU'=>'Australia'] as $code=>$lbl): ?>
+                                        <option value="<?= e($code) ?>" <?= $cur===$code?'selected':'' ?>><?= e($lbl) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label class="field__label" for="unit_count">Number of units</label>
+                                <input class="input" type="number" min="1" max="2000" id="unit_count" name="unit_count" required value="<?= e((string)$values['unit_count']) ?>" placeholder="48">
+                                <div class="field__hint">Determines your plan.</div>
+                                <?php if (!empty($errors['unit_count'])): ?><div class="field__error"><?= e($errors['unit_count']) ?></div><?php endif; ?>
+                            </div>
                         </div>
                         <div class="row" style="justify-content: flex-end;">
                             <a class="btn btn--ghost" href="/">Cancel</a>
@@ -151,7 +201,12 @@ require __DIR__ . '/includes/header.php';
                         <p class="muted" style="font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600;">Review your details</p>
                         <div class="grid grid--2" style="gap: var(--sp-4); font-size: var(--fs-sm);">
                             <div><strong>Association:</strong><br><span data-confirm="association_name">—</span></div>
-                            <div><strong>Address:</strong><br><span data-confirm="address">—</span></div>
+                            <div>
+                                <strong>Address:</strong><br>
+                                <span data-confirm="address">—</span><br>
+                                <span data-confirm="city">—</span>, <span data-confirm="state_region">—</span> <span data-confirm="postal_code"></span><br>
+                                <span data-confirm="country">—</span>
+                            </div>
                             <div><strong>Units:</strong><br><span data-confirm="unit_count">—</span></div>
                             <div><strong>Contact:</strong><br><span data-confirm="contact_name">—</span> &lt;<span data-confirm="contact_email">—</span>&gt;</div>
                         </div>

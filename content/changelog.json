@@ -1,0 +1,398 @@
+[
+    {
+        "id": "cl-20260509-235151-bde2",
+        "at": "2026-05-09T23:51:51+00:00",
+        "type": "fix",
+        "title": "Geocoding now runs on first save when lat/lon is missing",
+        "description": "Previously the geocode-on-save check only fired when an address field changed, so associations with an existing address but no stored coordinates never got geocoded \u2014 and their map section stayed hidden. The check now also triggers when latitude or longitude is empty, so simply hitting Save once will populate coordinates and reveal the map.",
+        "author": "Reboooot",
+        "link": "/dashboard/settings.php"
+    },
+    {
+        "id": "cl-20260509-233407-fb87",
+        "at": "2026-05-10T07:30:00-04:00",
+        "type": "feature",
+        "title": "Events calendar \u2014 board meetings, socials, work parties",
+        "description": "New /dashboard/events.php page (board admins create/edit/delete; signed-in members see read-only). Each event has title, start + optional end, location, description, and audience (Public / Members / Board). Public events render in an Upcoming events section on the community landing, with a calendar-tile date format. Past/upcoming + audience filters in the dashboard listing.",
+        "author": "Reboooot",
+        "link": "/dashboard/events.php"
+    },
+    {
+        "id": "cl-20260509-233407-833c",
+        "at": "2026-05-10T07:00:00-04:00",
+        "type": "feature",
+        "title": "Embedded map on community landing",
+        "description": "When a board admin saves a real address on /dashboard/settings.php, we geocode it via Photon and store latitude/longitude. The /{slug}/ landing then renders an OpenStreetMap iframe centered on the property \u2014 no API key, no fees. The address-only \"View on map \u2192\" link still works as a fallback.",
+        "author": "Reboooot",
+        "link": "/dashboard/settings.php"
+    },
+    {
+        "id": "cl-20260509-232917-21ad",
+        "at": "2026-05-10T06:05:00-04:00",
+        "type": "feature",
+        "title": "Social links in the landing footer",
+        "description": "Five new fields on /dashboard/settings.php: Website, Facebook, Instagram, X/Twitter, Nextdoor. Each one renders as an inline-SVG icon in the landing footer when set. Empty fields render nothing. URLs auto-prefix with https:// if the board pasted just a domain.",
+        "author": "Reboooot",
+        "link": "/dashboard/settings.php"
+    },
+    {
+        "id": "cl-20260509-232917-4bb2",
+        "at": "2026-05-10T06:00:00-04:00",
+        "type": "security",
+        "title": "Per-board-member opt-in for the public landing",
+        "description": "Board members are no longer auto-listed on /{slug}/ \u2014 they have to explicitly opt in via /dashboard/directory.php (Edit member \u2192 \"Show in Meet your board\"). Default is off. Migration 011 added show_on_public_landing to users; existing rows default to 0 so nobody is exposed without consent.",
+        "author": "Reboooot",
+        "link": "/dashboard/directory.php"
+    },
+    {
+        "id": "cl-20260509-232556-f88c",
+        "at": "2026-05-10T05:30:00-04:00",
+        "type": "feature",
+        "title": "Meet your board, public documents, and View-on-map link",
+        "description": "Three more sections on the public landing: (1) Meet your board \u2014 auto-listed from active board roles, shown as first-name-plus-last-initial cards with role badges; (2) Documents & forms \u2014 anything in /dashboard/documents.php with access_level=public, served via the new /public-document.php gatekeeper; (3) View on map \u2014 link in the hero address that opens the property location in Google Maps.",
+        "author": "Reboooot",
+        "link": "/demo/"
+    },
+    {
+        "id": "cl-20260509-232303-3860",
+        "at": "2026-05-10T05:00:00-04:00",
+        "type": "feature",
+        "title": "FAQ + contact form on the public landing",
+        "description": "Added FAQ section and a real contact form to /{slug}/. Boards manage FAQs at /dashboard/faq.php (Q + A, sort order, edit/delete). Contact form is CSRF-protected, has a hidden honeypot field for spam, validates name + email + min 10-char message, and emails the association's contact_email (or admin_email fallback) via the existing send_mail() pipeline. Submission audit-logged.",
+        "author": "Reboooot",
+        "link": "/dashboard/faq.php"
+    },
+    {
+        "id": "cl-20260509-225509-ca62",
+        "at": "2026-05-10T04:30:00-04:00",
+        "type": "feature",
+        "title": "Public landing page is now a real community website",
+        "description": "Added five content sections to /{slug}/: hero banner image, formatted About paragraph (Quill), Amenities list (one per line, two-column grid), public photo gallery (auto-pulled from media with visibility=public), and Contact info card (email + phone). All editable on /dashboard/settings.php (board admin only). Sections render only when content exists, so nothing looks empty if a board hasn't filled it in yet.",
+        "author": "Reboooot",
+        "link": "/dashboard/settings.php"
+    },
+    {
+        "id": "cl-20260509-223331-36d3",
+        "at": "2026-05-10T03:50:00-04:00",
+        "type": "fix",
+        "title": "Landing page silently failing on public-announcement query",
+        "description": "The announcements query on /landing.php joined the users table (for author names) but selected `id` unqualified. Both tables have an `id` column, so MySQL threw an ambiguity error and the page died \u2014 visitors saw a 302 to /login.php instead of the community page. Qualified the column names. Public announcements feed now renders correctly.",
+        "author": "Reboooot",
+        "link": "/changelog.php"
+    },
+    {
+        "id": "cl-20260509-221233-63a7",
+        "at": "2026-05-10T03:35:00-04:00",
+        "type": "feature",
+        "title": "Board admins can customize their community URL slug",
+        "description": "/dashboard/settings.php has a new Slug field that controls /{slug}/ \u2014 the public-landing URL. Format-validated (a-z, 0-9, hyphens), uniqueness-checked across all associations, and audit-logged when changed. Comes with a clear warning that changing breaks any existing bookmarks.",
+        "author": "Reboooot",
+        "link": "/dashboard/settings.php"
+    },
+    {
+        "id": "cl-20260509-221233-97ba",
+        "at": "2026-05-10T03:30:00-04:00",
+        "type": "feature",
+        "title": "Public announcements feed on the community landing",
+        "description": "Announcements posted with audience=all now render on the public /{slug}/ landing page \u2014 eight most recent, with type badge, date, author, and a 360-char excerpt. Board-only or owners-only announcements stay private.",
+        "author": "Reboooot",
+        "link": "/demo/"
+    },
+    {
+        "id": "cl-20260509-220654-84b8",
+        "at": "2026-05-10T03:00:00-04:00",
+        "type": "feature",
+        "title": "Per-association public landing page at /{slug}/",
+        "description": "Each association now gets a public, branded community page at https://badasshoa.com/{slug}/ \u2014 name, address, logo, primary-color accent, and a sign-in CTA. Opt-in via Settings \u2192 Show public landing page (default off). Logo upload is also now in the Settings form (PNG/JPG/SVG/WEBP, max 1MB). Real paths like /dashboard/, /admin/, /login.php, /assets/ all take precedence so the rewrite never collides.",
+        "author": "Reboooot",
+        "link": "/dashboard/settings.php"
+    },
+    {
+        "id": "cl-20260509-215516-b8ff",
+        "at": "2026-05-10T02:30:00-04:00",
+        "type": "feature",
+        "title": "Real address autocomplete (Photon/OSM)",
+        "description": "Type a partial street address on /signup.php, /admin/associations.php (edit), or /dashboard/settings.php and see a dropdown of real places. Click one to auto-fill street, city, state/province, ZIP, and country. Powered by Photon (komoot.io) \u2014 free, no API key, OpenStreetMap data. ZIP-only lookup is still wired as a fallback.",
+        "author": "Reboooot",
+        "link": "/dashboard/settings.php"
+    },
+    {
+        "id": "cl-20260509-211853-07a5",
+        "at": "2026-05-10T02:00:00-04:00",
+        "type": "feature",
+        "title": "Per-unit details (bedrooms, baths, sqft, ownership %, type)",
+        "description": "New units table keyed by (association_id, unit_number). Edit-member form on /dashboard/directory.php now has a Unit details section that upserts the unit row when you save. Properties belong to the unit so two members in the same unit share them.",
+        "author": "Reboooot",
+        "link": "/dashboard/directory.php"
+    },
+    {
+        "id": "cl-20260509-211436-76c0",
+        "at": "2026-05-10T01:45:00-04:00",
+        "type": "fix",
+        "title": "Dashboard 'Units' tile now counts actual registered units",
+        "description": "Was reading the static unit_count capacity from association settings. Now counts distinct unit numbers across active + pending members \u2014 matches what you actually see in /dashboard/directory.php.",
+        "author": "Reboooot",
+        "link": "/dashboard/"
+    },
+    {
+        "id": "cl-20260509-211213-a280",
+        "at": "2026-05-10T01:30:00-04:00",
+        "type": "improvement",
+        "title": "Removed change-password card from association settings",
+        "description": "Settings page is association-level (name, address, branding) \u2014 password changes are person-level. Users who want to change their password use /forgot.php; super admins or board admins can change any user's password via /admin/users.php or the add-member flow.",
+        "author": "Reboooot",
+        "link": "/dashboard/settings.php"
+    },
+    {
+        "id": "cl-20260509-210701-520a",
+        "at": "2026-05-10T01:10:00-04:00",
+        "type": "fix",
+        "title": "Board admins can actually add members now",
+        "description": "Two issues \u2014 labeled the action \"+ Add member\" instead of \"+ Invite\", and fixed a real bug where new users were created with status=pending which silently rejected them at login. They now start as status=active and can sign in immediately with the password you set or the auto-generated one we email them.",
+        "author": "Reboooot",
+        "link": "/dashboard/directory.php"
+    },
+    {
+        "id": "cl-20260509-210427-3f72",
+        "at": "2026-05-10T00:55:00-04:00",
+        "type": "improvement",
+        "title": "Removed demo-credentials hint from /login.php",
+        "description": "The login page used to show local-dev demo logins. Removed for cleaner production-grade UX.",
+        "author": "Reboooot",
+        "link": "/login.php"
+    },
+    {
+        "id": "cl-20260509-210427-2036",
+        "at": "2026-05-10T00:50:00-04:00",
+        "type": "security",
+        "title": "Super admins can reset any user's password",
+        "description": "User edit form on /admin/users.php now has a Change Password section. Set a new bcrypt-hashed password directly, or click Generate Random for a 14-char password from a non-ambiguous charset (no I/l/O/0). Saving invalidates any outstanding password-reset tokens for that user. Audit-logged separately as user.password_changed_admin.",
+        "author": "Reboooot",
+        "link": "/admin/users.php"
+    },
+    {
+        "id": "cl-20260509-204843-da30",
+        "at": "2026-05-10T00:35:00-04:00",
+        "type": "feature",
+        "title": "ZIP / postal-code auto-fill",
+        "description": "Type a US ZIP or Canadian postal code on /signup.php, /admin/associations.php (edit), or /dashboard/settings.php and the city + state/province auto-populate. Powered by Zippopotam.us \u2014 free, no API key. Manual entry still works for international addresses or if the API is unreachable.",
+        "author": "Reboooot",
+        "link": "/dashboard/settings.php"
+    },
+    {
+        "id": "cl-20260509-204843-a82b",
+        "at": "2026-05-10T00:30:00-04:00",
+        "type": "feature",
+        "title": "Super admins can edit any user",
+        "description": "/admin/users.php now has an Edit button on every row \u2014 full edit form for name, email, phone, role, association, unit, status, owner flag. Email-uniqueness check; self-lockout guard prevents super admins from demoting or deactivating their own account.",
+        "author": "Reboooot",
+        "link": "/admin/users.php"
+    },
+    {
+        "id": "cl-20260509-235900-a01",
+        "at": "2026-05-09T23:59:00-04:00",
+        "type": "feature",
+        "title": "Public changelog launched",
+        "description": "This page. Every meaningful change to BadassHOA is logged here, categorized, and dated.",
+        "author": "Reboooot",
+        "link": "/changelog.php"
+    },
+    {
+        "id": "cl-20260509-230000-b01",
+        "at": "2026-05-09T23:00:00-04:00",
+        "type": "content",
+        "title": "Hero headline + lede rewrite",
+        "description": "New headline: 'Transparent, Simplified and Built for Your Community.' New lede pays off the three words \u2014 every feature on every plan, in one portal your board can run and your community will actually use.",
+        "author": "Reboooot",
+        "link": "/"
+    },
+    {
+        "id": "cl-20260509-220000-c01",
+        "at": "2026-05-09T22:00:00-04:00",
+        "type": "feature",
+        "title": "Signup detail view for super admins",
+        "description": "Each pending signup row has a 'View' button that opens a clean detail card with full address, contact info (with mailto: + tel: links), submitted timestamp, and inline approve/reject buttons.",
+        "author": "Reboooot",
+        "link": "/admin/associations.php"
+    },
+    {
+        "id": "cl-20260509-213000-d01",
+        "at": "2026-05-09T21:30:00-04:00",
+        "type": "feature",
+        "title": "Structured address fields with US/Canadian state datalist",
+        "description": "Replaced the freeform address input on /admin/associations.php, /dashboard/settings.php, and /signup.php with separate Street / City / State-Province / ZIP-Postal / Country fields. Type-ahead datalist lists every US state and Canadian province; free text still allowed for international.",
+        "author": "Reboooot",
+        "link": "/dashboard/settings.php"
+    },
+    {
+        "id": "cl-20260509-210000-e01",
+        "at": "2026-05-09T21:00:00-04:00",
+        "type": "feature",
+        "title": "Edit any association from the super-admin panel",
+        "description": "/admin/associations.php now has an Edit button on every row \u2014 lets super admins update name, slug, address, plan, status, and primary color. Slug uniqueness enforced; audit-logged on save.",
+        "author": "Reboooot",
+        "link": "/admin/associations.php"
+    },
+    {
+        "id": "cl-20260509-203000-f01",
+        "at": "2026-05-09T20:30:00-04:00",
+        "type": "design",
+        "title": "Refined logos + bigger nav lockup",
+        "description": "Brand logos shipped to /assets/images/. Public top nav uses the color version (now 56px tall in an 88px nav bar for readability). Sidebars use the white version with the BadassHOA Symbol for the collapsed-icon state.",
+        "author": "Reboooot",
+        "link": "/"
+    },
+    {
+        "id": "cl-20260509-200000-g01",
+        "at": "2026-05-09T20:00:00-04:00",
+        "type": "fix",
+        "title": "Hero CTA contrast over video",
+        "description": "Inverted the hero overlay so the darkest pixels sit where copy lives (was backwards). Orange CTA now has a subtle white inner ring + drop shadow so its silhouette holds against any video frame. Ghost button bumped to a stronger frosted-glass treatment.",
+        "author": "Reboooot",
+        "link": "/"
+    },
+    {
+        "id": "cl-20260509-193000-h01",
+        "at": "2026-05-09T19:30:00-04:00",
+        "type": "fix",
+        "title": "Nav button text now stays white on orange",
+        "description": "The site-nav anchor color rule was overriding button text color. Scoped it to :not(.btn) so primary buttons keep their white-on-orange treatment regardless of context.",
+        "author": "Reboooot",
+        "link": "/"
+    },
+    {
+        "id": "cl-20260509-190000-i01",
+        "at": "2026-05-09T19:00:00-04:00",
+        "type": "design",
+        "title": "Full-bleed video hero",
+        "description": "Replaced the YouTube iframe with a self-hosted MP4 background video and overlaid the hero copy on top. Centered single-column layout, navy radial overlay for text legibility, dark-mode-friendly button styling, reduced-motion fallback.",
+        "author": "Reboooot",
+        "link": "/"
+    },
+    {
+        "id": "cl-20260509-183000-j01",
+        "at": "2026-05-09T18:30:00-04:00",
+        "type": "feature",
+        "title": "Rules CSV import + downloadable template",
+        "description": "Board admins can bulk-import rules via CSV at /dashboard/search.php?action=import. Required columns: title, body. Optional: rule_number, category, source, effective_date. Unknown categories auto-create. Template available at ?download=template.",
+        "author": "Reboooot",
+        "link": "/dashboard/search.php"
+    },
+    {
+        "id": "cl-20260509-180000-k01",
+        "at": "2026-05-09T18:00:00-04:00",
+        "type": "feature",
+        "title": "WYSIWYG editor + image upload on rules",
+        "description": "/dashboard/search.php?action=new now has a Quill 2.0.2 editor for rule bodies. Toolbar includes formatting, lists, links, and an image button that uploads directly into the rule via /dashboard/upload-image.php (board admin only, MIME whitelist, 8MB cap, served via the existing file gatekeeper).",
+        "author": "Reboooot",
+        "link": "/dashboard/search.php?action=new"
+    },
+    {
+        "id": "cl-20260509-173000-l01",
+        "at": "2026-05-09T17:30:00-04:00",
+        "type": "feature",
+        "title": "Rule categories with management UI + effective dates",
+        "description": "Categories are now first-class \u2014 create / list / delete via /dashboard/search.php?action=categories. The new and edit-rule forms use a category dropdown (with an 'Add new' link). Each rule also has an effective_date input.",
+        "author": "Reboooot",
+        "link": "/dashboard/search.php?action=categories"
+    },
+    {
+        "id": "cl-20260509-170000-m01",
+        "at": "2026-05-09T17:00:00-04:00",
+        "type": "design",
+        "title": "Left-sidebar layout for dashboard + admin",
+        "description": "Replaced the horizontal top-nav on /dashboard/ and /admin/ with a fixed left sidebar (collapsible to icons-only, mobile slide-over). Persistent collapse state, active-link highlighting, brand logo + user info + sign out all in one place.",
+        "author": "Reboooot",
+        "link": "/dashboard/"
+    },
+    {
+        "id": "cl-20260509-163000-n01",
+        "at": "2026-05-09T16:30:00-04:00",
+        "type": "feature",
+        "title": "Activity log viewer for super admins",
+        "description": "/admin/activity.php \u2014 paginated audit log (50/page) with filters for association, action, actor, and since-date. Pulls every audit event across every tenant. Linked from the audit-events stat tile on /admin/.",
+        "author": "Reboooot",
+        "link": "/admin/activity.php"
+    },
+    {
+        "id": "cl-20260509-160000-o01",
+        "at": "2026-05-09T16:00:00-04:00",
+        "type": "feature",
+        "title": "Committees with chairs and members",
+        "description": "New /dashboard/committees.php \u2014 board admins can create committees (e.g. Rules, Beautification, Architectural Review), add or remove members, designate a chair (auto-demotes prior chair), and delete the whole committee. Committee count is a clickable stat tile on the dashboard.",
+        "author": "Reboooot",
+        "link": "/dashboard/committees.php"
+    },
+    {
+        "id": "cl-20260509-153000-p01",
+        "at": "2026-05-09T15:30:00-04:00",
+        "type": "feature",
+        "title": "Member directory: edit + CSV bulk import",
+        "description": "Board admins can now edit any member (name, unit, role, email, phone, owner status, status) and bulk-import a roster via CSV. Sort is a proper alphanumeric natural sort \u2014 101, 101A, 102, B2 in the right order. Owners-only filter.",
+        "author": "Reboooot",
+        "link": "/dashboard/directory.php"
+    },
+    {
+        "id": "cl-20260509-150000-q01",
+        "at": "2026-05-09T15:00:00-04:00",
+        "type": "improvement",
+        "title": "Dashboard stat tiles are clickable",
+        "description": "Every stat card on /admin/ and /dashboard/ is now an anchor that navigates to the relevant management page. Hover gives a subtle lift, an arrow slides in, and the value goes orange.",
+        "author": "Reboooot",
+        "link": "/dashboard/"
+    },
+    {
+        "id": "cl-20260509-143000-r01",
+        "at": "2026-05-09T14:30:00-04:00",
+        "type": "content",
+        "title": "Pricing model finalized",
+        "description": "$20 flat for up to 10 units, $0.50/unit for 11-100, $0.75/unit for 101+. 30-day free trial included. Every plan includes every feature \u2014 no tier-gating on SSO, API access, or audit log export. Calculator updated, all four pricing cards show identical features.",
+        "author": "Reboooot",
+        "link": "/pricing.php"
+    },
+    {
+        "id": "cl-20260509-140000-s01",
+        "at": "2026-05-09T14:00:00-04:00",
+        "type": "design",
+        "title": "Inter typography throughout",
+        "description": "Switched from Syne to Inter as the single typeface for the whole site. Hierarchy comes from weight + size + tight negative tracking on display-sized headings.",
+        "author": "Reboooot",
+        "link": "/"
+    },
+    {
+        "id": "cl-20260509-133000-t01",
+        "at": "2026-05-09T13:30:00-04:00",
+        "type": "fix",
+        "title": "Pricing calculator field can be cleared during typing",
+        "description": "Clearing the unit-count input no longer snaps the value back to 50. Empty state is allowed mid-typing; on blur the field falls back to 50 only if it's still empty or invalid.",
+        "author": "Reboooot",
+        "link": "/pricing.php"
+    },
+    {
+        "id": "cl-20260509-130000-u01",
+        "at": "2026-05-09T13:00:00-04:00",
+        "type": "security",
+        "title": "Password reset flow + change-password card",
+        "description": "Added /forgot.php and /reset.php with SHA-256 hashed tokens, 1-hour TTL, single-use, anti-enumeration messaging. Plus a 'Change your password' card on /dashboard/settings.php for already-logged-in users. Outstanding password reset tokens are invalidated when the user changes their password.",
+        "author": "Reboooot",
+        "link": "/forgot.php"
+    },
+    {
+        "id": "cl-20260509-123000-v01",
+        "at": "2026-05-09T12:30:00-04:00",
+        "type": "fix",
+        "title": "Pinned every PDO connection to UTC",
+        "description": "Discovered during password reset testing \u2014 MAMP MySQL ran in EDT while PHP defaulted to UTC, causing 1-hour reset tokens to look already-expired. db.php now sets time_zone='+00:00' on every connection so PHP's time() and MySQL's NOW() agree.",
+        "author": "Reboooot",
+        "link": null
+    },
+    {
+        "id": "cl-20260509-120000-w01",
+        "at": "2026-05-09T12:00:00-04:00",
+        "type": "feature",
+        "title": "Phase 1 launched",
+        "description": "Multi-tenant SaaS for condo and HOA associations. Public marketing site, board dashboard, super-admin panel, full design system, 11-table schema with audit log, file uploads with secure gatekeeper, CSRF + login throttling, role-based access. Initial 6 dashboard pages: home, documents, rules, directory, communications, media, settings.",
+        "author": "Reboooot",
+        "link": "/"
+    }
+]

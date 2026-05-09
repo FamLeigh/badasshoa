@@ -2,25 +2,33 @@
 declare(strict_types=1);
 require_once __DIR__ . '/includes/auth.php';
 
-$page_title = 'BadassHOA — Run Your Condo Like a Boss';
+$page_title = 'BadassHOA — Transparent, Simplified and Built for Your Community';
 require __DIR__ . '/includes/header.php';
 ?>
 
-<section class="hero">
+<section class="hero hero--video">
+    <video class="hero__video" autoplay muted loop playsinline preload="auto"
+           poster="/assets/images/hero-poster.png" aria-hidden="true">
+        <source src="/assets/videos/hero.mp4" type="video/mp4">
+    </video>
+    <div class="hero__overlay" aria-hidden="true"></div>
+
     <div class="container">
-        <span class="hero__eyebrow">Modern HOA software</span>
-        <h1>Run Your Condo Like a Boss.</h1>
-        <p class="hero__lede">
-            The no-nonsense management platform built for real boards. Documents, rules, announcements, and people — in one portal residents will actually use.
-        </p>
-        <div class="hero__ctas">
-            <a class="btn btn--primary btn--lg" href="/signup.php">Get started free</a>
-            <a class="btn btn--ghost btn--lg" href="/pricing.php">See pricing</a>
-        </div>
-        <div class="hero__meta">
-            <span><strong>5 minutes</strong> to set up</span>
-            <span><strong>No credit card</strong> required</span>
-            <span><strong>Made for</strong> condos &amp; HOAs of every size</span>
+        <div class="hero__copy hero__copy--centered">
+            <span class="hero__eyebrow">Modern HOA software</span>
+            <h1>Transparent, Simplified and Built for Your Community.</h1>
+            <p class="hero__lede">
+                Documents, rules, announcements, and a resident directory &mdash; every feature on every plan, in one portal your board can run and your community will actually use.
+            </p>
+            <div class="hero__ctas">
+                <a class="btn btn--primary btn--lg" href="/signup.php">Get started free</a>
+                <a class="btn btn--ghost btn--lg" href="/pricing.php">See pricing</a>
+            </div>
+            <div class="hero__meta">
+                <span><strong>5 minutes</strong> to set up</span>
+                <span><strong>No credit card</strong> required</span>
+                <span><strong>Made for</strong> condos &amp; HOAs of every size</span>
+            </div>
         </div>
     </div>
 </section>
@@ -87,39 +95,47 @@ require __DIR__ . '/includes/header.php';
         <div class="grid grid--3">
             <div class="price-card">
                 <div class="price-card__name">Starter</div>
-                <div class="price-card__price">$20 + $0.50<small>/unit/mo</small></div>
-                <div class="price-card__limit">Up to 50 units</div>
+                <div class="price-card__price">$20<small>/mo</small></div>
+                <div class="price-card__limit">Up to 10 units</div>
                 <ul>
-                    <li>All core features</li>
-                    <li>Document storage 10 GB</li>
-                    <li>Email support</li>
+                    <li>Documents, rules, directory, comms, media</li>
+                    <li>Unlimited storage</li>
+                    <li>Priority support</li>
+                    <li>Custom branding</li>
+                    <li>Audit log + API access</li>
+                    <li>SSO ready</li>
                 </ul>
-                <a class="btn btn--ghost" href="/signup.php?plan=starter">Start free</a>
+                <a class="btn btn--ghost" href="/signup.php?plan=starter">Start free trial</a>
             </div>
 
             <div class="price-card price-card--featured">
                 <div class="price-card__name">Growth</div>
-                <div class="price-card__price">$20 + $0.50<small>/unit/mo</small></div>
-                <div class="price-card__limit">51 – 150 units</div>
+                <div class="price-card__price">$0.50<small>/unit/mo</small></div>
+                <div class="price-card__limit">11 – 100 units</div>
                 <ul>
-                    <li>Everything in Starter</li>
-                    <li>Document storage 50 GB</li>
+                    <li>Documents, rules, directory, comms, media</li>
+                    <li>Unlimited storage</li>
                     <li>Priority support</li>
                     <li>Custom branding</li>
+                    <li>Audit log + API access</li>
+                    <li>SSO ready</li>
                 </ul>
-                <a class="btn btn--primary" href="/signup.php?plan=growth">Start trial</a>
+                <a class="btn btn--primary" href="/signup.php?plan=growth">Start free trial</a>
             </div>
 
             <div class="price-card">
                 <div class="price-card__name">Professional</div>
-                <div class="price-card__price">$20 + $0.50<small>/unit/mo</small></div>
-                <div class="price-card__limit">151 – 300 units</div>
+                <div class="price-card__price">$0.75<small>/unit/mo</small></div>
+                <div class="price-card__limit">101+ units</div>
                 <ul>
-                    <li>Everything in Growth</li>
-                    <li>Document storage 200 GB</li>
-                    <li>Dedicated success manager</li>
+                    <li>Documents, rules, directory, comms, media</li>
+                    <li>Unlimited storage</li>
+                    <li>Priority support</li>
+                    <li>Custom branding</li>
+                    <li>Audit log + API access</li>
+                    <li>SSO ready</li>
                 </ul>
-                <a class="btn btn--ghost" href="/signup.php?plan=professional">Start trial</a>
+                <a class="btn btn--ghost" href="/signup.php?plan=professional">Start free trial</a>
             </div>
         </div>
 

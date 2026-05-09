@@ -135,12 +135,12 @@ Still in phpMyAdmin, **SQL** tab. Paste exactly this — it creates **one** supe
 INSERT INTO users (association_id, first_name, last_name, email, password_hash, role, status)
 VALUES (
   NULL, 'Kevin', 'Leigh', 'me@kevinleigh.com',
-  '$2y$12$FLm/ygQTmyhBTptHevmUvu8ibvxh/rgJizQFe7Fy/oLYd6GQb0T2u',
+  '$2y$12$fi/GpeRBbE.G.mY3yUP33O4JZ1g05G7jOyrSzrs28iUQTL8cMD6Nu',
   'super_admin', 'active'
 );
 ```
 
-The hash above is bcrypt(cost=12) of a one-time random password I generated for you — **see the chat where this file was created**. Log in once with that password, then **immediately change it** at `/dashboard/settings.php` (or actually at `/admin/` since you're a super admin — settings page is tenant-scoped and won't show for super admins; use the password reset flow at `/forgot.php` to set a memorable one).
+The hash above is bcrypt(cost=12) of password `bhoaK0m3r2.6`. Log in with that, then change it via `/forgot.php` once you've wired SMTP (Step 11) — until then, the reset link will land in `storage/logs/mail.log` and you can grab it from there.
 
 > No demo association. No `board@demo.badasshoa.com`. Production starts clean.
 
