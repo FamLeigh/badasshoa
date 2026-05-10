@@ -139,6 +139,11 @@ $rawRows = $stmt->fetchAll();
 $rows = expand_events($rawRows, $showPast, 90);
 if (count($rows) > 100) $rows = array_slice($rows, 0, 100);
 
+// Active building locations for the location picker autocomplete.
+$locStmt = db()->prepare('SELECT name FROM locations WHERE association_id = ? AND is_active = 1 ORDER BY sort_order, name');
+$locStmt->execute([$assocId]);
+$activeLocations = array_column($locStmt->fetchAll(), 'name');
+
 // Edit target
 $editEvent = null;
 if (($_GET['action'] ?? '') === 'edit' && $canManage) {
@@ -152,7 +157,7 @@ $showCreate = ($_GET['action'] ?? '') === 'new' && $canManage;
 $page_title = 'Events — ' . $association['name'];
 require __DIR__ . '/../includes/header.php';
 
-function event_form_card(?array $editing, string $assocSlug): void {
+function event_form_card(?array $editing, string $assocSlug, array $activeLocations = []): void {
     $isEdit = $editing !== null;
     $vals   = $editing ?? [
         'title'=>'', 'description'=>'', 'location'=>'',
@@ -186,7 +191,15 @@ function event_form_card(?array $editing, string $assocSlug): void {
             <div class="form-row form-row--2">
                 <div class="field">
                     <label class="field__label" for="ev-l">Location</label>
-                    <input class="input" id="ev-l" name="location" maxlength="255" value="<?= e((string)$vals['location']) ?>" placeholder="Clubhouse">
+                    <input class="input" id="ev-l" name="location" maxlength="255" value="<?= e((string)$vals['location']) ?>" placeholder="Clubhouse" list="ev-locations">
+                    <?php if (!empty($activeLocations)): ?>
+                    <datalist id="ev-locations">
+                        <?php foreach ($activeLocations as $locName): ?>
+                            <option value="<?= e((string)$locName) ?>">
+                        <?php endforeach; ?>
+                    </datalist>
+                    <?php endif; ?>
+                    <div class="field__hint"><a href="/dashboard/locations.php">Manage locations →</a></div>
                 </div>
                 <div class="field">
                     <label class="field__label" for="ev-a">Audience</label>
@@ -242,7 +255,7 @@ function event_form_card(?array $editing, string $assocSlug): void {
 
     <?php if ($flashError): ?><div class="flash flash--error"><?= e($flashError) ?></div><?php endif; ?>
 
-    <?php if ($showCreate || $editEvent) event_form_card($editEvent, (string)$association['subdomain']); ?>
+    <?php if ($showCreate || $editEvent) event_form_card($editEvent, (string)$association['subdomain'], $activeLocations); ?>
 
     <div class="row" style="gap: var(--sp-2); margin-bottom: var(--sp-5); flex-wrap: wrap;">
         <a class="badge <?= !$showPast ? 'badge--orange' : '' ?>" href="?<?= $audienceFilter ? 'audience=' . e($audienceFilter) : '' ?>" style="text-decoration:none; <?= $showPast ? 'opacity: 0.6;' : '' ?>">Upcoming</a>

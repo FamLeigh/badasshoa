@@ -24,6 +24,7 @@ function nav_icon(string $name): string
         case 'overview':       return "<svg $base><rect x='3' y='3' width='7' height='7'/><rect x='14' y='3' width='7' height='7'/><rect x='14' y='14' width='7' height='7'/><rect x='3' y='14' width='7' height='7'/></svg>";
         case 'associations':   return "<svg $base><path d='M3 21h18'/><path d='M5 21V7l8-4v18'/><path d='M19 21V11l-6-4'/><path d='M9 9v.01M9 12v.01M9 15v.01M9 18v.01'/></svg>";
         case 'activity':       return "<svg $base><polyline points='22 12 18 12 15 21 9 3 6 12 2 12'/></svg>";
+        case 'locations':      return "<svg $base><path d='M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z'/><circle cx='12' cy='10' r='3'/></svg>";
         case 'menu':           return "<svg $base><line x1='3' y1='12' x2='21' y2='12'/><line x1='3' y1='6' x2='21' y2='6'/><line x1='3' y1='18' x2='21' y2='18'/></svg>";
         case 'collapse':       return "<svg $base><rect x='3' y='3' width='18' height='18' rx='2' ry='2'/><line x1='9' y1='3' x2='9' y2='21'/></svg>";
         case 'logout':         return "<svg $base><path d='M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4'/><polyline points='16 17 21 12 16 7'/><line x1='21' y1='12' x2='9' y2='12'/></svg>";
@@ -212,6 +213,7 @@ $userInitial = strtoupper(substr(trim((string)($_SESSION['name'] ?? $_SESSION['e
             <?= nav_link('/dashboard/media.php',       'media',          'Media',          'media',          $active) ?>
             <?= nav_link('/dashboard/faq.php',         'rules',          'FAQ',            'faq',            $active) ?>
             <?php if (role_can_manage(viewing_role())): ?>
+                <?= nav_link('/dashboard/locations.php',   'locations',      'Locations',      'locations',      $active) ?>
                 <?= nav_link('/dashboard/activity.php',    'activity',       'Activity',       'activity',       $active) ?>
             <?php endif; ?>
             <?= nav_link('/dashboard/settings.php',    'settings',       'Settings',       'settings',       $active) ?>
