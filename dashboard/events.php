@@ -15,7 +15,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'add') {
     $starts      = trim((string)($_POST['starts_at'] ?? ''));
     $ends        = trim((string)($_POST['ends_at'] ?? ''));
     $audience    = $_POST['audience'] ?? 'members';
+    $recurType   = $_POST['recurrence_type'] ?? 'none';
+    $recurUntil  = trim((string)($_POST['recurrence_until'] ?? ''));
     if (!in_array($audience, ['all','members','board'], true)) $audience = 'members';
+    if (!in_array($recurType, ['none','daily','weekly','biweekly','monthly'], true)) $recurType = 'none';
+    if ($recurUntil !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $recurUntil)) $recurUntil = '';
+    $recurUntilSql = ($recurType !== 'none' && $recurUntil !== '') ? $recurUntil : null;
 
     $startsTs = $starts !== '' ? strtotime($starts) : 0;
     $endsTs   = $ends   !== '' ? strtotime($ends)   : 0;
@@ -27,13 +32,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'add') {
         $startsSql = date('Y-m-d H:i:s', $startsTs);
         $endsSql   = $endsTs ? date('Y-m-d H:i:s', $endsTs) : null;
         $stmt = db()->prepare(
-            'INSERT INTO events (association_id, title, description, location, starts_at, ends_at, audience, created_by)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+            'INSERT INTO events (association_id, title, description, location, starts_at, ends_at, audience, recurrence_type, recurrence_until, created_by)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
-        $stmt->execute([$assocId, $title, $description ?: null, $location ?: null, $startsSql, $endsSql, $audience, (int)$user['id']]);
+        $stmt->execute([$assocId, $title, $description ?: null, $location ?: null, $startsSql, $endsSql, $audience, $recurType, $recurUntilSql, (int)$user['id']]);
         $newId = (int)db()->lastInsertId();
-        audit('event.created', ['title' => $title, 'audience' => $audience], $newId, 'event');
-        flash('success', "Event \"$title\" added.");
+        audit('event.created', ['title' => $title, 'audience' => $audience, 'recurrence' => $recurType], $newId, 'event');
+        flash('success', "Event \"$title\" added" . ($recurType !== 'none' ? " (repeats {$recurType})." : '.'));
         redirect('/dashboard/events.php');
     }
 }
@@ -49,7 +54,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit') 
     $starts      = trim((string)($_POST['starts_at'] ?? ''));
     $ends        = trim((string)($_POST['ends_at'] ?? ''));
     $audience    = $_POST['audience'] ?? 'members';
+    $recurType   = $_POST['recurrence_type'] ?? 'none';
+    $recurUntil  = trim((string)($_POST['recurrence_until'] ?? ''));
     if (!in_array($audience, ['all','members','board'], true)) $audience = 'members';
+    if (!in_array($recurType, ['none','daily','weekly','biweekly','monthly'], true)) $recurType = 'none';
+    if ($recurUntil !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $recurUntil)) $recurUntil = '';
+    $recurUntilSql = ($recurType !== 'none' && $recurUntil !== '') ? $recurUntil : null;
 
     $check = db()->prepare('SELECT 1 FROM events WHERE id = ? AND association_id = ?');
     $check->execute([$eid, $assocId]);
@@ -62,15 +72,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit') 
     elseif ($endsTs && $endsTs < $startsTs)      $flashError = 'End must be after start.';
     else {
         db()->prepare(
-            'UPDATE events SET title = ?, description = ?, location = ?, starts_at = ?, ends_at = ?, audience = ?
+            'UPDATE events SET title = ?, description = ?, location = ?, starts_at = ?, ends_at = ?, audience = ?,
+                                recurrence_type = ?, recurrence_until = ?
              WHERE id = ? AND association_id = ?'
         )->execute([
             $title, $description ?: null, $location ?: null,
             date('Y-m-d H:i:s', $startsTs),
             $endsTs ? date('Y-m-d H:i:s', $endsTs) : null,
-            $audience, $eid, $assocId,
+            $audience, $recurType, $recurUntilSql, $eid, $assocId,
         ]);
-        audit('event.edited', ['title' => $title], $eid, 'event');
+        audit('event.edited', ['title' => $title, 'recurrence' => $recurType], $eid, 'event');
         flash('success', "Event updated.");
         redirect('/dashboard/events.php');
     }
@@ -104,19 +115,29 @@ if (role_can_manage(viewing_role())) {
 }
 $placeholders = implode(',', array_fill(0, count($allowedAudiences), '?'));
 
-$timeCondition = $showPast ? 'starts_at < NOW()' : 'starts_at >= NOW()';
-$orderBy       = $showPast ? 'starts_at DESC' : 'starts_at ASC';
+// Fetch raw rows; the expand_events() helper handles past/upcoming filtering
+// in PHP because recurring series have a single starts_at but many
+// occurrences, so SQL date filters can't narrow them correctly.
+// Prune obviously-stale data with a coarse SQL filter first to keep volume low.
+$pruneSql = $showPast
+    ? "(recurrence_type = 'none' AND starts_at < NOW())
+       OR (recurrence_type <> 'none' AND COALESCE(recurrence_until, NOW() - INTERVAL 1 DAY) < CURDATE())"
+    : "(recurrence_type = 'none' AND starts_at >= NOW())
+       OR (recurrence_type <> 'none' AND (recurrence_until IS NULL OR recurrence_until >= CURDATE()))";
 
-$sql = "SELECT * FROM events WHERE association_id = ? AND audience IN ($placeholders) AND $timeCondition";
+$sql = "SELECT * FROM events
+         WHERE association_id = ? AND audience IN ($placeholders) AND ($pruneSql)";
 $params = array_merge([$assocId], $allowedAudiences);
 if (in_array($audienceFilter, ['all','members','board'], true)) {
     $sql .= ' AND audience = ?';
     $params[] = $audienceFilter;
 }
-$sql .= " ORDER BY $orderBy LIMIT 100";
+$sql .= " LIMIT 200"; // raw rows; occurrences are computed below
 $stmt = db()->prepare($sql);
 $stmt->execute($params);
-$rows = $stmt->fetchAll();
+$rawRows = $stmt->fetchAll();
+$rows = expand_events($rawRows, $showPast, 90);
+if (count($rows) > 100) $rows = array_slice($rows, 0, 100);
 
 // Edit target
 $editEvent = null;
@@ -133,7 +154,13 @@ require __DIR__ . '/../includes/header.php';
 
 function event_form_card(?array $editing, string $assocSlug): void {
     $isEdit = $editing !== null;
-    $vals   = $editing ?? ['title'=>'','description'=>'','location'=>'','starts_at'=>'','ends_at'=>'','audience'=>'members','id'=>0];
+    $vals   = $editing ?? [
+        'title'=>'', 'description'=>'', 'location'=>'',
+        'starts_at'=>'', 'ends_at'=>'', 'audience'=>'members',
+        'recurrence_type'=>'none', 'recurrence_until'=>'', 'id'=>0,
+    ];
+    $vals['recurrence_type']  ??= 'none';
+    $vals['recurrence_until'] ??= '';
     ?>
     <div class="card card--padded" style="margin-bottom: var(--sp-6);">
         <h3 class="card__title"><?= $isEdit ? 'Edit event' : 'New event' ?></h3>
@@ -168,6 +195,22 @@ function event_form_card(?array $editing, string $assocSlug): void {
                         <option value="members" <?= $vals['audience']==='members' ?'selected':'' ?>>Members — signed-in residents only</option>
                         <option value="board"   <?= $vals['audience']==='board'   ?'selected':'' ?>>Board only</option>
                     </select>
+                </div>
+            </div>
+            <div class="form-row form-row--2">
+                <div class="field">
+                    <label class="field__label" for="ev-r">Repeats</label>
+                    <select class="select" id="ev-r" name="recurrence_type">
+                        <?php foreach (['none'=>'No (one-time event)','daily'=>'Daily','weekly'=>'Weekly (same day)','biweekly'=>'Every 2 weeks','monthly'=>'Monthly (same day-of-month)'] as $v=>$lbl): ?>
+                            <option value="<?= e($v) ?>" <?= $vals['recurrence_type']===$v?'selected':'' ?>><?= e($lbl) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <div class="field__hint">Recurring events show every occurrence on the listing and the public landing.</div>
+                </div>
+                <div class="field">
+                    <label class="field__label" for="ev-ru">Repeats until (optional)</label>
+                    <input class="input" type="date" id="ev-ru" name="recurrence_until" value="<?= e((string)$vals['recurrence_until']) ?>">
+                    <div class="field__hint">Leave blank for ongoing — the next 90 days are always shown.</div>
                 </div>
             </div>
             <div class="field">
@@ -240,6 +283,11 @@ function event_form_card(?array $editing, string $assocSlug): void {
             <div style="flex: 1; min-width: 0;">
                 <div class="row" style="gap: var(--sp-2); margin-bottom: var(--sp-2); flex-wrap: wrap;">
                     <span class="badge <?= $audClass ?>"><?= e((string)$ev['audience']) ?></span>
+                    <?php if (($ev['recurrence_type'] ?? 'none') !== 'none'): ?>
+                        <span class="badge" style="background: var(--color-surface); color: var(--color-text-soft); font-size: var(--fs-xs);">
+                            ↻ <?= e((string)$ev['recurrence_type']) ?>
+                        </span>
+                    <?php endif; ?>
                     <span class="muted" style="font-size: var(--fs-sm);">
                         <?= e(date('D, M j · g:i A', $startTs)) ?>
                         <?php if ($endTs): ?>

@@ -65,6 +65,81 @@ function ensure_default_document_categories(int $assocId): void
     }
 }
 
+// --- event recurrence ---------------------------------------------------
+// Expands a single events row into one or more occurrences within the given
+// window. For non-recurring events (recurrence_type='none' or unset) it
+// returns a one-element array with the original row. For recurring events
+// it generates occurrences forward from starts_at, stopping at the earlier
+// of recurrence_until or the window end.
+//
+// Each occurrence has the same row data with starts_at/ends_at shifted to
+// the occurrence date. The flag _is_recurring_occurrence=true is set on
+// repeated occurrences (the original starts_at row is also marked).
+//
+// $windowDays: how far forward to expand. Default 90 — generous enough
+// for "what's coming up" listings without exploding for endless series.
+function expand_event(array $event, int $windowDays = 90): array
+{
+    $type = (string)($event['recurrence_type'] ?? 'none');
+    if ($type === '' || $type === 'none') return [$event];
+
+    $startTs = strtotime((string)$event['starts_at']);
+    if ($startTs === false || $startTs === 0) return [$event];
+
+    $endTs    = !empty($event['ends_at']) ? strtotime((string)$event['ends_at']) : null;
+    $duration = $endTs ? ($endTs - $startTs) : 0;
+
+    $windowEnd = time() + ($windowDays * 86400);
+    $until = !empty($event['recurrence_until'])
+        ? strtotime((string)$event['recurrence_until'] . ' 23:59:59')
+        : $windowEnd;
+    $cap = min($windowEnd, $until ?: $windowEnd);
+
+    $step = match ($type) {
+        'daily'    => '+1 day',
+        'weekly'   => '+1 week',
+        'biweekly' => '+2 weeks',
+        'monthly'  => '+1 month',
+        default    => null,
+    };
+    if ($step === null) return [$event];
+
+    $occurrences = [];
+    $cursor = $startTs;
+    $maxIters = 366; // safety cap
+    $i = 0;
+    while ($cursor <= $cap && $i++ < $maxIters) {
+        $occ = $event;
+        $occ['starts_at'] = date('Y-m-d H:i:s', $cursor);
+        $occ['ends_at']   = $duration ? date('Y-m-d H:i:s', $cursor + $duration) : null;
+        $occ['_is_recurring_occurrence'] = true;
+        $occurrences[] = $occ;
+        $cursor = strtotime($step, $cursor);
+        if ($cursor === false) break;
+    }
+    return $occurrences ?: [$event];
+}
+
+// Expand a list of raw events into occurrences and optionally filter by
+// past/upcoming. Returns a flat sorted array.
+function expand_events(array $events, bool $past = false, int $windowDays = 90): array
+{
+    $out = [];
+    $now = time();
+    foreach ($events as $e) {
+        foreach (expand_event($e, $windowDays) as $occ) {
+            $occTs = strtotime((string)$occ['starts_at']);
+            if ($occTs === false) continue;
+            if ($past && $occTs >= $now) continue;
+            if (!$past && $occTs < $now) continue;
+            $out[] = $occ;
+        }
+    }
+    usort($out, fn($a, $b) => strtotime((string)$a['starts_at']) <=> strtotime((string)$b['starts_at']));
+    if ($past) $out = array_reverse($out);
+    return $out;
+}
+
 // --- rule categories (per-association picklist) ------------------------
 // Mirrors ensure_default_document_categories(). Bootstraps the 15 default
 // rule categories Kevin set on 2026-05-10 the first time an association

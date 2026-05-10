@@ -102,18 +102,21 @@ $mapAddress = trim(
 );
 $mapAddress = trim($mapAddress, ', ');
 
-// Upcoming public events
+// Upcoming public events. Pull both single events with starts_at in the
+// future AND recurring series whose end isn't past — expand_events() then
+// turns the series into individual occurrences within the next 90 days.
 $evStmt = db()->prepare(
-    "SELECT id, title, description, location, starts_at, ends_at
+    "SELECT id, title, description, location, starts_at, ends_at, recurrence_type, recurrence_until
      FROM events
      WHERE association_id = ?
        AND audience = 'all'
-       AND starts_at >= NOW()
-     ORDER BY starts_at ASC
-     LIMIT 6"
+       AND ((recurrence_type = 'none' AND starts_at >= NOW())
+            OR (recurrence_type <> 'none' AND (recurrence_until IS NULL OR recurrence_until >= CURDATE())))
+     LIMIT 50"
 );
 $evStmt->execute([(int)$assoc['id']]);
-$publicEvents = $evStmt->fetchAll();
+$publicEvents = expand_events($evStmt->fetchAll(), false, 90);
+if (count($publicEvents) > 6) $publicEvents = array_slice($publicEvents, 0, 6);
 
 $hasAbout    = trim(strip_tags((string)($assoc['about_text'] ?? ''))) !== '';
 $hasContact  = !empty($assoc['contact_email']) || !empty($assoc['contact_phone']);
