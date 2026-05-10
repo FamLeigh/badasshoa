@@ -71,6 +71,164 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit') 
     }
 }
 
+// --- Member submits a rule suggestion -------------------------------------
+// Anyone signed in to this association can suggest. The board reviews and
+// approves (becomes a real rules row) or rejects (stays in rule_suggestions
+// with status='rejected' for history).
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'suggest_create') {
+    csrf_check();
+    $title  = trim((string)($_POST['title'] ?? ''));
+    $body   = (string)($_POST['body'] ?? '');
+    $source = $_POST['source'] ?? 'board_rule';
+    $cat    = trim((string)($_POST['category'] ?? ''));
+    if (!in_array($source, ['bylaw','board_rule','policy'], true)) $source = 'board_rule';
+
+    $bodyText = trim(strip_tags(str_replace(['&nbsp;', "\xc2\xa0"], ' ', $body)));
+    if ($title === '')         $flashError = 'Title is required.';
+    elseif ($bodyText === '')  $flashError = 'Body is required.';
+    else {
+        db()->prepare(
+            'INSERT INTO rule_suggestions
+                 (association_id, suggester_user_id, title, body, source, category)
+             VALUES (?, ?, ?, ?, ?, ?)'
+        )->execute([$assocId, (int)$user['id'], $title, $body, $source, $cat ?: null]);
+        $newId = (int)db()->lastInsertId();
+        audit('rule_suggestion.submitted', ['title' => $title], $newId, 'rule_suggestion');
+
+        // Notify managers of this association.
+        $name = trim(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? '')) ?: (string)$user['email'];
+        notify_association_managers(
+            $assocId,
+            "[{$association['name']}] New rule suggestion: " . $title,
+            "$name has suggested a new rule for {$association['name']}.\n\n"
+            . "Title: $title\n"
+            . ($cat !== '' ? "Category: $cat\n" : '')
+            . "Source: $source\n\n"
+            . "Body:\n" . $bodyText . "\n\n"
+            . "Review and approve or reject:\n"
+            . "https://badasshoa.com/dashboard/search.php?action=suggestions\n"
+        );
+
+        flash('success', "Thanks — your suggestion is now in front of the board for review. You'll get an email when they decide.");
+        redirect('/dashboard/search.php');
+    }
+}
+
+// --- Approve a suggestion -> creates a real rule -------------------------
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'suggest_approve') {
+    csrf_check();
+    if (!$canManage) { http_response_code(403); die('Forbidden'); }
+    $sid           = (int)($_POST['id'] ?? 0);
+    $title         = trim((string)($_POST['title'] ?? ''));
+    $body          = (string)($_POST['body'] ?? '');
+    $source        = $_POST['source'] ?? 'board_rule';
+    $cat           = trim((string)($_POST['category'] ?? ''));
+    $num           = trim((string)($_POST['rule_number'] ?? ''));
+    $approvalDate  = trim((string)($_POST['approval_date'] ?? ''));
+    $note          = trim((string)($_POST['decision_note'] ?? ''));
+    if (!in_array($source, ['bylaw','board_rule','policy'], true)) $source = 'board_rule';
+    if ($approvalDate !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $approvalDate)) $approvalDate = '';
+    if ($approvalDate === '') $approvalDate = date('Y-m-d');
+
+    $stmt = db()->prepare('SELECT * FROM rule_suggestions WHERE id = ? AND association_id = ? AND status = "pending"');
+    $stmt->execute([$sid, $assocId]);
+    $sug = $stmt->fetch();
+    if (!$sug) {
+        flash('error', 'Suggestion not found or already decided.');
+        redirect('/dashboard/search.php?action=suggestions');
+    }
+
+    db()->beginTransaction();
+    try {
+        db()->prepare(
+            'INSERT INTO rules (association_id, title, body, category, source, rule_number, effective_date)
+             VALUES (?, ?, ?, ?, ?, ?, ?)'
+        )->execute([$assocId, $title, $body, $cat ?: null, $source, $num ?: null, $approvalDate]);
+        $newRuleId = (int)db()->lastInsertId();
+
+        db()->prepare(
+            'UPDATE rule_suggestions
+                SET status = "approved",
+                    reviewed_by_user_id = ?,
+                    reviewed_at = NOW(),
+                    decision_note = ?,
+                    approval_date = ?,
+                    resulting_rule_id = ?
+              WHERE id = ?'
+        )->execute([(int)$user['id'], $note ?: null, $approvalDate, $newRuleId, $sid]);
+        db()->commit();
+    } catch (Throwable $e) {
+        db()->rollBack();
+        flash('error', 'Approval failed: ' . $e->getMessage());
+        redirect('/dashboard/search.php?action=suggestions');
+    }
+
+    audit('rule_suggestion.approved', ['title' => $title, 'approval_date' => $approvalDate, 'rule_id' => $newRuleId], $sid, 'rule_suggestion');
+
+    // Email the suggester (if still active in this association).
+    $sStmt = db()->prepare('SELECT first_name, email FROM users WHERE id = ? AND status = "active"');
+    $sStmt->execute([(int)$sug['suggester_user_id']]);
+    if ($s = $sStmt->fetch()) {
+        $sName = (string)($s['first_name'] ?: 'there');
+        send_mail((string)$s['email'],
+            "[{$association['name']}] Your rule suggestion was approved",
+            "Hi $sName,\n\nThe board approved your rule suggestion for {$association['name']}:\n\n"
+            . "  $title\n\n"
+            . ($note !== '' ? "Board's note: $note\n\n" : '')
+            . "Effective date: $approvalDate\n\n"
+            . "View the full rules list at https://badasshoa.com/dashboard/search.php\n\n"
+            . "— {$association['name']}");
+    }
+
+    flash('success', "Approved \"$title\". It's now a published rule (effective $approvalDate).");
+    redirect('/dashboard/search.php?action=suggestions');
+}
+
+// --- Reject a suggestion -------------------------------------------------
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'suggest_reject') {
+    csrf_check();
+    if (!$canManage) { http_response_code(403); die('Forbidden'); }
+    $sid  = (int)($_POST['id'] ?? 0);
+    $note = trim((string)($_POST['decision_note'] ?? ''));
+
+    $stmt = db()->prepare('SELECT * FROM rule_suggestions WHERE id = ? AND association_id = ? AND status = "pending"');
+    $stmt->execute([$sid, $assocId]);
+    $sug = $stmt->fetch();
+    if (!$sug) {
+        flash('error', 'Suggestion not found or already decided.');
+        redirect('/dashboard/search.php?action=suggestions');
+    }
+
+    db()->prepare(
+        'UPDATE rule_suggestions
+            SET status = "rejected",
+                reviewed_by_user_id = ?,
+                reviewed_at = NOW(),
+                decision_note = ?
+          WHERE id = ?'
+    )->execute([(int)$user['id'], $note ?: null, $sid]);
+    audit('rule_suggestion.rejected', ['title' => $sug['title']], $sid, 'rule_suggestion');
+
+    // Email the suggester
+    $sStmt = db()->prepare('SELECT first_name, email FROM users WHERE id = ? AND status = "active"');
+    $sStmt->execute([(int)$sug['suggester_user_id']]);
+    if ($s = $sStmt->fetch()) {
+        $sName = (string)($s['first_name'] ?: 'there');
+        send_mail((string)$s['email'],
+            "[{$association['name']}] Your rule suggestion was reviewed",
+            "Hi $sName,\n\nThe board reviewed your rule suggestion for {$association['name']}:\n\n"
+            . "  {$sug['title']}\n\n"
+            . "Status: not adopted at this time."
+            . ($note !== '' ? "\n\nBoard's note: $note\n" : "\n")
+            . "\nYou're welcome to refine and resubmit at any time:\n"
+            . "https://badasshoa.com/dashboard/search.php\n\n"
+            . "— {$association['name']}");
+    }
+
+    flash('success', "Suggestion rejected.");
+    redirect('/dashboard/search.php?action=suggestions');
+}
+
 // --- Delete rule ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'delete') {
     csrf_check();
@@ -293,6 +451,48 @@ $showCats = ($_GET['action'] ?? '') === 'categories' && $canManage;
 $showImp  = ($_GET['action'] ?? '') === 'import'     && $canManage;
 $showForm = $showAdd || $showEdit;
 
+// Rule-suggestion view flags
+$showSuggest      = ($_GET['action'] ?? '') === 'suggest';
+$showSuggestQueue = ($_GET['action'] ?? '') === 'suggestions' && $canManage;
+$approvingSug     = null;
+if (($_GET['action'] ?? '') === 'approve' && $canManage) {
+    $sid = (int)($_GET['id'] ?? 0);
+    $stmt = db()->prepare(
+        'SELECT s.*, TRIM(CONCAT(IFNULL(u.first_name,""), " ", IFNULL(u.last_name,""))) AS suggester_name, u.email AS suggester_email
+           FROM rule_suggestions s LEFT JOIN users u ON u.id = s.suggester_user_id
+          WHERE s.id = ? AND s.association_id = ? AND s.status = "pending"'
+    );
+    $stmt->execute([$sid, $assocId]);
+    $approvingSug = $stmt->fetch() ?: null;
+}
+
+// Pending suggestion counter (for the manager-facing banner / link badge).
+$pendingSugCount = 0;
+if ($canManage) {
+    $stmt = db()->prepare('SELECT COUNT(*) FROM rule_suggestions WHERE association_id = ? AND status = "pending"');
+    $stmt->execute([$assocId]);
+    $pendingSugCount = (int)$stmt->fetchColumn();
+}
+
+// Suggestions list for the review queue
+$suggestionRows = [];
+if ($showSuggestQueue) {
+    $statusFilter = $_GET['status'] ?? 'pending';
+    if (!in_array($statusFilter, ['pending','approved','rejected','all'], true)) $statusFilter = 'pending';
+    $sugSql = 'SELECT s.*, TRIM(CONCAT(IFNULL(u.first_name,""), " ", IFNULL(u.last_name,""))) AS suggester_name, u.email AS suggester_email
+                 FROM rule_suggestions s LEFT JOIN users u ON u.id = s.suggester_user_id
+                WHERE s.association_id = ?';
+    $sugParams = [$assocId];
+    if ($statusFilter !== 'all') {
+        $sugSql .= ' AND s.status = ?';
+        $sugParams[] = $statusFilter;
+    }
+    $sugSql .= ' ORDER BY s.suggested_at DESC LIMIT 100';
+    $stmt = db()->prepare($sugSql);
+    $stmt->execute($sugParams);
+    $suggestionRows = $stmt->fetchAll();
+}
+
 $page_title = 'Rules &amp; Bylaws — ' . $association['name'];
 if ($showForm) {
     $page_extra_head = '<link href="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.snow.css" rel="stylesheet">';
@@ -394,14 +594,28 @@ function rule_form_card(?array $editing, array $categories): void {
             <h1 style="font-size: var(--fs-3xl); margin: 0;">Rules &amp; bylaws</h1>
             <p class="muted">Search, manage, and import your association's rules.</p>
         </div>
-        <?php if ($canManage): ?>
-        <div class="row" style="gap: var(--sp-2);">
-            <a class="btn btn--ghost" href="?action=categories">Categories</a>
-            <a class="btn btn--ghost" href="?action=import">⬆ Import CSV</a>
-            <a class="btn btn--primary" href="?action=new">+ Add rule</a>
+        <div class="row" style="gap: var(--sp-2); flex-wrap: wrap;">
+            <?php if ($canManage): ?>
+                <a class="btn btn--ghost" href="?action=suggestions">
+                    Suggestions<?php if ($pendingSugCount): ?>
+                        <span class="badge badge--orange" style="margin-left: 6px;"><?= (int)$pendingSugCount ?></span>
+                    <?php endif; ?>
+                </a>
+                <a class="btn btn--ghost" href="?action=categories">Categories</a>
+                <a class="btn btn--ghost" href="?action=import">⬆ Import CSV</a>
+                <a class="btn btn--primary" href="?action=new">+ Add rule</a>
+            <?php else: ?>
+                <a class="btn btn--primary" href="?action=suggest">+ Suggest a rule</a>
+            <?php endif; ?>
         </div>
-        <?php endif; ?>
     </div>
+
+    <?php if ($canManage && $pendingSugCount > 0 && !$showSuggestQueue && !$approvingSug): ?>
+    <div class="flash flash--warning" style="margin-bottom: var(--sp-4);">
+        <strong><?= (int)$pendingSugCount ?> rule suggestion<?= $pendingSugCount === 1 ? '' : 's' ?> awaiting board review.</strong>
+        <a href="?action=suggestions" style="margin-left: var(--sp-2);">Review now →</a>
+    </div>
+    <?php endif; ?>
 
     <?php if ($flashError): ?><div class="flash flash--error"><?= e($flashError) ?></div><?php endif; ?>
     <?php if ($importSummary): ?>
@@ -563,7 +777,193 @@ function rule_form_card(?array $editing, array $categories): void {
     </div>
     <?php endif; ?>
 
-    <?php if (!$showCats && !$showImp): /* show search bar + results unless on a sub-view */ ?>
+    <?php if ($showSuggest): ?>
+    <div class="card card--padded" style="margin-bottom: var(--sp-6);">
+        <div class="card__head">
+            <h3 class="card__title">Suggest a rule</h3>
+            <a class="muted" style="font-size: var(--fs-sm);" href="/dashboard/search.php">← Back to rules</a>
+        </div>
+        <p class="muted" style="font-size: var(--fs-sm); margin-bottom: var(--sp-4);">
+            Submit a rule for the board to consider. They'll review and either approve it (with a final adoption date) or reply with feedback. You'll get an email when they decide.
+        </p>
+        <form method="post" class="form">
+            <?= csrf_field() ?>
+            <input type="hidden" name="form" value="suggest_create">
+            <div class="form-row form-row--2">
+                <div class="field">
+                    <label class="field__label" for="sg-title">Title</label>
+                    <input class="input" id="sg-title" name="title" required maxlength="255" placeholder="No grilling on balconies">
+                </div>
+                <div class="field">
+                    <label class="field__label" for="sg-source">Type</label>
+                    <select class="select" id="sg-source" name="source">
+                        <option value="board_rule" selected>Board rule</option>
+                        <option value="bylaw">Bylaw amendment</option>
+                        <option value="policy">Policy</option>
+                    </select>
+                </div>
+            </div>
+            <div class="field">
+                <label class="field__label" for="sg-cat">Category (optional)</label>
+                <select class="select" id="sg-cat" name="category">
+                    <option value="">— None / not sure —</option>
+                    <?php foreach ($categories as $c): ?>
+                        <option value="<?= e((string)$c['name']) ?>"><?= e((string)$c['name']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="field">
+                <label class="field__label" for="sg-body">What are you suggesting?</label>
+                <textarea class="textarea" id="sg-body" name="body" rows="6" required placeholder="Explain the rule and why it would help…"></textarea>
+            </div>
+            <div class="row" style="justify-content: flex-end;">
+                <a class="btn btn--ghost" href="/dashboard/search.php">Cancel</a>
+                <button class="btn btn--primary" type="submit">Submit for review</button>
+            </div>
+        </form>
+    </div>
+    <?php endif; ?>
+
+    <?php if ($showSuggestQueue):
+        $statusFilter = $_GET['status'] ?? 'pending';
+    ?>
+    <div class="card card--padded" style="margin-bottom: var(--sp-6);">
+        <div class="card__head">
+            <h3 class="card__title">Rule suggestions from members</h3>
+            <a class="muted" style="font-size: var(--fs-sm);" href="/dashboard/search.php">← Back to rules</a>
+        </div>
+
+        <div class="row" style="gap: var(--sp-2); margin-bottom: var(--sp-4); flex-wrap: wrap;">
+            <?php foreach (['pending'=>'Pending','approved'=>'Approved','rejected'=>'Rejected','all'=>'All'] as $val => $lbl): ?>
+                <a class="badge <?= $statusFilter === $val ? 'badge--navy' : '' ?>" href="?action=suggestions&status=<?= e($val) ?>" style="text-decoration:none; <?= $statusFilter !== $val ? 'opacity: 0.6;' : '' ?>"><?= e($lbl) ?></a>
+            <?php endforeach; ?>
+        </div>
+
+        <?php if (!$suggestionRows): ?>
+            <p class="muted">No <?= e($statusFilter === 'all' ? '' : $statusFilter . ' ') ?>suggestions.</p>
+        <?php else: ?>
+        <div class="stack-md">
+        <?php foreach ($suggestionRows as $sug):
+            $statusBadge = match ($sug['status']) {
+                'approved' => 'badge--success',
+                'rejected' => 'badge--error',
+                default    => 'badge--warning',
+            };
+        ?>
+            <article class="card card--padded" style="border-left: 3px solid <?= $sug['status']==='pending' ? 'var(--color-orange)' : 'transparent' ?>;">
+                <div class="row row--between" style="align-items:flex-start; margin-bottom: var(--sp-2);">
+                    <div style="flex: 1; min-width: 0;">
+                        <div class="row" style="gap: var(--sp-2); margin-bottom: var(--sp-2); flex-wrap: wrap;">
+                            <span class="badge <?= $statusBadge ?>"><?= e((string)$sug['status']) ?></span>
+                            <span class="badge" style="background: var(--color-surface); color: var(--color-text-soft); font-size: var(--fs-xs);"><?= e((string)$sug['source']) ?></span>
+                            <?php if (!empty($sug['category'])): ?>
+                                <span class="muted" style="font-size: var(--fs-xs);"><?= e((string)$sug['category']) ?></span>
+                            <?php endif; ?>
+                            <span class="muted" style="font-size: var(--fs-xs);">
+                                · suggested <?= e(date('M j, Y', strtotime((string)$sug['suggested_at']))) ?>
+                                by <?= e(trim((string)$sug['suggester_name']) ?: (string)($sug['suggester_email'] ?? '—')) ?>
+                            </span>
+                        </div>
+                        <h4 style="margin: 0 0 var(--sp-2); font-size: var(--fs-lg);"><?= e((string)$sug['title']) ?></h4>
+                        <div class="muted" style="font-size: var(--fs-sm); white-space: pre-wrap; max-height: 200px; overflow-y: auto;"><?= e(trim(strip_tags(str_replace(['&nbsp;', "\xc2\xa0"], ' ', (string)$sug['body'])))) ?></div>
+                        <?php if ($sug['status'] !== 'pending'): ?>
+                            <div class="muted" style="font-size: var(--fs-xs); margin-top: var(--sp-2); padding-top: var(--sp-2); border-top: 1px solid var(--color-border);">
+                                <?= e(ucfirst((string)$sug['status'])) ?> <?= $sug['reviewed_at'] ? 'on ' . e(date('M j, Y', strtotime((string)$sug['reviewed_at']))) : '' ?>
+                                <?php if (!empty($sug['decision_note'])): ?>
+                                    · <em>"<?= e((string)$sug['decision_note']) ?>"</em>
+                                <?php endif; ?>
+                                <?php if (!empty($sug['resulting_rule_id'])): ?>
+                                    · <a href="?q=<?= urlencode((string)$sug['title']) ?>">View resulting rule →</a>
+                                <?php endif; ?>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                    <?php if ($sug['status'] === 'pending'): ?>
+                        <div class="row" style="gap: var(--sp-2);">
+                            <a class="btn btn--primary" href="?action=approve&id=<?= (int)$sug['id'] ?>" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);">Approve</a>
+                            <form method="post" style="display:inline;" onsubmit="var n = prompt('Optional note to the suggester:'); if (n === null) return false; this.querySelector('[name=decision_note]').value = n; return true;">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="form" value="suggest_reject">
+                                <input type="hidden" name="id" value="<?= (int)$sug['id'] ?>">
+                                <input type="hidden" name="decision_note" value="">
+                                <button class="btn btn--ghost" type="submit" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs); color: var(--color-error);">Reject</button>
+                            </form>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </article>
+        <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
+    </div>
+    <?php endif; ?>
+
+    <?php if ($approvingSug): ?>
+    <div class="card card--padded" style="margin-bottom: var(--sp-6);">
+        <div class="card__head">
+            <h3 class="card__title">Approve suggestion</h3>
+            <a class="muted" style="font-size: var(--fs-sm);" href="?action=suggestions">← Back to queue</a>
+        </div>
+        <p class="muted" style="font-size: var(--fs-sm); margin-bottom: var(--sp-4);">
+            Edit any field before adopting. On submit, this becomes a real rule with the approval date set as the effective date, and the suggester gets an email.
+        </p>
+        <form method="post" class="form">
+            <?= csrf_field() ?>
+            <input type="hidden" name="form" value="suggest_approve">
+            <input type="hidden" name="id" value="<?= (int)$approvingSug['id'] ?>">
+
+            <div class="form-row form-row--2">
+                <div class="field">
+                    <label class="field__label" for="ap-title">Title</label>
+                    <input class="input" id="ap-title" name="title" required value="<?= e((string)$approvingSug['title']) ?>">
+                </div>
+                <div class="field">
+                    <label class="field__label" for="ap-source">Source</label>
+                    <select class="select" id="ap-source" name="source">
+                        <?php foreach (['bylaw'=>'Bylaw','board_rule'=>'Board rule','policy'=>'Policy'] as $v=>$lbl): ?>
+                            <option value="<?= e($v) ?>" <?= $approvingSug['source']===$v?'selected':'' ?>><?= e($lbl) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row form-row--2">
+                <div class="field">
+                    <label class="field__label" for="ap-cat">Category</label>
+                    <select class="select" id="ap-cat" name="category">
+                        <option value="">— None —</option>
+                        <?php foreach ($categories as $c): ?>
+                            <option value="<?= e((string)$c['name']) ?>" <?= $approvingSug['category']===$c['name']?'selected':'' ?>><?= e((string)$c['name']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="field">
+                    <label class="field__label" for="ap-num">Rule number (optional)</label>
+                    <input class="input" id="ap-num" name="rule_number" placeholder="3.4.1">
+                </div>
+            </div>
+            <div class="form-row form-row--2">
+                <div class="field">
+                    <label class="field__label" for="ap-date">Approval / effective date</label>
+                    <input class="input" type="date" id="ap-date" name="approval_date" required value="<?= e(date('Y-m-d')) ?>">
+                </div>
+                <div class="field">
+                    <label class="field__label" for="ap-note">Note to suggester (optional)</label>
+                    <input class="input" id="ap-note" name="decision_note" placeholder="Thanks for the suggestion!">
+                </div>
+            </div>
+            <div class="field">
+                <label class="field__label" for="ap-body">Rule body</label>
+                <textarea class="textarea" id="ap-body" name="body" rows="6" required><?= e((string)$approvingSug['body']) ?></textarea>
+            </div>
+            <div class="row" style="justify-content: flex-end;">
+                <a class="btn btn--ghost" href="?action=suggestions">Cancel</a>
+                <button class="btn btn--primary" type="submit">Approve and publish</button>
+            </div>
+        </form>
+    </div>
+    <?php endif; ?>
+
+    <?php if (!$showCats && !$showImp && !$showSuggest && !$showSuggestQueue && !$approvingSug): /* show search bar + results unless on a sub-view */ ?>
     <div data-live-search data-endpoint="/dashboard/search.php">
         <form class="search-bar" method="get">
             <span aria-hidden="true">🔎</span>

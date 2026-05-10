@@ -167,6 +167,29 @@ function ensure_default_rule_categories(int $assocId): void
     }
 }
 
+// --- email all managers of an association --------------------------------
+// Used when a member submits a rule suggestion (board needs a heads-up).
+// "Manager" = any role in MANAGE_ROLES belonging to that association,
+// excluding super_admins (they're cross-tenant; they get the existing
+// /admin/activity feed instead).
+function notify_association_managers(int $assocId, string $subject, string $body): int
+{
+    $stmt = db()->prepare(
+        "SELECT email FROM users
+          WHERE association_id = ?
+            AND status = 'active'
+            AND role IN ('property_manager','board_member','board_admin')
+            AND email IS NOT NULL"
+    );
+    $stmt->execute([$assocId]);
+    $sent = 0;
+    foreach ($stmt->fetchAll() as $row) {
+        send_mail((string)$row['email'], $subject, $body);
+        $sent++;
+    }
+    return $sent;
+}
+
 // --- audit log ----------------------------------------------------------
 // Records actions to the audit_log table. The "actor" is the current session
 // user — which during super-admin impersonation is the *impersonated* user
