@@ -1,5 +1,50 @@
 [
     {
+        "id": "cl-20260510-150000-aaa6",
+        "at": "2026-05-10T15:00:00-04:00",
+        "type": "feature",
+        "title": "Vision statement on the public landing + FAQ CSV import",
+        "description": "Settings has a new Vision Statement field that renders prominently above the About section on the public landing. FAQ now supports CSV bulk-import (question, answer, optional sort_order) and shows when each FAQ was last updated.",
+        "author": "Reboooot",
+        "link": "/dashboard/settings.php"
+    },
+    {
+        "id": "cl-20260510-145500-aaa5",
+        "at": "2026-05-10T14:55:00-04:00",
+        "type": "feature",
+        "title": "Units: CSV bulk import + garage / parking spot tracking",
+        "description": "Register dozens of units at once from a spreadsheet — required column is unit_number, plus optional type, bedrooms, baths, square_footage, ownership_percent, garage_number, parking_spot, and notes. Re-importing the same unit_number updates instead of duplicating. Garage and parking-spot fields acknowledge that those numbers often differ from the unit number (your unit 421 might have garage 64). Locations also picked up an optional category field so garages, event spaces, and amenities don't all sit in one bucket.",
+        "author": "Reboooot",
+        "link": "/dashboard/units.php"
+    },
+    {
+        "id": "cl-20260510-145000-aaa4",
+        "at": "2026-05-10T14:50:00-04:00",
+        "type": "improvement",
+        "title": "Documents: edit metadata + expandable descriptions",
+        "description": "Documents in the listing now have an Edit button (board\/PM only) for changing title, description, category, access level, or unit assignment without re-uploading. Long descriptions clamp to two lines with a Show More toggle so the table stays scannable.",
+        "author": "Reboooot",
+        "link": "/dashboard/documents.php"
+    },
+    {
+        "id": "cl-20260510-144500-aaa3",
+        "at": "2026-05-10T14:45:00-04:00",
+        "type": "feature",
+        "title": "Concerns: complaints, compliments, and suggestions",
+        "description": "Any signed-in member (resident or renter) can submit a concern — complaint, compliment, or suggestion — with an optional anonymity toggle. The board sees an inbox with status filters (open\/new\/in-progress\/resolved\/closed) and a counter banner for items awaiting attention. Each concern has a discussion thread with regular replies plus board-only internal notes. Resolved concerns can carry a resolution summary that's emailed to the submitter.",
+        "author": "Reboooot",
+        "link": "/dashboard/concerns.php"
+    },
+    {
+        "id": "cl-20260510-144000-aaa2",
+        "at": "2026-05-10T14:40:00-04:00",
+        "type": "improvement",
+        "title": "Mailing addresses for absentee owners + new \"Beautification\" announcement category",
+        "description": "User profiles now have an optional mailing address that's used when an owner lives somewhere other than the unit they own (typical when they're renting their property). Communications gained a Beautification category alongside General, Event, Maintenance, Emergency. Long rule bodies on the Rules page now collapse to four lines with a Show More toggle. The dashboard's Quick Actions side panel was removed — every action it surfaced is one click away in the sidebar.",
+        "author": "Reboooot",
+        "link": "/dashboard/"
+    },
+    {
         "id": "cl-20260510-130000-z9z2",
         "at": "2026-05-10T13:00:00-04:00",
         "type": "feature",
