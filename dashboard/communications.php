@@ -2,7 +2,7 @@
 require __DIR__ . '/_bootstrap.php';
 
 $user = current_user();
-$canPost = (ROLE_RANK[$user['role']] ?? 0) >= ROLE_RANK['board_member'];
+$canPost = role_can_manage(viewing_role());
 $flashError = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'post') {

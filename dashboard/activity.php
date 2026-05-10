@@ -1,6 +1,6 @@
 <?php
 require __DIR__ . '/_bootstrap.php';
-require_role('board_member'); // residents/renters don't need this view
+require_management(); // PM, board_member, board_admin (super_admin via /admin/activity.php instead)
 
 // --- Filters ---
 $qAction = trim((string)($_GET['action'] ?? ''));

@@ -103,6 +103,27 @@ $userInitial = strtoupper(substr(trim((string)($_SESSION['name'] ?? $_SESSION['e
 </head>
 <body class="<?= e($page_class) ?> <?= e($shellClass) ?>" data-layout="<?= e($page_layout) ?>">
 
+<?php if (is_viewing_as()): ?>
+<div class="view-as-banner" role="status">
+    <div class="container row row--between" style="gap: var(--sp-3); flex-wrap: wrap; align-items: center;">
+        <div>
+            <strong>👁 Viewing as <?= e($_SESSION['view_as_role'] === 'resident' ? 'a homeowner' : 'a renter') ?></strong>
+            <span style="opacity: 0.85; font-size: var(--fs-sm);">
+                ·  manage controls hidden ·  your real role is <?= e(str_replace('_', ' ', (string)($_SESSION['role'] ?? ''))) ?>
+            </span>
+        </div>
+        <form method="post" action="/dashboard/view-as.php" style="margin: 0;">
+            <?= csrf_field() ?>
+            <input type="hidden" name="role" value="exit">
+            <input type="hidden" name="back" value="<?= e((string)($_SERVER['REQUEST_URI'] ?? '/dashboard/')) ?>">
+            <button class="btn btn--ghost" type="submit" style="background: rgba(255,255,255,0.18); color: var(--color-white); border-color: rgba(255,255,255,0.3);">
+                Exit view-as →
+            </button>
+        </form>
+    </div>
+</div>
+<?php endif; ?>
+
 <?php if (!empty($_SESSION['real_user_id'])): ?>
 <div class="impersonation-banner" role="alert">
     <div class="container row row--between" style="gap: var(--sp-3); flex-wrap: wrap; align-items: center;">
@@ -190,7 +211,7 @@ $userInitial = strtoupper(substr(trim((string)($_SESSION['name'] ?? $_SESSION['e
             <?= nav_link('/dashboard/communications.php', 'communications', 'Communications', 'communications', $active) ?>
             <?= nav_link('/dashboard/media.php',       'media',          'Media',          'media',          $active) ?>
             <?= nav_link('/dashboard/faq.php',         'rules',          'FAQ',            'faq',            $active) ?>
-            <?php if ((ROLE_RANK[$_SESSION['role'] ?? ''] ?? 0) >= ROLE_RANK['board_member']): ?>
+            <?php if (role_can_manage(viewing_role())): ?>
                 <?= nav_link('/dashboard/activity.php',    'activity',       'Activity',       'activity',       $active) ?>
             <?php endif; ?>
             <?= nav_link('/dashboard/settings.php',    'settings',       'Settings',       'settings',       $active) ?>
@@ -211,6 +232,17 @@ $userInitial = strtoupper(substr(trim((string)($_SESSION['name'] ?? $_SESSION['e
                     <small class="side-nav__role"><?= e(str_replace('_', ' ', (string)($_SESSION['role'] ?? ''))) ?></small>
                 </div>
             </div>
+            <?php if ($page_layout === 'app' && role_can_manage((string)($_SESSION['role'] ?? '')) && !is_viewing_as()): ?>
+                <div class="side-nav__view-as side-nav__hide-when-collapsed">
+                    <small style="display:block; opacity: 0.55; font-size: var(--fs-xs); margin-bottom: 4px; padding: 0 var(--sp-3);">View as</small>
+                    <form method="post" action="/dashboard/view-as.php" style="display:flex; gap: 4px; padding: 0 var(--sp-3);">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="back" value="<?= e((string)($_SERVER['REQUEST_URI'] ?? '/dashboard/')) ?>">
+                        <button class="side-nav__view-as-btn" type="submit" name="role" value="resident" title="View as a homeowner">Homeowner</button>
+                        <button class="side-nav__view-as-btn" type="submit" name="role" value="renter" title="View as a renter">Renter</button>
+                    </form>
+                </div>
+            <?php endif; ?>
             <a class="side-nav__signout" href="/logout.php" title="Sign out">
                 <?= nav_icon('logout') ?><span class="side-nav__label">Sign out</span>
             </a>

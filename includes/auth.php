@@ -85,6 +85,44 @@ function require_role(string $minRole): void
     }
 }
 
+// Roles allowed to add/edit/delete content within their association.
+// Property managers count even though their rank is below board_member —
+// the management privilege is a discrete capability, not a strict hierarchy.
+const MANAGE_ROLES = ['property_manager', 'board_member', 'board_admin', 'super_admin'];
+
+function role_can_manage(string $role): bool
+{
+    return in_array($role, MANAGE_ROLES, true);
+}
+
+// Server-side gate for "must be able to manage". Always uses the REAL session
+// role — never the view_as role — because view-as is a UI lens, not an actual
+// privilege drop.
+function require_management(): void
+{
+    require_login();
+    if (!role_can_manage((string)($_SESSION['role'] ?? ''))) {
+        http_response_code(403);
+        die('Access denied.');
+    }
+}
+
+// "View as" lens: a manager can temporarily render the dashboard as if they
+// were a homeowner or renter, to preview what those users see. It's a UI
+// override, not a privilege change. UI/permission gates that affect
+// rendering should call viewing_role() instead of reading $_SESSION['role'].
+// Server-side action handlers and access gates should still use the real
+// session role for safety.
+function viewing_role(): string
+{
+    return (string)($_SESSION['view_as_role'] ?? $_SESSION['role'] ?? '');
+}
+
+function is_viewing_as(): bool
+{
+    return !empty($_SESSION['view_as_role']);
+}
+
 // --- login throttling ---------------------------------------------------
 function login_attempt_blocked(string $email, string $ip): bool
 {

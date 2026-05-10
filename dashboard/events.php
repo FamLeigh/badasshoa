@@ -2,7 +2,7 @@
 require __DIR__ . '/_bootstrap.php';
 
 $user      = current_user();
-$canManage = (ROLE_RANK[$user['role']] ?? 0) >= ROLE_RANK['board_member'];
+$canManage = role_can_manage(viewing_role());
 $flashError = null;
 
 // --- Add ---
@@ -96,10 +96,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'delete'
 $showPast = isset($_GET['past']);
 $audienceFilter = $_GET['audience'] ?? '';
 
-// Tenants only see what they're allowed to see
-$userRank = ROLE_RANK[$user['role']] ?? 0;
+// Tenants only see what they're allowed to see (uses viewing_role so view-as
+// homeowner correctly hides board-only events).
 $allowedAudiences = ['all', 'members'];
-if ($userRank >= ROLE_RANK['board_member']) {
+if (role_can_manage(viewing_role())) {
     $allowedAudiences[] = 'board';
 }
 $placeholders = implode(',', array_fill(0, count($allowedAudiences), '?'));

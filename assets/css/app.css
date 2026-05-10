@@ -578,6 +578,41 @@
 .impersonation-banner strong { color: var(--color-white); }
 .impersonation-banner .btn { white-space: nowrap; }
 
+/* ============ View-as banner (manager previewing as homeowner/renter) === */
+.view-as-banner {
+    background: var(--color-navy);
+    color: var(--color-white);
+    padding: var(--sp-3) var(--sp-4);
+    font-size: var(--fs-sm);
+    border-bottom: 2px solid rgba(0,0,0,0.15);
+    position: relative;
+    z-index: calc(var(--z-nav) + 1);
+}
+.view-as-banner strong { color: var(--color-white); }
+
+/* View-as toggle in the sidebar bottom (for managers, hidden when already in view-as) */
+.side-nav__view-as { margin: var(--sp-2) 0; }
+.side-nav__view-as-btn {
+    flex: 1; min-width: 0;
+    padding: 6px 8px;
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.15);
+    color: rgba(255,255,255,0.7);
+    border-radius: var(--r-sm);
+    font-size: var(--fs-xs);
+    cursor: pointer;
+    transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.side-nav__view-as-btn:hover {
+    background: var(--color-navy-700);
+    color: var(--color-white);
+    border-color: rgba(255,255,255,0.3);
+}
+.side-nav.collapsed .side-nav__hide-when-collapsed { display: none; }
+
 /* ============ Left sidebar (app + admin layouts) ============ */
 :root {
     --side-nav-w:           232px;

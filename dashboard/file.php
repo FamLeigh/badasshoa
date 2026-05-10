@@ -14,9 +14,10 @@ if ($type === 'document') {
     $row = $stmt->fetch();
     if (!$row) { http_response_code(404); die('Not found'); }
 
-    // Access-level enforcement
-    $userRank = ROLE_RANK[$_SESSION['role'] ?? ''] ?? 0;
-    if ($row['access_level'] === 'board_only' && $userRank < ROLE_RANK['board_member']) {
+    // Access-level enforcement. Uses viewing_role() so view-as-homeowner
+    // properly blocks board-only docs from being downloaded — exit view-as
+    // mode if you actually need the file.
+    if ($row['access_level'] === 'board_only' && !role_can_manage(viewing_role())) {
         http_response_code(403); die('Forbidden');
     }
     $relative = $row['file_path'];
@@ -28,8 +29,7 @@ if ($type === 'document') {
     $row = $stmt->fetch();
     if (!$row) { http_response_code(404); die('Not found'); }
     if ($row['visibility'] === 'private') {
-        $userRank = ROLE_RANK[$_SESSION['role'] ?? ''] ?? 0;
-        if ($userRank < ROLE_RANK['board_member']) { http_response_code(403); die('Forbidden'); }
+        if (!role_can_manage(viewing_role())) { http_response_code(403); die('Forbidden'); }
     }
     $relative = $row['file_path'];
     $filename = $row['file_name'] ?: basename($relative);

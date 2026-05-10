@@ -8,7 +8,7 @@ require __DIR__ . '/_bootstrap.php';
 header('Content-Type: application/json');
 
 $user      = current_user();
-$canManage = (ROLE_RANK[$user['role']] ?? 0) >= ROLE_RANK['board_admin'];
+$canManage = role_can_manage(viewing_role());
 
 if (!$canManage) {
     http_response_code(403);

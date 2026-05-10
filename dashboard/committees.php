@@ -2,7 +2,7 @@
 require __DIR__ . '/_bootstrap.php';
 
 $user      = current_user();
-$canManage = (ROLE_RANK[$user['role']] ?? 0) >= ROLE_RANK['board_admin'];
+$canManage = role_can_manage(viewing_role());
 $flashError = null;
 
 // --- Create committee ---

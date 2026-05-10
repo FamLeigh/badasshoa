@@ -2,7 +2,7 @@
 require __DIR__ . '/_bootstrap.php';
 
 $user = current_user();
-$canManage = (ROLE_RANK[$user['role']] ?? 0) >= ROLE_RANK['board_member'];
+$canManage = role_can_manage(viewing_role());
 
 // Ensure the association has the default category set on first visit.
 ensure_default_document_categories($assocId);
@@ -165,8 +165,9 @@ $sql = 'SELECT d.*, CONCAT(IFNULL(u.first_name,""), " ", IFNULL(u.last_name,""))
 $params = [$assocId];
 if ($qCategory !== '') { $sql .= ' AND d.category = ?'; $params[] = $qCategory; }
 if ($qSearch !== '')   { $sql .= ' AND (d.title LIKE ? OR d.description LIKE ?)'; $params[] = "%$qSearch%"; $params[] = "%$qSearch%"; }
-// Hide board-only docs from non-board roles.
-if ((ROLE_RANK[$user['role']] ?? 0) < ROLE_RANK['board_member']) {
+// Hide board-only docs from anyone who isn't allowed to manage. Uses viewing_role
+// so view-as-homeowner correctly suppresses them in the listing too.
+if (!role_can_manage(viewing_role())) {
     $sql .= ' AND d.access_level <> "board_only"';
 }
 $sql .= ' ORDER BY d.created_at DESC LIMIT 200';
