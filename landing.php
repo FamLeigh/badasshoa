@@ -182,6 +182,18 @@ $page_layout = 'public_landing'; // Avoids the public marketing nav; landing has
     </div>
 </section>
 
+<?php $hasVision = trim((string)($assoc['vision_statement'] ?? '')) !== ''; ?>
+<?php if ($hasVision): ?>
+<section class="landing-vision">
+    <div class="container container--narrow center">
+        <span class="badge badge--orange">Our vision</span>
+        <p style="font-size: var(--fs-xl); line-height: var(--lh-loose); color: var(--color-navy); margin-top: var(--sp-3); white-space: pre-wrap;">
+            <?= e((string)$assoc['vision_statement']) ?>
+        </p>
+    </div>
+</section>
+<?php endif; ?>
+
 <?php if ($hasAbout): ?>
 <section class="landing-about">
     <div class="container container--narrow">

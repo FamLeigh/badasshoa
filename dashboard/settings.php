@@ -74,6 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'update'
     }
 
     // --- Long-form public-landing content (optional) ---
+    $vision        = trim((string)($_POST['vision_statement'] ?? ''));
     $aboutText     = (string)($_POST['about_text'] ?? '');
     $amenitiesText = trim((string)($_POST['amenities_text'] ?? ''));
     $contactEmail  = trim((string)($_POST['contact_email'] ?? ''));
@@ -142,7 +143,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'update'
             "UPDATE associations
              SET name = ?, subdomain = ?, address = ?, city = ?, state_region = ?, postal_code = ?, country = ?,
                  unit_count = ?, primary_color = ?, public_landing_enabled = ?,
-                 about_text = ?, amenities_text = ?, contact_email = ?, contact_phone = ?,
+                 vision_statement = ?, about_text = ?, amenities_text = ?, contact_email = ?, contact_phone = ?,
                  website_url = ?, facebook_url = ?, instagram_url = ?, twitter_url = ?, nextdoor_url = ?
                  $extraSql
              WHERE id = ?"
@@ -151,7 +152,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'update'
                 $name, $subdomain,
                 $address ?: null, $city ?: null, $stateReg ?: null, $postal ?: null, $country,
                 $units, $primary, $publicLanding,
-                $aboutText ?: null, $amenitiesText ?: null, $contactEmail ?: null, $contactPhone ?: null,
+                $vision ?: null, $aboutText ?: null, $amenitiesText ?: null, $contactEmail ?: null, $contactPhone ?: null,
                 $websiteUrl, $facebookUrl, $instagramUrl, $twitterUrl, $nextdoorUrl,
             ],
             $extraArgs,
@@ -321,6 +322,12 @@ require __DIR__ . '/../includes/header.php';
                 <?php endif; ?>
                 <input class="input" type="file" id="ahero" name="hero_image" accept="image/png,image/jpeg,image/webp">
                 <div class="field__hint">Wide image used at the top of the public landing. PNG / JPG / WEBP, max 4 MB. Aim for 1600×600 or wider.</div>
+            </div>
+
+            <div class="field">
+                <label class="field__label" for="avision">Vision statement (optional)</label>
+                <textarea class="textarea" id="avision" name="vision_statement" rows="3" placeholder="A short paragraph describing what your community stands for. Shown prominently above the About section on the landing."><?= e((string)($association['vision_statement'] ?? '')) ?></textarea>
+                <div class="field__hint">Shown above the About section on your public landing.</div>
             </div>
 
             <div class="field">

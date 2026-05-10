@@ -46,6 +46,59 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit') 
     }
 }
 
+// --- CSV bulk import ---
+$importSummary = null;
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'import') {
+    csrf_check();
+    if (!$canManage) { http_response_code(403); die('Forbidden'); }
+    if (!isset($_FILES['csv']) || $_FILES['csv']['error'] !== UPLOAD_ERR_OK) {
+        $flashError = 'CSV upload failed.';
+    } elseif ($_FILES['csv']['size'] > 1 * 1024 * 1024) {
+        $flashError = 'Max CSV size is 1 MB.';
+    } else {
+        $fh = fopen($_FILES['csv']['tmp_name'], 'r');
+        if (!$fh) {
+            $flashError = 'Could not read CSV.';
+        } else {
+            $added = 0; $errors = []; $row = 0; $headerMap = null;
+            while (($cols = fgetcsv($fh)) !== false) {
+                $row++;
+                if ($cols === [null] || (count($cols) === 1 && trim((string)$cols[0]) === '')) continue;
+                if ($headerMap === null) {
+                    $headerMap = [];
+                    foreach ($cols as $i => $name) {
+                        $key = strtolower(trim(str_replace([' ', '-'], '_', (string)$name)));
+                        $headerMap[$key] = $i;
+                    }
+                    if (!isset($headerMap['question']) || !isset($headerMap['answer'])) {
+                        $flashError = 'Missing required column. Required: question, answer. Optional: sort_order.';
+                        break;
+                    }
+                    continue;
+                }
+                $get = fn($k) => isset($headerMap[$k], $cols[$headerMap[$k]]) ? trim((string)$cols[$headerMap[$k]]) : '';
+                $q = $get('question'); $a = $get('answer');
+                $ord = $get('sort_order') !== '' ? (int)$get('sort_order') : null;
+                if ($q === '') { $errors[] = "Row $row: missing question"; continue; }
+                if ($a === '') { $errors[] = "Row $row: missing answer"; continue; }
+                if ($ord === null) {
+                    db()->prepare(
+                        'INSERT INTO faqs (association_id, question, answer, sort_order)
+                         VALUES (?, ?, ?, COALESCE((SELECT MAX(sort_order) FROM faqs AS x WHERE x.association_id = ?), 0) + 10)'
+                    )->execute([$assocId, $q, $a, $assocId]);
+                } else {
+                    db()->prepare('INSERT INTO faqs (association_id, question, answer, sort_order) VALUES (?, ?, ?, ?)')
+                        ->execute([$assocId, $q, $a, $ord]);
+                }
+                $added++;
+            }
+            fclose($fh);
+            $importSummary = ['added' => $added, 'errors' => $errors];
+            audit('faqs.imported', $importSummary);
+        }
+    }
+}
+
 // --- Delete ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'delete') {
     csrf_check();
@@ -86,11 +139,55 @@ require __DIR__ . '/../includes/header.php';
             </p>
         </div>
         <?php if ($canManage): ?>
-            <a class="btn btn--primary" href="?action=new">+ New FAQ</a>
+            <div class="row" style="gap: var(--sp-2);">
+                <a class="btn btn--ghost" href="?action=import">⬆ Import CSV</a>
+                <a class="btn btn--primary" href="?action=new">+ New FAQ</a>
+            </div>
         <?php endif; ?>
     </div>
 
     <?php if ($flashError): ?><div class="flash flash--error"><?= e($flashError) ?></div><?php endif; ?>
+
+    <?php if ($importSummary): ?>
+        <div class="flash flash--success">
+            Imported <strong><?= (int)$importSummary['added'] ?></strong> FAQ<?= $importSummary['added']===1?'':'s' ?>.
+            <?php if (!empty($importSummary['errors'])): ?>
+                <details style="margin-top: var(--sp-2);">
+                    <summary><?= count($importSummary['errors']) ?> row<?= count($importSummary['errors'])===1?'':'s' ?> errored</summary>
+                    <ul style="margin: var(--sp-2) 0 0; font-size: var(--fs-sm);">
+                        <?php foreach ($importSummary['errors'] as $err): ?><li><?= e($err) ?></li><?php endforeach; ?>
+                    </ul>
+                </details>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($canManage && ($_GET['action'] ?? '') === 'import'): ?>
+    <div class="card card--padded" style="margin-bottom: var(--sp-6);">
+        <div class="card__head">
+            <h3 class="card__title">Import FAQs from CSV</h3>
+            <a class="muted" style="font-size: var(--fs-sm);" href="/dashboard/faq.php">← Back</a>
+        </div>
+        <p class="muted" style="font-size: var(--fs-sm);">
+            Required columns: <code>question</code>, <code>answer</code>. Optional: <code>sort_order</code> (integer; lower numbers first). Header row required.
+        </p>
+        <pre style="background: var(--color-surface-2); padding: var(--sp-3); border-radius: var(--r-md); font-size: var(--fs-xs); overflow-x:auto;">question,answer,sort_order
+"What time does the pool close?","9pm in summer, 7pm in winter.",10
+"Where do I report a leak?","Email maintenance@bellaircondo.com or open a Concern in the dashboard.",20</pre>
+        <form method="post" enctype="multipart/form-data" class="form">
+            <?= csrf_field() ?>
+            <input type="hidden" name="form" value="import">
+            <div class="field">
+                <label class="field__label" for="csv">CSV file (max 1 MB)</label>
+                <input class="input" type="file" id="csv" name="csv" accept=".csv,text/csv" required>
+            </div>
+            <div class="row" style="justify-content: flex-end;">
+                <a class="btn btn--ghost" href="/dashboard/faq.php">Cancel</a>
+                <button class="btn btn--primary" type="submit">Import</button>
+            </div>
+        </form>
+    </div>
+    <?php endif; ?>
 
     <?php if ($showCreate || $editFaq):
         $vals = $editFaq ?? ['question'=>'','answer'=>'','sort_order'=>0,'id'=>0];
@@ -148,7 +245,12 @@ require __DIR__ . '/../includes/header.php';
             <div class="row row--between" style="align-items:flex-start; margin-bottom: var(--sp-3);">
                 <div style="flex: 1; min-width: 0;">
                     <h3 style="font-size: var(--fs-lg); margin: 0;"><?= e((string)$f['question']) ?></h3>
-                    <span class="muted" style="font-size: var(--fs-xs);">sort: <?= (int)$f['sort_order'] ?> &middot; id: <?= (int)$f['id'] ?></span>
+                    <span class="muted" style="font-size: var(--fs-xs);">
+                        sort: <?= (int)$f['sort_order'] ?>
+                        <?php if (!empty($f['updated_at'])): ?>
+                            &middot; updated <?= e(date('M j, Y', strtotime((string)$f['updated_at']))) ?>
+                        <?php endif; ?>
+                    </span>
                 </div>
                 <?php if ($canManage): ?>
                 <div class="row" style="gap: var(--sp-2);">
