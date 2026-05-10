@@ -102,6 +102,17 @@ $mapAddress = trim(
 );
 $mapAddress = trim($mapAddress, ', ');
 
+// Public contacts (emergency / non-emergency / utility / contractors marked is_public)
+$pubContactStmt = db()->prepare(
+    "SELECT * FROM association_contacts
+      WHERE association_id = ? AND is_public = 1
+      ORDER BY FIELD(kind,'emergency','non_emergency','utility','contractor','other'), sort_order, label"
+);
+$pubContactStmt->execute([(int)$assoc['id']]);
+$publicContacts = $pubContactStmt->fetchAll();
+$hasPublicContractor = false;
+foreach ($publicContacts as $c) { if ($c['kind'] === 'contractor') { $hasPublicContractor = true; break; } }
+
 // Upcoming public events. Pull both single events with starts_at in the
 // future AND recurring series whose end isn't past — expand_events() then
 // turns the series into individual occurrences within the next 90 days.
@@ -393,6 +404,39 @@ $page_layout = 'public_landing'; // Avoids the public marketing nav; landing has
             </details>
             <?php endforeach; ?>
         </div>
+    </div>
+</section>
+<?php endif; ?>
+
+<?php if ($publicContacts): ?>
+<section class="landing-public-contacts" style="background: var(--color-surface); padding: var(--sp-8) 0;">
+    <div class="container container--narrow">
+        <h2 class="landing-section__heading center">Important numbers</h2>
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--sp-3); margin-top: var(--sp-5);">
+            <?php
+            $kindLabels = ['emergency'=>'Emergency','non_emergency'=>'Non-emergency','utility'=>'Utility','contractor'=>'Contractor','other'=>'Other'];
+            $kindColors = ['emergency'=>'var(--color-error)','non_emergency'=>'var(--color-warning)','utility'=>'var(--color-navy)','contractor'=>'var(--color-info)','other'=>'var(--color-text-soft)'];
+            foreach ($publicContacts as $c):
+                $kLbl = $kindLabels[$c['kind']] ?? $c['kind'];
+                $kCol = $kindColors[$c['kind']] ?? 'var(--color-text-soft)';
+            ?>
+            <div class="card card--padded" style="border-left: 3px solid <?= $kCol ?>;">
+                <div style="font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.05em; color: <?= $kCol ?>; font-weight: 600;"><?= e($kLbl) ?><?= !empty($c['trade']) ? ' · ' . e((string)$c['trade']) : '' ?></div>
+                <strong style="display:block; margin-top: var(--sp-1); font-size: var(--fs-md);"><?= e((string)$c['label']) ?></strong>
+                <?php if (!empty($c['phone'])): ?><div><a href="tel:<?= e((string)$c['phone']) ?>"><?= e((string)$c['phone']) ?></a></div><?php endif; ?>
+                <?php if (!empty($c['email'])): ?><div style="font-size: var(--fs-sm);"><a href="mailto:<?= e((string)$c['email']) ?>"><?= e((string)$c['email']) ?></a></div><?php endif; ?>
+                <?php if (!empty($c['url'])): ?><div style="font-size: var(--fs-sm);"><a href="<?= e((string)$c['url']) ?>" target="_blank" rel="noopener"><?= e(parse_url((string)$c['url'], PHP_URL_HOST) ?: $c['url']) ?></a></div><?php endif; ?>
+                <?php if (!empty($c['notes'])): ?><div class="muted" style="font-size: var(--fs-xs); margin-top: var(--sp-2);"><?= e((string)$c['notes']) ?></div><?php endif; ?>
+            </div>
+            <?php endforeach; ?>
+        </div>
+        <?php if ($hasPublicContractor): ?>
+        <p class="muted center" style="font-size: var(--fs-xs); margin-top: var(--sp-5); max-width: 720px; margin-left: auto; margin-right: auto;">
+            <strong>Contractor disclaimer:</strong> Contractors above are listed as a convenience for residents.
+            <?= e($assoc['name']) ?> doesn't guarantee their work and isn't responsible for the quality, pricing, or
+            outcome of any service performed. Please get your own quotes and references.
+        </p>
+        <?php endif; ?>
     </div>
 </section>
 <?php endif; ?>

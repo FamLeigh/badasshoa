@@ -345,13 +345,14 @@ require __DIR__ . '/../includes/header.php';
 
             <div class="form-row form-row--2">
                 <div class="field">
-                    <label class="field__label" for="acemail">Public contact email</label>
+                    <label class="field__label" for="acemail">Main email</label>
                     <input class="input" type="email" id="acemail" name="contact_email" value="<?= e((string)($association['contact_email'] ?? '')) ?>" placeholder="info@yourcommunity.com">
-                    <div class="field__hint">Shown on the landing as a <code>mailto:</code> link.</div>
+                    <div class="field__hint">Primary contact email for the association — shown on the public landing as a <code>mailto:</code> link and used in the contact form footer.</div>
                 </div>
                 <div class="field">
-                    <label class="field__label" for="acphone">Public contact phone</label>
+                    <label class="field__label" for="acphone">Main phone</label>
                     <input class="input" type="tel" id="acphone" name="contact_phone" value="<?= e((string)($association['contact_phone'] ?? '')) ?>" placeholder="555-555-5555">
+                    <div class="field__hint">Primary contact phone — shown on the public landing.</div>
                 </div>
             </div>
 

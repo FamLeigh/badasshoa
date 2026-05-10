@@ -1,5 +1,14 @@
 [
     {
+        "id": "cl-20260510-160000-bbb1",
+        "at": "2026-05-10T16:00:00-04:00",
+        "type": "feature",
+        "title": "Contacts directory: emergency lines, utilities, and recommended contractors",
+        "description": "New /dashboard/contacts.php (manager-only) lets the board list emergency and non-emergency phone numbers, utility providers, and suggested contractors by trade. Items marked public render on the community landing in an \"Important numbers\" section. Contractors carry an auto-disclaimer that the association doesn't guarantee their work. The Settings page's Main email and Main phone fields are now labeled clearly (they were always there, just buried as \"public contact\").",
+        "author": "Reboooot",
+        "link": "/dashboard/contacts.php"
+    },
+    {
         "id": "cl-20260510-150000-aaa6",
         "at": "2026-05-10T15:00:00-04:00",
         "type": "feature",
