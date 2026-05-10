@@ -176,29 +176,68 @@ $userInitial = strtoupper(substr(trim((string)($_SESSION['name'] ?? $_SESSION['e
         <?= nav_icon('menu') ?>
     </button>
     <strong class="mobile-topbar__title">
-        <?= $page_layout === 'admin' ? 'BadassHOA Admin' : e(($_SESSION['name'] ? ($_SESSION['name'] . ' · ') : '') . ('Dashboard')) ?>
+        <?= $page_layout === 'admin'
+            ? 'BadassHOA Admin'
+            : e((isset($association) && $association ? (string)$association['name'] : 'Dashboard')) ?>
     </strong>
     <span style="width:38px;"></span>
 </div>
 
+<?php
+// Tenant dashboard gets a persistent top app-bar showing the ASSOCIATION's
+// branding (logo + name), not BadassHOA's. The collapse toggle lives here so
+// it stays clickable when the sidebar is collapsed. Admin layout keeps the
+// existing in-sidebar branding.
+if ($page_layout === 'app' && isset($association) && $association):
+    $assocLogoSrc = !empty($association['logo_path'])
+        ? '/branding.php?id=' . (int)$association['id']
+        : null;
+?>
+<header class="app-topbar" role="banner">
+    <a href="/dashboard/" class="app-topbar__brand" aria-label="<?= e((string)$association['name']) ?> dashboard home">
+        <?php if ($assocLogoSrc): ?>
+            <img src="<?= e($assocLogoSrc) ?>" alt="<?= e((string)$association['name']) ?>" class="app-topbar__logo">
+        <?php else: ?>
+            <span class="app-topbar__avatar" aria-hidden="true"><?= e(strtoupper(mb_substr((string)$association['name'], 0, 1))) ?></span>
+        <?php endif; ?>
+        <span class="app-topbar__text">
+            <strong class="app-topbar__name"><?= e((string)$association['name']) ?></strong>
+            <?php if (!empty($association['address']) || !empty($association['city'])): ?>
+                <small class="app-topbar__sub">
+                    <?php
+                    $bits = array_filter([
+                        $association['address'] ?? null,
+                        $association['city']    ?? null,
+                        $association['state_region'] ?? null,
+                    ]);
+                    echo e(implode(', ', $bits));
+                    ?>
+                </small>
+            <?php endif; ?>
+        </span>
+    </a>
+    <button type="button" class="app-topbar__toggle side-nav__toggle" id="side-nav-toggle" aria-label="Collapse sidebar" title="Collapse sidebar">
+        <?= nav_icon('collapse') ?>
+    </button>
+</header>
+<?php endif; ?>
+
 <nav class="side-nav" id="side-nav" aria-label="<?= $page_layout === 'admin' ? 'Admin' : 'Dashboard' ?> navigation">
     <div class="side-nav__inner">
 
+        <?php if ($page_layout === 'admin'): /* admin keeps the BadassHOA brand row */ ?>
         <div class="side-nav__brand-row">
-            <a href="<?= $page_layout === 'admin' ? '/admin/' : '/dashboard/' ?>" class="side-nav__brand" aria-label="BadassHOA home">
-                <!-- Expanded: full white wordmark (4:1 ratio @ 800×200, scales to row width) -->
+            <a href="/admin/" class="side-nav__brand" aria-label="BadassHOA home">
                 <img src="/assets/images/logo-white.png" alt="BadassHOA" class="side-nav__logo">
-                <!-- Collapsed: house+sun mark only -->
                 <img src="/assets/images/logo-mark.png" alt="BadassHOA" class="side-nav__mark">
             </a>
             <button type="button" class="side-nav__toggle" id="side-nav-toggle" aria-label="Collapse sidebar" title="Collapse sidebar">
                 <?= nav_icon('collapse') ?>
             </button>
         </div>
-        <?php if ($page_layout === 'admin'): ?>
-            <div class="side-nav__brand-sub">
-                <span class="side-nav__brand-tag">Admin</span>
-            </div>
+        <div class="side-nav__brand-sub">
+            <span class="side-nav__brand-tag">Admin</span>
+        </div>
         <?php endif; ?>
 
         <div class="side-nav__links">

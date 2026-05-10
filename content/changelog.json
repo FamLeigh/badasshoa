@@ -1,5 +1,95 @@
 [
     {
+        "id": "cl-20260510-110000-z9d1",
+        "at": "2026-05-10T11:00:00-04:00",
+        "type": "design",
+        "title": "Each association's logo and name now anchor the dashboard",
+        "description": "Sign in to your dashboard and the top of every page now shows your association's branding (logo + name + city) instead of the generic BadassHOA mark. The collapse toggle for the side navigation moved up there too, so it stays visible and clickable whether the sidebar is expanded or collapsed.",
+        "author": "Reboooot",
+        "link": "/dashboard/"
+    },
+    {
+        "id": "cl-20260510-105500-z8c1",
+        "at": "2026-05-10T10:55:00-04:00",
+        "type": "improvement",
+        "title": "Renters see only board contacts in the directory",
+        "description": "Privacy update: renter accounts now see only the Board section of the Directory page — no full resident roster, no other unit owners' contact details. Owners and managers see everything as before.",
+        "author": "Reboooot",
+        "link": "/dashboard/directory.php"
+    },
+    {
+        "id": "cl-20260510-105000-z7b1",
+        "at": "2026-05-10T10:50:00-04:00",
+        "type": "fix",
+        "title": "Rules page now lists all rules, not just search hits",
+        "description": "Visiting /dashboard/search.php with no search term used to show \"No rules on file yet\" even when hundreds of rules were imported. Now the page defaults to a most-recent listing (200 rows), and search narrows it down. Imports were always landing in the database correctly — just invisible until you typed a query.",
+        "author": "Reboooot",
+        "link": "/dashboard/search.php"
+    },
+    {
+        "id": "cl-20260510-104500-z6a1",
+        "at": "2026-05-10T10:45:00-04:00",
+        "type": "feature",
+        "title": "Building locations: curate the spaces in your property",
+        "description": "Managers can now add named locations (Clubhouse, Pool deck, Roof terrace, …) at /dashboard/locations.php, with optional descriptions and an active/inactive flag. The Events form auto-suggests from this list while still accepting free-text. The locations table is also the foundation for the maintenance work-order flow we're building next.",
+        "author": "Reboooot",
+        "link": "/dashboard/locations.php"
+    },
+    {
+        "id": "cl-20260510-104000-z5b1",
+        "at": "2026-05-10T10:40:00-04:00",
+        "type": "feature",
+        "title": "Members can suggest rules; board approves with a final adoption date",
+        "description": "Any signed-in member (resident or renter) can submit a rule suggestion via a new form on the Rules page. The board sees a banner alert and a counter badge when suggestions are pending. Approving opens an editable inline form with all the suggestion's fields plus an adoption date — submit and it becomes a real rule with that date as the effective date. The suggester is emailed on either decision (approve or reject, with optional note).",
+        "author": "Reboooot",
+        "link": "/dashboard/search.php"
+    },
+    {
+        "id": "cl-20260510-103500-z4c1",
+        "at": "2026-05-10T10:35:00-04:00",
+        "type": "feature",
+        "title": "Recurring events: weekly board meetings, monthly socials, etc.",
+        "description": "Events now have a Repeats option (daily, weekly, biweekly, monthly, or none) plus an optional repeats-until date. Series are stored as a single row; occurrences are computed at display time and shown both on the dashboard listing and on the public community landing — no need to re-create a meeting every Tuesday.",
+        "author": "Reboooot",
+        "link": "/dashboard/events.php"
+    },
+    {
+        "id": "cl-20260510-103000-z3d1",
+        "at": "2026-05-10T10:30:00-04:00",
+        "type": "improvement",
+        "title": "Property managers now have full management rights, plus a \"View as\" lens for the board",
+        "description": "Property managers can now add, edit, and delete content across the dashboard alongside board members and board admins (residents and renters remain view-only). Board users also get a new View-as toggle in the sidebar — preview the dashboard exactly as a homeowner or renter sees it (manage controls hidden, board-only documents suppressed) and one click to return to your normal view.",
+        "author": "Reboooot",
+        "link": "/dashboard/"
+    },
+    {
+        "id": "cl-20260510-102500-z2e1",
+        "at": "2026-05-10T10:25:00-04:00",
+        "type": "feature",
+        "title": "Per-association activity log for the board",
+        "description": "New /dashboard/activity.php page (board members, board admins, and property managers only) shows every audit event scoped to your association — who added a rule, deleted a document, posted an announcement, etc. Filter by action, actor, or date. When a BadassHOA admin signs in as a user to help with support, the activity log makes that visible with a small \"via BadassHOA support\" tag on the actor.",
+        "author": "Reboooot",
+        "link": "/dashboard/activity.php"
+    },
+    {
+        "id": "cl-20260510-102000-z1f1",
+        "at": "2026-05-10T10:20:00-04:00",
+        "type": "feature",
+        "title": "Document categories you can manage",
+        "description": "Document uploads now use a curated category dropdown (Bylaws, Minutes, Insurance, Forms, Renters, General by default). Board users can rename categories — and the rename propagates to every existing document tagged with the old label — or add and delete categories from a Manage page accessible right from the upload form.",
+        "author": "Reboooot",
+        "link": "/dashboard/documents.php"
+    },
+    {
+        "id": "cl-20260510-101500-z0g1",
+        "at": "2026-05-10T10:15:00-04:00",
+        "type": "feature",
+        "title": "Send invitations and password resets from the admin panel",
+        "description": "On /admin/users.php, leave the password field blank when creating a user and they'll get an emailed invitation with a link to set their own password (status starts as pending; first password set promotes them to active). Each existing user row now also has a Reset button that emails them a one-hour reset link. Welcome and invitation emails read \"from your association\" instead of generically from BadassHOA.",
+        "author": "Reboooot",
+        "link": "/admin/users.php"
+    },
+    {
         "id": "cl-20260510-073500-a1e2",
         "at": "2026-05-10T07:35:00-04:00",
         "type": "feature",

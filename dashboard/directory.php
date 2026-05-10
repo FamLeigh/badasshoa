@@ -284,23 +284,33 @@ $board = $boardStmt->fetchAll();
 // Residents
 $qSearch     = trim((string)($_GET['q'] ?? ''));
 $ownersOnly  = isset($_GET['owners_only']);
-$sql = "SELECT * FROM users WHERE association_id = ? AND status <> 'inactive'";
-$params = [$assocId];
-if ($qSearch !== '') {
-    $sql .= " AND (first_name LIKE ? OR last_name LIKE ? OR email LIKE ? OR unit_number LIKE ?)";
-    $like = "%$qSearch%";
-    array_push($params, $like, $like, $like, $like);
+
+// Privacy: renters only see the Board section — not the full resident roster.
+// (Their landlord's contact info is the building's responsibility, not a
+// neighbor's, and renters don't need to see other unit owners' details.)
+$rentersOnly = (viewing_role() === 'renter');
+
+if ($rentersOnly) {
+    $residents = [];
+} else {
+    $sql = "SELECT * FROM users WHERE association_id = ? AND status <> 'inactive'";
+    $params = [$assocId];
+    if ($qSearch !== '') {
+        $sql .= " AND (first_name LIKE ? OR last_name LIKE ? OR email LIKE ? OR unit_number LIKE ?)";
+        $like = "%$qSearch%";
+        array_push($params, $like, $like, $like, $like);
+    }
+    if ($ownersOnly) {
+        $sql .= ' AND is_owner = 1';
+    }
+    // Natural alphanumeric sort: numeric prefix first (so "101" < "101A"), then full string lex,
+    // then name. Letter-prefixed units (CAST = 0) bubble to the top — acceptable since most
+    // condos use number-prefixed units; document if it becomes an issue.
+    $sql .= ' ORDER BY CAST(unit_number AS UNSIGNED), unit_number, last_name, first_name';
+    $stmt = db()->prepare($sql);
+    $stmt->execute($params);
+    $residents = $stmt->fetchAll();
 }
-if ($ownersOnly) {
-    $sql .= ' AND is_owner = 1';
-}
-// Natural alphanumeric sort: numeric prefix first (so "101" < "101A"), then full string lex,
-// then name. Letter-prefixed units (CAST = 0) bubble to the top — acceptable since most
-// condos use number-prefixed units; document if it becomes an issue.
-$sql .= ' ORDER BY CAST(unit_number AS UNSIGNED), unit_number, last_name, first_name';
-$stmt = db()->prepare($sql);
-$stmt->execute($params);
-$residents = $stmt->fetchAll();
 
 $showInvite = ($_GET['action'] ?? '') === 'invite' && $canManage;
 $showImport = ($_GET['action'] ?? '') === 'import' && $canManage;
@@ -624,6 +634,11 @@ B2,Sam,Garcia,sam@example.com,,0</pre>
     </div>
     <?php endif; ?>
 
+    <?php if ($rentersOnly): ?>
+        <div class="card card--padded muted" style="margin-bottom: var(--sp-4);">
+            Renter accounts can see board and management contacts above. Other unit owners' details aren't shown — for anything beyond board matters, please reach out to your landlord directly.
+        </div>
+    <?php else: ?>
     <h2 style="font-size: var(--fs-xl);">Residents <span class="muted" style="font-size: var(--fs-sm); font-weight: 400;">— sorted by unit number</span></h2>
     <form method="get" class="row" style="margin-bottom: var(--sp-4); gap: var(--sp-3);">
         <input class="input" type="search" name="q" placeholder="Search name, email, unit" value="<?= e($qSearch) ?>" style="max-width: 320px;">
@@ -632,7 +647,9 @@ B2,Sam,Garcia,sam@example.com,,0</pre>
         </label>
         <button class="btn btn--ghost" type="submit">Apply</button>
     </form>
+    <?php endif; ?>
 
+    <?php if (!$rentersOnly): ?>
     <div style="overflow-x:auto;">
     <table class="table">
         <thead>
@@ -668,6 +685,7 @@ B2,Sam,Garcia,sam@example.com,,0</pre>
         </tbody>
     </table>
     </div>
+    <?php endif; ?>
 
 </div>
 

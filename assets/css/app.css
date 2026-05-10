@@ -613,6 +613,82 @@
 }
 .side-nav.collapsed .side-nav__hide-when-collapsed { display: none; }
 
+/* ============ App top bar (tenant dashboard only) =================
+   Persistent header with the association's branding. Sits above the
+   sidebar visually (z-index) and flows with the document so banners
+   remain easy to stack. The collapse toggle lives here so it stays
+   reachable when the sidebar is collapsed. */
+.app-topbar {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    padding: var(--sp-3) var(--sp-5);
+    background: var(--color-white);
+    border-bottom: 1px solid var(--color-border);
+    height: 64px;
+    box-sizing: border-box;
+    /* Sit above sidebar in the upper-left corner so its top edge isn't
+       hidden under the fixed sidebar. */
+    position: relative;
+    z-index: calc(var(--z-nav) + 2);
+}
+.app-topbar__brand {
+    display: flex; align-items: center; gap: var(--sp-3);
+    flex: 1; min-width: 0;
+    color: var(--color-navy);
+    text-decoration: none;
+}
+.app-topbar__logo {
+    height: 40px; width: auto; max-width: 180px;
+    object-fit: contain;
+    border-radius: var(--r-sm);
+    flex-shrink: 0;
+}
+.app-topbar__avatar {
+    width: 40px; height: 40px; flex: 0 0 40px;
+    border-radius: var(--r-sm);
+    background: var(--color-navy);
+    color: var(--color-white);
+    font-weight: 700; font-size: var(--fs-lg);
+    display: inline-flex; align-items: center; justify-content: center;
+}
+.app-topbar__text {
+    display: flex; flex-direction: column;
+    line-height: 1.15;
+    min-width: 0;
+}
+.app-topbar__name {
+    color: var(--color-navy);
+    font-size: var(--fs-md);
+    font-weight: 700;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.app-topbar__sub {
+    color: var(--color-text-soft);
+    font-size: var(--fs-xs);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.app-topbar__toggle {
+    background: transparent; border: 0;
+    color: var(--color-text-soft);
+    padding: var(--sp-2);
+    border-radius: var(--r-sm);
+    cursor: pointer;
+    transition: background var(--t-fast), color var(--t-fast);
+    flex: 0 0 auto;
+}
+.app-topbar__toggle:hover { color: var(--color-navy); background: var(--color-surface); }
+/* Hide the topbar's name text when sidebar is collapsed too keeps the bar tidy */
+@media (max-width: 600px) {
+    .app-topbar__sub { display: none; }
+}
+
+/* When the app-topbar is rendered (tenant dashboard only), the sidebar
+   should not duplicate brand/toggle real estate. The topbar already has
+   them, so nudge the sidebar's content down past the topbar height and
+   relax body padding-left if nothing else changes. */
+body[data-layout="app"] .side-nav__inner { padding-top: var(--sp-2); }
+
 /* ============ Left sidebar (app + admin layouts) ============ */
 :root {
     --side-nav-w:           232px;

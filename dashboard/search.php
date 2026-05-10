@@ -393,6 +393,22 @@ $q       = trim((string)($_GET['q'] ?? ''));
 $source  = $_GET['source'] ?? '';
 $results = [];
 
+// No search query → show all rules (newest first), so the page is useful as
+// a browsable list. Was previously search-only, which made an association
+// with hundreds of imported rules look empty until you typed something.
+if ($q === '') {
+    $sql = "SELECT id, title, body, category, source, rule_number, effective_date
+              FROM rules WHERE association_id = ?";
+    $params = [$assocId];
+    if (in_array($source, ['bylaw','board_rule','policy'], true)) {
+        $sql .= ' AND source = ?'; $params[] = $source;
+    }
+    $sql .= ' ORDER BY created_at DESC, id DESC LIMIT 200';
+    $stmt = db()->prepare($sql);
+    $stmt->execute($params);
+    $results = $stmt->fetchAll();
+}
+
 if ($q !== '') {
     $sql = "SELECT id, title, body, category, source, rule_number, effective_date,
                    MATCH(title, body) AGAINST (? IN NATURAL LANGUAGE MODE) AS score
