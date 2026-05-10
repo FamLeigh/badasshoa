@@ -71,7 +71,7 @@ $faqs = $faqStmt->fetchAll();
 
 // Active board members who've opted in to the public listing
 $boardStmt = db()->prepare(
-    "SELECT first_name, last_name, role, unit_number
+    "SELECT id, first_name, last_name, role, unit_number, avatar_path, bio
      FROM users
      WHERE association_id = ?
        AND status = 'active'
@@ -270,9 +270,16 @@ $page_layout = 'public_landing'; // Avoids the public marketing nav; landing has
                 };
             ?>
             <div class="landing-board__card">
-                <span class="landing-board__avatar"><?= e($initial) ?></span>
+                <?php if (!empty($bm['avatar_path'])): ?>
+                    <img class="landing-board__avatar" src="/user-avatar.php?id=<?= (int)$bm['id'] ?>" alt="" style="object-fit: cover;">
+                <?php else: ?>
+                    <span class="landing-board__avatar"><?= e($initial) ?></span>
+                <?php endif; ?>
                 <div class="landing-board__name"><?= e($displayName ?: 'Board Member') ?></div>
                 <span class="badge <?= $roleClass ?>"><?= e($roleLabel) ?></span>
+                <?php if (!empty($bm['bio'])): ?>
+                    <p class="muted" style="margin-top: var(--sp-2); font-size: var(--fs-sm); white-space: pre-wrap;"><?= e((string)$bm['bio']) ?></p>
+                <?php endif; ?>
             </div>
             <?php endforeach; ?>
         </div>

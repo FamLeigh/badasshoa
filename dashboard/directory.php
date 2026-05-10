@@ -704,7 +704,16 @@ B2,Sam,Garcia,sam@example.com,,0</pre>
         <tbody>
             <?php foreach ($residents as $r): ?>
             <tr>
-                <td><strong><?= e(trim($r['first_name'] . ' ' . $r['last_name']) ?: '—') ?></strong></td>
+                <td>
+                    <div class="row" style="gap: var(--sp-2); align-items:center;">
+                        <?php if (!empty($r['avatar_path'])): ?>
+                            <img src="/user-avatar.php?id=<?= (int)$r['id'] ?>" alt="" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; flex: 0 0 32px;">
+                        <?php else: ?>
+                            <span class="side-nav__avatar" style="background: var(--color-text-soft);"><?= e(strtoupper(mb_substr((string)($r['first_name'] ?? '?'), 0, 1))) ?></span>
+                        <?php endif; ?>
+                        <strong><?= e(trim($r['first_name'] . ' ' . $r['last_name']) ?: '—') ?></strong>
+                    </div>
+                </td>
                 <td>
                     <?php if (!empty($r['unit_number'])): ?>
                         <?php if ($canManage): ?>

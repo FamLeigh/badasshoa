@@ -296,13 +296,27 @@ if ($page_layout === 'app' && isset($association) && $association):
         </div>
 
         <div class="side-nav__bottom">
-            <div class="side-nav__user">
-                <span class="side-nav__avatar"><?= e($userInitial) ?></span>
+            <?php
+            // Render headshot if user has uploaded one; otherwise the initial avatar.
+            $_sessAvatar = null;
+            if (!empty($_SESSION['user_id'])) {
+                $_chk = db()->prepare('SELECT avatar_path FROM users WHERE id = ?');
+                $_chk->execute([(int)$_SESSION['user_id']]);
+                $_path = (string)($_chk->fetchColumn() ?: '');
+                if ($_path !== '') $_sessAvatar = '/user-avatar.php?id=' . (int)$_SESSION['user_id'] . '&v=' . substr(md5($_path), 0, 8);
+            }
+            ?>
+            <a class="side-nav__user" href="<?= $page_layout === 'app' ? '/dashboard/profile.php' : '#' ?>" style="text-decoration: none; color: inherit;">
+                <?php if ($_sessAvatar): ?>
+                    <img class="side-nav__avatar" src="<?= e($_sessAvatar) ?>" alt="" style="object-fit: cover;">
+                <?php else: ?>
+                    <span class="side-nav__avatar"><?= e($userInitial) ?></span>
+                <?php endif; ?>
                 <div class="side-nav__user-text">
                     <strong class="side-nav__name"><?= e($_SESSION['name'] ?? 'Account') ?></strong>
                     <small class="side-nav__role"><?= e(str_replace('_', ' ', (string)($_SESSION['role'] ?? ''))) ?></small>
                 </div>
-            </div>
+            </a>
             <?php if ($page_layout === 'app' && role_can_manage((string)($_SESSION['role'] ?? '')) && !is_viewing_as()): ?>
                 <div class="side-nav__view-as side-nav__hide-when-collapsed">
                     <small style="display:block; opacity: 0.55; font-size: var(--fs-xs); margin-bottom: 4px; padding: 0 var(--sp-3);">View as</small>

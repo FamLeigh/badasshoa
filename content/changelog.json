@@ -1,5 +1,14 @@
 [
     {
+        "id": "cl-20260510-170000-ccc1",
+        "at": "2026-05-10T17:00:00-04:00",
+        "type": "feature",
+        "title": "Personal headshots + about-me bios",
+        "description": "Every signed-in user can now visit /dashboard/profile.php to upload a headshot (PNG, JPG, or WEBP, 4 MB max) and write a short bio. Headshots show up next to your name in the directory, on board-member cards on the community landing page, and at the bottom of the sidebar where you click to edit. Bios appear under your role badge on the public landing for board members who've opted into showing on it.",
+        "author": "Reboooot",
+        "link": "/dashboard/profile.php"
+    },
+    {
         "id": "cl-20260510-160000-bbb1",
         "at": "2026-05-10T16:00:00-04:00",
         "type": "feature",

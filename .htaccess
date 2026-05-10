@@ -12,7 +12,7 @@ Options -Indexes -MultiViews
     RewriteEngine On
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
-    RewriteCond %{REQUEST_URI}      !^/(landing|branding|public-media|public-document|contact)\.php
+    RewriteCond %{REQUEST_URI}      !^/(landing|branding|public-media|public-document|contact|user-avatar)\.php
     RewriteRule ^([a-z0-9][a-z0-9-]*)/?$  /landing.php?slug=$1  [QSA,L]
 </IfModule>
 
