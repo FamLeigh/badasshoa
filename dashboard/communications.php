@@ -12,7 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'post') 
     $body  = trim((string)($_POST['body'] ?? ''));
     $type  = $_POST['type'] ?? 'general';
     $aud   = $_POST['audience'] ?? 'all';
-    if (!in_array($type, ['general','emergency','event','maintenance'], true)) $type = 'general';
+    if (!in_array($type, ['general','emergency','event','maintenance','beautification'], true)) $type = 'general';
     if (!in_array($aud,  ['all','owners','renters','board'], true))           $aud = 'all';
 
     if ($title === '' || $body === '') {
@@ -46,7 +46,7 @@ $sql = 'SELECT a.*, CONCAT(IFNULL(u.first_name,""), " ", IFNULL(u.last_name,""))
         FROM announcements a LEFT JOIN users u ON u.id = a.author_id
         WHERE a.association_id = ?';
 $params = [$assocId];
-if (in_array($qType, ['general','emergency','event','maintenance'], true)) { $sql .= ' AND a.type = ?'; $params[] = $qType; }
+if (in_array($qType, ['general','emergency','event','maintenance','beautification'], true)) { $sql .= ' AND a.type = ?'; $params[] = $qType; }
 if (in_array($qAud,  ['all','owners','renters','board'], true))           { $sql .= ' AND a.audience = ?'; $params[] = $qAud; }
 $sql .= ' ORDER BY a.published_at DESC LIMIT 100';
 $stmt = db()->prepare($sql);
@@ -86,6 +86,7 @@ require __DIR__ . '/../includes/header.php';
                         <option value="general">General</option>
                         <option value="event">Event</option>
                         <option value="maintenance">Maintenance</option>
+                        <option value="beautification">Beautification</option>
                         <option value="emergency">Emergency</option>
                     </select>
                 </div>
@@ -113,7 +114,7 @@ require __DIR__ . '/../includes/header.php';
     <form method="get" class="row" style="margin-bottom: var(--sp-4);">
         <select class="select" name="type" style="max-width: 200px;">
             <option value="">All types</option>
-            <?php foreach (['general','event','maintenance','emergency'] as $t): ?>
+            <?php foreach (['general','event','maintenance','beautification','emergency'] as $t): ?>
                 <option value="<?= e($t) ?>" <?= $qType===$t?'selected':'' ?>><?= e(ucfirst($t)) ?></option>
             <?php endforeach; ?>
         </select>

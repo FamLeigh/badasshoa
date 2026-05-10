@@ -157,6 +157,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit_us
     $last    = trim((string)($_POST['last_name'] ?? ''));
     $email   = trim((string)($_POST['email'] ?? ''));
     $phone   = trim((string)($_POST['phone'] ?? ''));
+    $mAddr   = trim((string)($_POST['mailing_address'] ?? ''));
+    $mCity   = trim((string)($_POST['mailing_city'] ?? ''));
+    $mState  = trim((string)($_POST['mailing_state_region'] ?? ''));
+    $mPostal = trim((string)($_POST['mailing_postal_code'] ?? ''));
+    $mCtry   = strtoupper(trim((string)($_POST['mailing_country'] ?? '')));
+    if ($mCtry !== '' && !preg_match('/^[A-Z]{2}$/', $mCtry)) $mCtry = '';
     $role    = $_POST['role'] ?? 'resident';
     $status  = $_POST['status'] ?? 'active';
     $unit    = trim((string)($_POST['unit_number'] ?? ''));
@@ -217,10 +223,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit_us
                     db()->prepare(
                         'UPDATE users
                          SET first_name = ?, last_name = ?, email = ?, phone = ?,
+                             mailing_address = ?, mailing_city = ?, mailing_state_region = ?,
+                             mailing_postal_code = ?, mailing_country = ?,
                              role = ?, status = ?, unit_number = ?, association_id = ?, is_owner = ?
                          WHERE id = ?'
                     )->execute([
                         $first, $last, $email, $phone ?: null,
+                        $mAddr ?: null, $mCity ?: null, $mState ?: null, $mPostal ?: null, $mCtry ?: null,
                         $role, $status, $unit ?: null, $assocId, $isOwner,
                         $uid,
                     ]);
@@ -464,6 +473,43 @@ require __DIR__ . '/../includes/header.php';
                     <input class="input" id="eu-phone" name="phone" value="<?= e((string)($editUser['phone'] ?? '')) ?>">
                 </div>
             </div>
+
+            <!-- Mailing address: optional. Leave blank if their HOA correspondence
+                 should go to the unit address (the common case). Owners renting
+                 their unit out fill this in so they get correspondence at home. -->
+            <fieldset style="border: 1px solid var(--color-border); border-radius: var(--r-md); padding: var(--sp-3) var(--sp-4); margin-bottom: var(--sp-4);">
+                <legend style="padding: 0 var(--sp-2); color: var(--color-text-soft); font-size: var(--fs-sm);">Mailing address (optional — for absentee owners)</legend>
+                <div class="field">
+                    <label class="field__label" for="eu-maddr">Street address</label>
+                    <input class="input" id="eu-maddr" name="mailing_address" value="<?= e((string)($editUser['mailing_address'] ?? '')) ?>" placeholder="123 Main St">
+                </div>
+                <div style="display:grid; grid-template-columns: 1.4fr 1fr 0.8fr; gap: var(--sp-3);">
+                    <div class="field">
+                        <label class="field__label" for="eu-mcity">City</label>
+                        <input class="input" id="eu-mcity" name="mailing_city" value="<?= e((string)($editUser['mailing_city'] ?? '')) ?>">
+                    </div>
+                    <div class="field">
+                        <label class="field__label" for="eu-mstate">State / Province</label>
+                        <input class="input" id="eu-mstate" name="mailing_state_region" list="us-ca-states" value="<?= e((string)($editUser['mailing_state_region'] ?? '')) ?>" autocomplete="address-level1">
+                    </div>
+                    <div class="field">
+                        <label class="field__label" for="eu-mpostal">ZIP / Postal</label>
+                        <input class="input" id="eu-mpostal" name="mailing_postal_code" value="<?= e((string)($editUser['mailing_postal_code'] ?? '')) ?>" autocomplete="postal-code">
+                    </div>
+                </div>
+                <?= function_exists('us_ca_states_datalist') ? us_ca_states_datalist() : '' ?>
+                <div class="field">
+                    <label class="field__label" for="eu-mctry">Country</label>
+                    <select class="select" id="eu-mctry" name="mailing_country" style="max-width: 280px;">
+                        <option value="">— Same as unit —</option>
+                        <?php $cur = (string)($editUser['mailing_country'] ?? '');
+                        foreach (['US'=>'United States','CA'=>'Canada','MX'=>'Mexico','GB'=>'United Kingdom','AU'=>'Australia'] as $code=>$lbl): ?>
+                            <option value="<?= e($code) ?>" <?= $cur===$code?'selected':'' ?>><?= e($lbl) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </fieldset>
+
             <div class="form-row form-row--2">
                 <div class="field">
                     <label class="field__label" for="eu-assoc">Association</label>

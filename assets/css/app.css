@@ -563,6 +563,30 @@
 }
 .site-nav__links > a:not(.btn):hover { color: var(--color-orange); }
 
+/* ============ Rule body expand-on-click ===========================
+   Used on /dashboard/search.php — clamps long rule bodies to 4 lines and
+   the JS in app.js inserts a "Show more / Show less" toggle whenever the
+   content actually overflows. */
+.rule-body-clamp {
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.5;
+}
+.rule-body-clamp.is-expanded {
+    display: block;
+    -webkit-line-clamp: unset;
+}
+.rule-body-toggle {
+    background: none; border: 0; padding: 4px 0;
+    margin-top: 4px;
+    color: var(--color-orange);
+    font-size: var(--fs-xs); font-weight: 600;
+    cursor: pointer;
+}
+.rule-body-toggle:hover { text-decoration: underline; }
+
 /* ============ Impersonation banner (super-admin "Log in as") ============ */
 .impersonation-banner {
     background: var(--color-orange);

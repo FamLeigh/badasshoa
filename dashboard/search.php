@@ -1020,7 +1020,7 @@ function rule_form_card(?array $editing, array $categories): void {
                         <?php endif; ?>
                     </div>
                     <strong><?= e($r['title']) ?></strong>
-                    <p class="muted" style="margin: var(--sp-2) 0 0; font-size: var(--fs-sm);"><?= e(mb_strimwidth(strip_tags($r['body']), 0, 240, '…')) ?></p>
+                    <p class="muted rule-body-clamp" style="margin: var(--sp-2) 0 0; font-size: var(--fs-sm); white-space: pre-wrap;"><?= e(trim(strip_tags(str_replace(['&nbsp;', "\xc2\xa0"], ' ', (string)$r['body'])))) ?></p>
                 </div>
                 <?php endforeach; ?>
             <?php elseif (!$results): ?>
@@ -1051,7 +1051,7 @@ function rule_form_card(?array $editing, array $categories): void {
                         <?php endif; ?>
                     </div>
                     <strong><?= e($r['title']) ?></strong>
-                    <p class="muted" style="margin: var(--sp-2) 0 0; font-size: var(--fs-sm);"><?= $highlighted ?></p>
+                    <p class="muted rule-body-clamp" style="margin: var(--sp-2) 0 0; font-size: var(--fs-sm); white-space: pre-wrap;"><?= $highlighted ?></p>
                 </div>
                 <?php endforeach; ?>
             <?php endif; ?>

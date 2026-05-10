@@ -2,6 +2,23 @@
 (function () {
     'use strict';
 
+    // --- rule body expand-on-click ---
+    // Long rule bodies get clamped to 4 lines via CSS; here we add a
+    // "Show more" button only when the content actually overflows.
+    document.querySelectorAll('.rule-body-clamp').forEach(function (el) {
+        if (el.scrollHeight > el.clientHeight + 2) {
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'rule-body-toggle';
+            btn.textContent = 'Show more';
+            btn.addEventListener('click', function () {
+                var expanded = el.classList.toggle('is-expanded');
+                btn.textContent = expanded ? 'Show less' : 'Show more';
+            });
+            if (el.parentNode) el.parentNode.insertBefore(btn, el.nextSibling);
+        }
+    });
+
     // --- public site mobile nav toggle ---
     document.querySelectorAll('.nav-toggle').forEach(function (btn) {
         btn.addEventListener('click', function () {

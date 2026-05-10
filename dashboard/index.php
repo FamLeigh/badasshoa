@@ -106,53 +106,31 @@ require __DIR__ . '/../includes/header.php';
         </a>
     </div>
 
-    <div class="grid grid--2" style="align-items:start;">
-        <div class="card card--padded">
-            <div class="card__head">
-                <h2 class="card__title">Recent announcements</h2>
-                <a href="/dashboard/communications.php" class="muted" style="font-size: var(--fs-sm);">View all →</a>
-            </div>
-            <?php if (!$announcements): ?>
-                <p class="muted">No announcements yet. <a href="/dashboard/communications.php?action=new">Post the first one</a>.</p>
-            <?php else: ?>
-                <div class="stack-lg">
-                <?php foreach ($announcements as $a): ?>
-                    <div>
-                        <div class="row" style="gap: var(--sp-2); margin-bottom: var(--sp-1);">
-                            <span class="badge <?= $a['type'] === 'emergency' ? 'badge--error' : ($a['type'] === 'event' ? 'badge--info' : 'badge--orange') ?>">
-                                <?= e($a['type']) ?>
-                            </span>
-                            <span class="muted" style="font-size: var(--fs-xs);"><?= e(date('M j, Y', strtotime($a['published_at']))) ?> &middot; <?= e(trim($a['author']) ?: 'Unknown') ?></span>
-                        </div>
-                        <strong><?= e($a['title']) ?></strong>
-                        <p class="muted" style="margin: var(--sp-1) 0 0; font-size: var(--fs-sm);">
-                            <?= e(mb_strimwidth(strip_tags($a['body']), 0, 160, '…')) ?>
-                        </p>
+    <div class="card card--padded">
+        <div class="card__head">
+            <h2 class="card__title">Recent announcements</h2>
+            <a href="/dashboard/communications.php" class="muted" style="font-size: var(--fs-sm);">View all →</a>
+        </div>
+        <?php if (!$announcements): ?>
+            <p class="muted">No announcements yet. <a href="/dashboard/communications.php?action=new">Post the first one</a>.</p>
+        <?php else: ?>
+            <div class="stack-lg">
+            <?php foreach ($announcements as $a): ?>
+                <div>
+                    <div class="row" style="gap: var(--sp-2); margin-bottom: var(--sp-1);">
+                        <span class="badge <?= $a['type'] === 'emergency' ? 'badge--error' : ($a['type'] === 'event' ? 'badge--info' : 'badge--orange') ?>">
+                            <?= e($a['type']) ?>
+                        </span>
+                        <span class="muted" style="font-size: var(--fs-xs);"><?= e(date('M j, Y', strtotime($a['published_at']))) ?> &middot; <?= e(trim($a['author']) ?: 'Unknown') ?></span>
                     </div>
-                <?php endforeach; ?>
+                    <strong><?= e($a['title']) ?></strong>
+                    <p class="muted" style="margin: var(--sp-1) 0 0; font-size: var(--fs-sm);">
+                        <?= e(mb_strimwidth(strip_tags($a['body']), 0, 160, '…')) ?>
+                    </p>
                 </div>
-            <?php endif; ?>
-        </div>
-
-        <div class="card card--padded">
-            <div class="card__head">
-                <h2 class="card__title">Quick actions</h2>
+            <?php endforeach; ?>
             </div>
-            <div class="stack">
-                <a class="btn btn--ghost btn--block" href="/dashboard/documents.php?action=new">📂 Upload a document</a>
-                <a class="btn btn--ghost btn--block" href="/dashboard/communications.php?action=new">📣 Post announcement</a>
-                <a class="btn btn--ghost btn--block" href="/dashboard/directory.php?action=invite">👥 Invite a board member</a>
-                <a class="btn btn--ghost btn--block" href="/dashboard/media.php?action=new">🖼️ Upload a photo</a>
-                <a class="btn btn--ghost btn--block" href="/dashboard/search.php?action=new">📜 Add a rule or bylaw</a>
-            </div>
-            <hr>
-            <p class="muted" style="font-size: var(--fs-sm); margin: 0;">
-                <strong>Plan:</strong> <?= e(ucfirst((string)$association['plan'])) ?>
-                <?php if ($association['status'] === 'trial'): ?>
-                    <span class="badge badge--warning" style="margin-left: var(--sp-2);">Trial</span>
-                <?php endif; ?>
-            </p>
-        </div>
+        <?php endif; ?>
     </div>
 
 </div>
