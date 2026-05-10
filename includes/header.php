@@ -26,6 +26,7 @@ function nav_icon(string $name): string
         case 'activity':       return "<svg $base><polyline points='22 12 18 12 15 21 9 3 6 12 2 12'/></svg>";
         case 'locations':      return "<svg $base><path d='M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z'/><circle cx='12' cy='10' r='3'/></svg>";
         case 'units':          return "<svg $base><rect x='3' y='3' width='7' height='7'/><rect x='14' y='3' width='7' height='7'/><rect x='3' y='14' width='7' height='7'/><rect x='14' y='14' width='7' height='7'/></svg>";
+        case 'concerns':       return "<svg $base><path d='M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'/></svg>";
         case 'menu':           return "<svg $base><line x1='3' y1='12' x2='21' y2='12'/><line x1='3' y1='6' x2='21' y2='6'/><line x1='3' y1='18' x2='21' y2='18'/></svg>";
         case 'collapse':       return "<svg $base><rect x='3' y='3' width='18' height='18' rx='2' ry='2'/><line x1='9' y1='3' x2='9' y2='21'/></svg>";
         case 'logout':         return "<svg $base><path d='M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4'/><polyline points='16 17 21 12 16 7'/><line x1='21' y1='12' x2='9' y2='12'/></svg>";
@@ -253,6 +254,7 @@ if ($page_layout === 'app' && isset($association) && $association):
             <?= nav_link('/dashboard/committees.php',  'committees',     'Committees',     'committees',     $active) ?>
             <?= nav_link('/dashboard/events.php',      'committees',     'Events',         'events',         $active) ?>
             <?= nav_link('/dashboard/communications.php', 'communications', 'Communications', 'communications', $active) ?>
+            <?= nav_link('/dashboard/concerns.php',    'concerns',       'Concerns',       'concerns',       $active) ?>
             <?= nav_link('/dashboard/media.php',       'media',          'Media',          'media',          $active) ?>
             <?= nav_link('/dashboard/faq.php',         'rules',          'FAQ',            'faq',            $active) ?>
             <?php if (role_can_manage(viewing_role())): ?>
