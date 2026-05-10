@@ -76,6 +76,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'cat_del
     redirect('/dashboard/documents.php?manage_cats=1');
 }
 
+// --- Edit metadata (title, description, category, access, unit assignment) ---
+// File replacement is intentionally not supported here — re-upload + delete
+// is the path for that. Keeps this handler simple and avoids orphaning
+// storage files on partial errors.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit') {
+    csrf_check();
+    if (!$canManage) { http_response_code(403); die('Forbidden'); }
+
+    $did         = (int)($_POST['id'] ?? 0);
+    $title       = trim((string)($_POST['title'] ?? ''));
+    $description = trim((string)($_POST['description'] ?? ''));
+    $category    = trim((string)($_POST['category'] ?? 'General'));
+    $access      = $_POST['access_level'] ?? 'members_only';
+    $unitId      = ($_POST['unit_id'] ?? '') === '' ? null : (int)$_POST['unit_id'];
+    if (!in_array($access, ['public','members_only','board_only','unit_only'], true)) $access = 'members_only';
+    if ($access === 'unit_only' && !$unitId) $access = 'members_only';
+    if ($unitId) {
+        $check = db()->prepare('SELECT 1 FROM units WHERE id = ? AND association_id = ?');
+        $check->execute([$unitId, $assocId]);
+        if (!$check->fetchColumn()) $unitId = null;
+    }
+
+    $check = db()->prepare('SELECT 1 FROM documents WHERE id = ? AND association_id = ?');
+    $check->execute([$did, $assocId]);
+    if (!$check->fetchColumn()) {
+        $flashError = 'Document not found.';
+    } elseif ($title === '') {
+        $flashError = 'Title is required.';
+    } else {
+        db()->prepare(
+            'UPDATE documents
+                SET title = ?, description = ?, category = ?, access_level = ?, unit_id = ?
+              WHERE id = ? AND association_id = ?'
+        )->execute([$title, $description ?: null, $category ?: null, $access, $unitId, $did, $assocId]);
+        audit('document.edited', ['title' => $title, 'access' => $access, 'unit_id' => $unitId], $did, 'document');
+        flash('success', "Updated \"$title\".");
+        redirect('/dashboard/documents.php');
+    }
+}
+
 // --- Upload handler ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'upload') {
     csrf_check();
@@ -217,6 +257,15 @@ sort($filterCategories);
 $showUpload    = ($_GET['action'] ?? '') === 'new' && $canManage;
 $showManageCat = ($_GET['manage_cats'] ?? '') === '1' && $canManage;
 
+// Edit target
+$editDoc = null;
+if (($_GET['action'] ?? '') === 'edit' && $canManage) {
+    $eid = (int)($_GET['id'] ?? 0);
+    $stmt = db()->prepare('SELECT * FROM documents WHERE id = ? AND association_id = ?');
+    $stmt->execute([$eid, $assocId]);
+    $editDoc = $stmt->fetch() ?: null;
+}
+
 // Pre-selected unit (from /dashboard/unit.php "+ Upload to unit" link, or from filter)
 $preselectUnitId = (int)($_GET['unit_id'] ?? 0);
 
@@ -295,6 +344,73 @@ require __DIR__ . '/../includes/header.php';
             </tbody>
         </table>
         <?php endif; ?>
+    </div>
+    <?php endif; ?>
+
+    <?php if ($editDoc): ?>
+    <div class="card card--padded" style="margin-bottom: var(--sp-6);">
+        <div class="card__head">
+            <h3 class="card__title">Edit document</h3>
+            <a class="muted" style="font-size: var(--fs-sm);" href="/dashboard/documents.php">← Back</a>
+        </div>
+        <p class="muted" style="font-size: var(--fs-sm); margin-bottom: var(--sp-3);">
+            Editing metadata only. To replace the file itself, delete this entry and upload again.
+        </p>
+        <form method="post" action="/dashboard/documents.php" class="form" novalidate>
+            <?= csrf_field() ?>
+            <input type="hidden" name="form" value="edit">
+            <input type="hidden" name="id" value="<?= (int)$editDoc['id'] ?>">
+            <div class="form-row form-row--2">
+                <div class="field">
+                    <label class="field__label" for="ed-title">Title</label>
+                    <input class="input" id="ed-title" name="title" required value="<?= e((string)$editDoc['title']) ?>">
+                </div>
+                <div class="field">
+                    <label class="field__label" for="ed-cat">Category</label>
+                    <select class="select" id="ed-cat" name="category">
+                        <?php
+                        $haveMatch = false;
+                        foreach ($categories as $c):
+                            $sel = ($editDoc['category'] === $c);
+                            if ($sel) $haveMatch = true;
+                        ?>
+                            <option value="<?= e($c) ?>" <?= $sel ? 'selected' : '' ?>><?= e($c) ?></option>
+                        <?php endforeach; ?>
+                        <?php if ($editDoc['category'] && !$haveMatch): ?>
+                            <option value="<?= e((string)$editDoc['category']) ?>" selected><?= e((string)$editDoc['category']) ?> (legacy)</option>
+                        <?php endif; ?>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row form-row--2">
+                <div class="field">
+                    <label class="field__label" for="ed-unit">Attach to unit</label>
+                    <select class="select" id="ed-unit" name="unit_id">
+                        <option value="">— Association-wide —</option>
+                        <?php foreach ($unitsList as $u_): ?>
+                            <option value="<?= (int)$u_['id'] ?>" <?= (int)($editDoc['unit_id'] ?? 0) === (int)$u_['id'] ? 'selected' : '' ?>>Unit <?= e((string)$u_['unit_number']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="field">
+                    <label class="field__label" for="ed-access">Access</label>
+                    <select class="select" id="ed-access" name="access_level">
+                        <option value="public"        <?= $editDoc['access_level']==='public'?'selected':'' ?>>Public — anyone with the link</option>
+                        <option value="members_only"  <?= $editDoc['access_level']==='members_only'?'selected':'' ?>>Members only</option>
+                        <option value="board_only"    <?= $editDoc['access_level']==='board_only'?'selected':'' ?>>Board only</option>
+                        <option value="unit_only"     <?= $editDoc['access_level']==='unit_only'?'selected':'' ?>>Unit only — its occupants + board</option>
+                    </select>
+                </div>
+            </div>
+            <div class="field">
+                <label class="field__label" for="ed-desc">Description</label>
+                <textarea class="textarea" id="ed-desc" name="description" rows="4"><?= e((string)($editDoc['description'] ?? '')) ?></textarea>
+            </div>
+            <div class="row" style="justify-content: flex-end;">
+                <a class="btn btn--ghost" href="/dashboard/documents.php">Cancel</a>
+                <button class="btn btn--primary" type="submit">Save changes</button>
+            </div>
+        </form>
     </div>
     <?php endif; ?>
 
@@ -411,7 +527,7 @@ require __DIR__ . '/../includes/header.php';
                 <td>
                     <strong><?= e($r['title']) ?></strong>
                     <?php if ($r['description']): ?>
-                        <div class="muted" style="font-size: var(--fs-xs);"><?= e(mb_strimwidth($r['description'], 0, 90, '…')) ?></div>
+                        <div class="muted rule-body-clamp" style="font-size: var(--fs-xs); white-space: pre-wrap; -webkit-line-clamp: 2;"><?= e((string)$r['description']) ?></div>
                     <?php endif; ?>
                 </td>
                 <td><?= e($r['category'] ?: '—') ?></td>
@@ -427,14 +543,15 @@ require __DIR__ . '/../includes/header.php';
                     <?= e(date('M j, Y', strtotime($r['created_at']))) ?>
                     <div class="muted" style="font-size: var(--fs-xs);">v<?= e((string)$r['version']) ?> &middot; <?= e(trim((string)$r['uploader']) ?: 'unknown') ?></div>
                 </td>
-                <td style="text-align:right;">
-                    <a class="btn btn--ghost" href="/dashboard/file.php?type=document&id=<?= (int)$r['id'] ?>" target="_blank" rel="noopener">View</a>
+                <td style="text-align:right; white-space: nowrap;">
+                    <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="/dashboard/file.php?type=document&id=<?= (int)$r['id'] ?>" target="_blank" rel="noopener">View</a>
                     <?php if ($canManage): ?>
+                        <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="?action=edit&id=<?= (int)$r['id'] ?>">Edit</a>
                         <form method="post" action="/dashboard/documents.php" style="display:inline;" onsubmit="return confirm('Delete this document?');">
                             <?= csrf_field() ?>
                             <input type="hidden" name="form" value="delete">
                             <input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
-                            <button class="btn btn--danger" type="submit">Delete</button>
+                            <button class="btn btn--ghost" type="submit" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs); color: var(--color-error);">Delete</button>
                         </form>
                     <?php endif; ?>
                 </td>
