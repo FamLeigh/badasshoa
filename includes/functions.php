@@ -132,6 +132,64 @@ function send_mail(string $to, string $subject, string $body): void
     file_put_contents(storage_path('logs/mail.log'), $line, FILE_APPEND | LOCK_EX);
 }
 
+// --- invite + password-reset emails -------------------------------------
+// Generates a one-time token (stored as SHA-256 hash, raw token in the link),
+// invalidates any prior unused tokens for the user, and sends an email pointing
+// at /reset.php?token=…
+//
+// Used by:
+//   - /forgot.php (the user-driven reset flow inlines this rather than calling
+//     it, for anti-enumeration reasons — see that file)
+//   - super_admin tools in /admin/users.php and /admin/associations.php to
+//     invite a new user (purpose='invite') or kick off a password reset on
+//     someone's behalf (purpose='reset')
+//
+// Returns true if the email was handed to send_mail(), false if the user
+// couldn't receive (not found, inactive). The caller is responsible for
+// any further audit logging beyond the generic password_reset.<purpose> entry
+// we add here.
+function send_password_link(int $userId, string $purpose = 'reset'): bool
+{
+    $stmt = db()->prepare('SELECT id, first_name, email, status FROM users WHERE id = ? LIMIT 1');
+    $stmt->execute([$userId]);
+    $user = $stmt->fetch();
+    if (!$user || $user['status'] === 'inactive') return false;
+
+    db()->prepare('DELETE FROM password_resets WHERE user_id = ? AND used_at IS NULL')
+        ->execute([$userId]);
+
+    $rawToken  = bin2hex(random_bytes(32));
+    $tokenHash = hash('sha256', $rawToken);
+    db()->prepare(
+        'INSERT INTO password_resets (user_id, token_hash, expires_at)
+         VALUES (?, ?, (NOW() + INTERVAL 1 HOUR))'
+    )->execute([$userId, $tokenHash]);
+
+    $base = (string)(config()['app']['base_url'] ?? 'https://badasshoa.com');
+    $url  = rtrim($base, '/') . '/reset.php?token=' . $rawToken;
+    $name = (string)($user['first_name'] ?: 'there');
+
+    if ($purpose === 'invite') {
+        $subject = 'Welcome to BadassHOA — set up your account';
+        $body    = "Hi {$name},\n\n"
+                 . "You've been invited to BadassHOA. Click the link below to set your password and sign in (link expires in 1 hour):\n\n"
+                 . $url . "\n\n"
+                 . "If you weren't expecting this, you can safely ignore this email.\n\n"
+                 . "— BadassHOA";
+    } else {
+        $subject = 'Reset your BadassHOA password';
+        $body    = "Hi {$name},\n\n"
+                 . "A password reset has been initiated for your BadassHOA account. Click the link below to set a new password (link expires in 1 hour):\n\n"
+                 . $url . "\n\n"
+                 . "If you didn't expect this, you can ignore this email — your password is unchanged.\n\n"
+                 . "— BadassHOA";
+    }
+
+    send_mail((string)$user['email'], $subject, $body);
+    audit('password_reset.' . $purpose, ['email' => $user['email']], $userId, 'user');
+    return true;
+}
+
 // --- flash messages -----------------------------------------------------
 function flash(string $type, string $message): void
 {

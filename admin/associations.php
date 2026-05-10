@@ -82,6 +82,73 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'set_sta
     redirect('/admin/associations.php');
 }
 
+// --- Create association (super admin direct entry, no signup required) ---
+$createError = null;
+$createDefaults = [
+    'name' => '', 'subdomain' => '', 'address' => '', 'city' => '',
+    'state_region' => '', 'postal_code' => '', 'country' => 'US',
+    'unit_count' => 0, 'plan' => 'starter', 'status' => 'trial',
+    'primary_color' => '#0f1f3d', 'public_landing_enabled' => 0,
+];
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'create_assoc') {
+    csrf_check();
+    $name      = trim((string)($_POST['name'] ?? ''));
+    $subdomain = trim((string)($_POST['subdomain'] ?? ''));
+    $address   = trim((string)($_POST['address'] ?? ''));
+    $city      = trim((string)($_POST['city'] ?? ''));
+    $stateReg  = trim((string)($_POST['state_region'] ?? ''));
+    $postal    = trim((string)($_POST['postal_code'] ?? ''));
+    $country   = strtoupper(trim((string)($_POST['country'] ?? 'US')));
+    $units     = max(0, (int)($_POST['unit_count'] ?? 0));
+    $plan      = $_POST['plan'] ?? 'starter';
+    $status    = $_POST['status'] ?? 'trial';
+    $color     = trim((string)($_POST['primary_color'] ?? '#0f1f3d'));
+    $publicLanding = isset($_POST['public_landing_enabled']) ? 1 : 0;
+
+    if (!in_array($plan, ['starter','growth','professional','enterprise'], true)) $plan = 'starter';
+    if (!in_array($status, ['active','inactive','trial'], true))                   $status = 'trial';
+    if (!preg_match('/^#[0-9a-f]{6}$/i', $color))                                  $color = '#0f1f3d';
+    if (!preg_match('/^[A-Z]{2}$/', $country))                                     $country = 'US';
+
+    // Slug normalize / fall back to slugify(name)
+    $subdomain = preg_replace('/[^a-z0-9-]/', '', strtolower($subdomain));
+    if ($subdomain === '') $subdomain = slugify($name);
+
+    if ($name === '') {
+        $createError = 'Association name is required.';
+    } elseif ($subdomain === '') {
+        $createError = 'Slug is required (or give a name we can slugify).';
+    } else {
+        $dupe = db()->prepare('SELECT 1 FROM associations WHERE subdomain = ?');
+        $dupe->execute([$subdomain]);
+        if ($dupe->fetchColumn()) {
+            $createError = "Slug \"$subdomain\" is already taken.";
+        } else {
+            db()->prepare(
+                'INSERT INTO associations
+                 (name, subdomain, address, city, state_region, postal_code, country,
+                  unit_count, plan, status, primary_color, public_landing_enabled)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            )->execute([
+                $name, $subdomain,
+                $address ?: null, $city ?: null, $stateReg ?: null, $postal ?: null, $country,
+                $units, $plan, $status, $color, $publicLanding,
+            ]);
+            $newId = (int)db()->lastInsertId();
+            audit('association.created_admin', ['name' => $name, 'subdomain' => $subdomain, 'plan' => $plan], $newId, 'association');
+            flash('success', "Created association \"$name\" (#$newId). Add board users via the Users page.");
+            redirect('/admin/associations.php?action=edit&id=' . $newId);
+        }
+    }
+    // On error, preserve what they typed so the form re-renders with their values
+    $createDefaults = [
+        'name' => $name, 'subdomain' => $subdomain, 'address' => $address, 'city' => $city,
+        'state_region' => $stateReg, 'postal_code' => $postal, 'country' => $country,
+        'unit_count' => $units, 'plan' => $plan, 'status' => $status,
+        'primary_color' => $color, 'public_landing_enabled' => $publicLanding,
+    ];
+}
+
 // --- Full edit ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit_assoc') {
     csrf_check();
@@ -142,6 +209,9 @@ $assocs  = db()->query(
      FROM associations a ORDER BY a.created_at DESC'
 )->fetchAll();
 
+// Show create form when ?action=new (or after a failed create POST that set $createError)
+$showCreate = ($_GET['action'] ?? '') === 'new' || $createError !== null;
+
 // Edit target
 $editAssoc = null;
 if (($_GET['action'] ?? '') === 'edit') {
@@ -166,10 +236,18 @@ require __DIR__ . '/../includes/header.php';
 
 <div class="container" style="padding: var(--sp-8) var(--sp-6) var(--sp-12); max-width: 1280px;">
 
-    <h1 style="font-size: var(--fs-3xl); margin: 0;">Associations</h1>
-    <p class="muted">Approve signups and manage tenant status.</p>
+    <div class="row row--between" style="align-items: flex-start; flex-wrap: wrap; gap: var(--sp-3);">
+        <div>
+            <h1 style="font-size: var(--fs-3xl); margin: 0;">Associations</h1>
+            <p class="muted">Approve signups and manage tenant status.</p>
+        </div>
+        <?php if (!$showCreate && !$editAssoc && !$viewSignup): ?>
+            <a class="btn btn--primary" href="?action=new">+ New association</a>
+        <?php endif; ?>
+    </div>
 
     <?php if ($flashError): ?><div class="flash flash--error"><?= e($flashError) ?></div><?php endif; ?>
+    <?php if ($createError): ?><div class="flash flash--error"><?= e($createError) ?></div><?php endif; ?>
 
     <?php if ($viewSignup): ?>
     <div class="card card--padded" style="margin: var(--sp-6) 0;">
@@ -255,11 +333,113 @@ require __DIR__ . '/../includes/header.php';
     </div>
     <?php endif; ?>
 
+    <?php if ($showCreate): ?>
+    <div class="card card--padded" style="margin: var(--sp-6) 0;">
+        <div class="card__head">
+            <h3 class="card__title">New association</h3>
+            <a class="muted" style="font-size: var(--fs-sm);" href="/admin/associations.php">← Back to list</a>
+        </div>
+        <p class="muted" style="margin-bottom: var(--sp-4); font-size: var(--fs-sm);">
+            Direct super-admin entry. Use this for pilot customers, manual onboarding, or test data.
+            For self-service signups from the marketing site, use "Approve" on the Pending signups list instead.
+        </p>
+        <form method="post" class="form" data-address-lookup>
+            <?= csrf_field() ?>
+            <input type="hidden" name="form" value="create_assoc">
+            <div class="form-row form-row--2">
+                <div class="field">
+                    <label class="field__label" for="na-name">Name</label>
+                    <input class="input" id="na-name" name="name" required value="<?= e((string)$createDefaults['name']) ?>" placeholder="Bellair Condo Association">
+                </div>
+                <div class="field">
+                    <label class="field__label" for="na-slug">Slug (URL-safe)</label>
+                    <input class="input" id="na-slug" name="subdomain" value="<?= e((string)$createDefaults['subdomain']) ?>" pattern="[a-z0-9-]*" placeholder="auto from name if blank">
+                    <div class="field__hint">Lowercase letters, numbers, and hyphens. Leave blank to auto-derive from the name.</div>
+                </div>
+            </div>
+            <div class="field">
+                <label class="field__label" for="na-addr">Street address</label>
+                <input class="input" id="na-addr" name="address" value="<?= e((string)$createDefaults['address']) ?>" placeholder="123 Main St">
+            </div>
+            <div style="display:grid; grid-template-columns: 1.4fr 1fr 0.8fr; gap: var(--sp-3);">
+                <div class="field">
+                    <label class="field__label" for="na-city">City</label>
+                    <input class="input" id="na-city" name="city" value="<?= e((string)$createDefaults['city']) ?>">
+                </div>
+                <div class="field">
+                    <label class="field__label" for="na-state">State / Province</label>
+                    <input class="input" id="na-state" name="state_region" list="us-ca-states" value="<?= e((string)$createDefaults['state_region']) ?>" autocomplete="address-level1">
+                </div>
+                <div class="field">
+                    <label class="field__label" for="na-postal">ZIP / Postal</label>
+                    <input class="input" id="na-postal" name="postal_code" value="<?= e((string)$createDefaults['postal_code']) ?>" autocomplete="postal-code" placeholder="12345 or A1A 1A1">
+                </div>
+            </div>
+            <?= us_ca_states_datalist() ?>
+            <div class="form-row form-row--2">
+                <div class="field">
+                    <label class="field__label" for="na-country">Country</label>
+                    <select class="select" id="na-country" name="country">
+                        <?php $cur = strtoupper((string)$createDefaults['country']);
+                        foreach (['US'=>'United States','CA'=>'Canada','MX'=>'Mexico','GB'=>'United Kingdom','AU'=>'Australia'] as $code=>$lbl): ?>
+                            <option value="<?= e($code) ?>" <?= $cur===$code?'selected':'' ?>><?= e($lbl) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="field">
+                    <label class="field__label" for="na-units">Unit count</label>
+                    <input class="input" type="number" min="0" max="10000" id="na-units" name="unit_count" value="<?= (int)$createDefaults['unit_count'] ?>">
+                </div>
+            </div>
+            <div class="form-row form-row--2">
+                <div class="field">
+                    <label class="field__label" for="na-plan">Plan</label>
+                    <select class="select" id="na-plan" name="plan">
+                        <?php foreach (['starter'=>'Starter','growth'=>'Growth','professional'=>'Professional','enterprise'=>'Enterprise'] as $val=>$lbl): ?>
+                            <option value="<?= e($val) ?>" <?= $createDefaults['plan']===$val?'selected':'' ?>><?= e($lbl) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="field">
+                    <label class="field__label" for="na-status">Status</label>
+                    <select class="select" id="na-status" name="status">
+                        <?php foreach (['trial'=>'Trial','active'=>'Active','inactive'=>'Inactive'] as $val=>$lbl): ?>
+                            <option value="<?= e($val) ?>" <?= $createDefaults['status']===$val?'selected':'' ?>><?= e($lbl) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row form-row--2">
+                <div class="field">
+                    <label class="field__label" for="na-color">Primary color</label>
+                    <input class="input" type="color" id="na-color" name="primary_color" value="<?= e((string)$createDefaults['primary_color']) ?>">
+                </div>
+                <div class="field">
+                    <label style="display:flex; align-items:center; gap: var(--sp-2); padding: var(--sp-3); background: var(--color-surface); border-radius: var(--r-sm); height: 100%; box-sizing: border-box;">
+                        <input type="checkbox" name="public_landing_enabled" value="1" <?= (int)$createDefaults['public_landing_enabled'] === 1 ? 'checked' : '' ?>>
+                        <span>Enable public landing at <code>/{slug}/</code></span>
+                    </label>
+                </div>
+            </div>
+            <div class="row" style="justify-content: flex-end;">
+                <a class="btn btn--ghost" href="/admin/associations.php">Cancel</a>
+                <button class="btn btn--primary" type="submit">Create association</button>
+            </div>
+        </form>
+    </div>
+    <?php endif; ?>
+
     <?php if ($editAssoc): ?>
     <div class="card card--padded" style="margin: var(--sp-6) 0;">
         <div class="card__head">
             <h3 class="card__title">Edit association</h3>
-            <a class="muted" style="font-size: var(--fs-sm);" href="/admin/associations.php">← Back to list</a>
+            <div class="row" style="gap: var(--sp-3); align-items: center;">
+                <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);"
+                   href="/admin/users.php?action=new&association_id=<?= (int)$editAssoc['id'] ?>">
+                    + Invite a user to this association
+                </a>
+                <a class="muted" style="font-size: var(--fs-sm);" href="/admin/associations.php">← Back to list</a>
+            </div>
         </div>
         <form method="post" class="form" data-address-lookup>
             <?= csrf_field() ?>

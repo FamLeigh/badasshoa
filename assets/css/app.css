@@ -737,16 +737,19 @@ html[data-nav-collapsed="1"] body.app-shell .side-nav { width: var(--side-nav-w-
 .side-nav__signout svg { flex: 0 0 18px; }
 .side-nav__signout:hover { background: var(--color-navy-700); color: var(--color-orange); }
 
-/* Collapsed state — hide labels, swap full logo for icon mark */
+/* Collapsed state — hide labels and the brand link entirely; toggle stays
+   visible so the user can click it to expand. */
 .side-nav.collapsed .side-nav__logo,
+.side-nav.collapsed .side-nav__mark,
+.side-nav.collapsed .side-nav__brand,
 .side-nav.collapsed .side-nav__brand-sub,
 .side-nav.collapsed .side-nav__label,
-.side-nav.collapsed .side-nav__user-text,
-.side-nav.collapsed .side-nav__toggle { display: none; }
-.side-nav.collapsed .side-nav__mark { display: block; margin: 0 auto; }
-.side-nav.collapsed .side-nav__brand,
+.side-nav.collapsed .side-nav__user-text { display: none; }
 .side-nav.collapsed .side-nav__user { justify-content: center; padding: var(--sp-1); }
-.side-nav.collapsed .side-nav__brand-row { justify-content: center; }
+.side-nav.collapsed .side-nav__brand-row { justify-content: center; padding: var(--sp-1); }
+/* Visual cue: rotate the collapse icon 180° so it visibly points "outward" when
+   the sidebar is collapsed, suggesting "click to expand." */
+.side-nav.collapsed .side-nav__toggle svg { transform: rotate(180deg); }
 .side-nav.collapsed .side-nav__link,
 .side-nav.collapsed .side-nav__signout {
     justify-content: center;

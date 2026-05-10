@@ -186,11 +186,19 @@
     var body       = document.body;
 
     if (sideNav) {
+        function setSideToggleLabel(collapsed) {
+            if (!sideToggle) return;
+            var label = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+            sideToggle.setAttribute('aria-label', label);
+            sideToggle.setAttribute('title', label);
+        }
+
         // Restore collapsed state (pre-paint hint already applied padding)
         try {
             if (localStorage.getItem('sideNavCollapsed') === '1') {
                 sideNav.classList.add('collapsed');
                 body.classList.add('nav-collapsed');
+                setSideToggleLabel(true);
             }
         } catch (_) {}
 
@@ -198,6 +206,18 @@
             sideToggle.addEventListener('click', function () {
                 var collapsed = sideNav.classList.toggle('collapsed');
                 body.classList.toggle('nav-collapsed', collapsed);
+                // The pre-paint script sets html[data-nav-collapsed="1"] on
+                // initial load to avoid a flash of the wide sidebar. The CSS
+                // rules that match that attribute have higher specificity than
+                // the .collapsed class rules, so we MUST toggle the attribute
+                // here too — otherwise removing .collapsed alone won't shrink
+                // the body padding back, and the sidebar appears stuck narrow.
+                if (collapsed) {
+                    document.documentElement.dataset.navCollapsed = '1';
+                } else {
+                    delete document.documentElement.dataset.navCollapsed;
+                }
+                setSideToggleLabel(collapsed);
                 try { localStorage.setItem('sideNavCollapsed', collapsed ? '1' : '0'); } catch (_) {}
             });
         }

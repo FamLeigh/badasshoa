@@ -55,8 +55,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$tokenError) {
         $newHash = password_hash($pw1, PASSWORD_BCRYPT, ['cost' => 12]);
         db()->beginTransaction();
         try {
-            db()->prepare('UPDATE users SET password_hash = ? WHERE id = ?')
-                ->execute([$newHash, (int)$record['user_id']]);
+            // Update password. If the user was 'pending' (invited but never
+            // signed in), promote to 'active' now that they've proven ownership
+            // of the email by clicking the link and chosen a password.
+            db()->prepare(
+                "UPDATE users
+                    SET password_hash = ?,
+                        status = IF(status = 'pending', 'active', status)
+                  WHERE id = ?"
+            )->execute([$newHash, (int)$record['user_id']]);
             db()->prepare('UPDATE password_resets SET used_at = NOW() WHERE id = ?')
                 ->execute([(int)$record['pr_id']]);
             // Best-effort: also clear any other outstanding tokens for this user.

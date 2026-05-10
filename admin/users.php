@@ -18,6 +18,119 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'set_sta
     redirect('/admin/users.php');
 }
 
+// --- Send password reset on behalf of an existing user ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'send_reset') {
+    csrf_check();
+    $uid = (int)($_POST['id'] ?? 0);
+    $sent = send_password_link($uid, 'reset');
+    if ($sent) {
+        flash('success', "Password reset link emailed (expires in 1 hour).");
+    } else {
+        flash('error', 'Could not send reset — user not found or marked inactive.');
+    }
+    redirect('/admin/users.php');
+}
+
+// --- Create user (super admin direct entry) ---
+$createError = null;
+$createDefaults = [
+    'first_name' => '', 'last_name' => '', 'email' => '', 'phone' => '',
+    'role' => 'resident', 'status' => 'active', 'unit_number' => '',
+    'association_id' => '', 'is_owner' => 1, 'send_welcome' => 1,
+];
+// If linked from /admin/associations.php (Invite a user), prefill association.
+if (($_GET['action'] ?? '') === 'new' && isset($_GET['association_id'])) {
+    $createDefaults['association_id'] = (int)$_GET['association_id'];
+    $createDefaults['role'] = 'board_admin';
+}
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'create_user') {
+    csrf_check();
+    $first   = trim((string)($_POST['first_name'] ?? ''));
+    $last    = trim((string)($_POST['last_name'] ?? ''));
+    $email   = trim((string)($_POST['email'] ?? ''));
+    $phone   = trim((string)($_POST['phone'] ?? ''));
+    $role    = $_POST['role'] ?? 'resident';
+    $status  = $_POST['status'] ?? 'active';
+    $unit    = trim((string)($_POST['unit_number'] ?? ''));
+    $assocIdRaw = $_POST['association_id'] ?? '';
+    $assocId = ($assocIdRaw === '') ? null : (int)$assocIdRaw;
+    $isOwner = isset($_POST['is_owner']) ? 1 : 0;
+    $sendWelcome = isset($_POST['send_welcome']) ? 1 : 0;
+    $pw1 = (string)($_POST['new_password'] ?? '');
+    $pw2 = (string)($_POST['new_password_confirm'] ?? '');
+
+    $allowedRoles  = ['super_admin','board_admin','board_member','property_manager','resident','renter'];
+    $allowedStatus = ['active','pending','inactive'];
+    if (!in_array($role, $allowedRoles, true))   $role   = 'resident';
+    if (!in_array($status, $allowedStatus, true)) $status = 'active';
+    if ($role === 'super_admin') $assocId = null;
+
+    // Blank password = "send invitation" mode: random placeholder password,
+    // status=pending, user gets a setup link via email.
+    $invite = ($pw1 === '' && $pw2 === '');
+
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $createError = 'Valid email required.';
+    } elseif ($role !== 'super_admin' && $assocId === null) {
+        $createError = 'Pick an association (only super admins can have none).';
+    } elseif (!$invite && $pw1 !== $pw2) {
+        $createError = 'Passwords don\'t match.';
+    } elseif (!$invite && strlen($pw1) < 8) {
+        $createError = 'Password must be at least 8 characters.';
+    } else {
+        $dupe = db()->prepare('SELECT id FROM users WHERE email = ?');
+        $dupe->execute([$email]);
+        if ($dupe->fetchColumn()) {
+            $createError = 'A user with that email already exists.';
+        } elseif ($assocId !== null) {
+            $a = db()->prepare('SELECT 1 FROM associations WHERE id = ?');
+            $a->execute([$assocId]);
+            if (!$a->fetchColumn()) {
+                $createError = 'Association does not exist.';
+            }
+        }
+        if (!$createError) {
+            // Invite mode: random placeholder, force status=pending.
+            // Direct mode:  use the admin-supplied password and the chosen status.
+            $effectiveStatus = $invite ? 'pending' : $status;
+            $hash = password_hash(
+                $invite ? bin2hex(random_bytes(16)) : $pw1,
+                PASSWORD_BCRYPT, ['cost' => 12]
+            );
+            db()->prepare(
+                'INSERT INTO users
+                 (association_id, first_name, last_name, email, phone, password_hash, role, status, unit_number, is_owner)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            )->execute([
+                $assocId, $first, $last, $email, $phone ?: null, $hash, $role, $effectiveStatus, $unit ?: null, $isOwner,
+            ]);
+            $newId = (int)db()->lastInsertId();
+            audit('user.created_admin', ['email' => $email, 'role' => $role, 'association_id' => $assocId, 'invite' => $invite], $newId, 'user');
+
+            if ($invite) {
+                send_password_link($newId, 'invite');
+                flash('success', "Invited \"$email\". They'll get an email with a link to set their password (expires in 1 hour).");
+            } elseif ($sendWelcome) {
+                $name = trim($first) ?: 'there';
+                send_mail($email,
+                    'Your BadassHOA account is ready',
+                    "Hi $name,\n\nA BadassHOA account has been created for you.\n\nSign in: https://badasshoa.com/login.php\nEmail: $email\nTemporary password: $pw1\n\nPlease change your password after signing in (Settings → Change password).\n");
+                flash('success', "Created user \"$email\". Welcome email sent with the temporary password.");
+            } else {
+                flash('success', "Created user \"$email\". Share the password through a secure channel — it's not shown again.");
+            }
+            redirect('/admin/users.php?action=edit&id=' . $newId);
+        }
+    }
+    // Preserve form values on error
+    $createDefaults = [
+        'first_name' => $first, 'last_name' => $last, 'email' => $email, 'phone' => $phone,
+        'role' => $role, 'status' => $status, 'unit_number' => $unit,
+        'association_id' => $assocIdRaw === '' ? '' : (int)$assocIdRaw,
+        'is_owner' => $isOwner, 'send_welcome' => $sendWelcome,
+    ];
+}
+
 // --- Full edit (super admin only) ---
 $editError = null;
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit_user') {
@@ -141,6 +254,9 @@ $users = $stmt->fetchAll();
 
 $assocs = db()->query('SELECT id, name FROM associations ORDER BY name')->fetchAll();
 
+// Show create form when ?action=new (or after a failed create POST)
+$showCreate = ($_GET['action'] ?? '') === 'new' || $createError !== null;
+
 // Edit target
 $editUser = null;
 if (($_GET['action'] ?? '') === 'edit') {
@@ -155,10 +271,140 @@ require __DIR__ . '/../includes/header.php';
 ?>
 
 <div class="container" style="padding: var(--sp-8) var(--sp-6) var(--sp-12); max-width: 1280px;">
-    <h1 style="font-size: var(--fs-3xl); margin: 0;">Users</h1>
-    <p class="muted">Across every association.</p>
+    <div class="row row--between" style="align-items: flex-start; flex-wrap: wrap; gap: var(--sp-3);">
+        <div>
+            <h1 style="font-size: var(--fs-3xl); margin: 0;">Users</h1>
+            <p class="muted">Across every association.</p>
+        </div>
+        <?php if (!$showCreate && !$editUser): ?>
+            <a class="btn btn--primary" href="?action=new">+ New user</a>
+        <?php endif; ?>
+    </div>
 
-    <?php if ($editError): ?><div class="flash flash--error" style="margin-top: var(--sp-4);"><?= e($editError) ?></div><?php endif; ?>
+    <?php if ($editError):   ?><div class="flash flash--error" style="margin-top: var(--sp-4);"><?= e($editError) ?></div><?php endif; ?>
+    <?php if ($createError): ?><div class="flash flash--error" style="margin-top: var(--sp-4);"><?= e($createError) ?></div><?php endif; ?>
+
+    <?php if ($showCreate): ?>
+    <div class="card card--padded" style="margin: var(--sp-6) 0;">
+        <div class="card__head">
+            <h3 class="card__title">New user</h3>
+            <a class="muted" style="font-size: var(--fs-sm);" href="/admin/users.php">← Back to list</a>
+        </div>
+        <p class="muted" style="margin-bottom: var(--sp-4); font-size: var(--fs-sm);">
+            Direct super-admin creation. Use this for board admins, property managers, or to manually add residents.
+            Set an initial password — the user can change it after signing in.
+        </p>
+        <form method="post" class="form">
+            <?= csrf_field() ?>
+            <input type="hidden" name="form" value="create_user">
+
+            <div class="form-row form-row--2">
+                <div class="field">
+                    <label class="field__label" for="nu-first">First name</label>
+                    <input class="input" id="nu-first" name="first_name" value="<?= e((string)$createDefaults['first_name']) ?>">
+                </div>
+                <div class="field">
+                    <label class="field__label" for="nu-last">Last name</label>
+                    <input class="input" id="nu-last" name="last_name" value="<?= e((string)$createDefaults['last_name']) ?>">
+                </div>
+            </div>
+            <div class="form-row form-row--2">
+                <div class="field">
+                    <label class="field__label" for="nu-email">Email</label>
+                    <input class="input" type="email" id="nu-email" name="email" required value="<?= e((string)$createDefaults['email']) ?>">
+                </div>
+                <div class="field">
+                    <label class="field__label" for="nu-phone">Phone</label>
+                    <input class="input" id="nu-phone" name="phone" value="<?= e((string)$createDefaults['phone']) ?>">
+                </div>
+            </div>
+            <div class="form-row form-row--2">
+                <div class="field">
+                    <label class="field__label" for="nu-assoc">Association</label>
+                    <select class="select" id="nu-assoc" name="association_id">
+                        <option value="">— None (super admin) —</option>
+                        <?php foreach ($assocs as $a): ?>
+                            <option value="<?= (int)$a['id'] ?>" <?= (string)$createDefaults['association_id'] === (string)$a['id'] ? 'selected' : '' ?>><?= e((string)$a['name']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <div class="field__hint">Required unless the role is Super admin.</div>
+                </div>
+                <div class="field">
+                    <label class="field__label" for="nu-unit">Unit #</label>
+                    <input class="input" id="nu-unit" name="unit_number" value="<?= e((string)$createDefaults['unit_number']) ?>" placeholder="101A">
+                </div>
+            </div>
+            <div class="form-row form-row--2">
+                <div class="field">
+                    <label class="field__label" for="nu-role">Role</label>
+                    <select class="select" id="nu-role" name="role">
+                        <?php foreach (['board_admin'=>'Board admin','board_member'=>'Board member','property_manager'=>'Property manager','resident'=>'Resident','renter'=>'Renter','super_admin'=>'Super admin'] as $val => $lbl): ?>
+                            <option value="<?= e($val) ?>" <?= $createDefaults['role'] === $val ? 'selected' : '' ?>><?= e($lbl) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="field">
+                    <label class="field__label" for="nu-status">Status</label>
+                    <select class="select" id="nu-status" name="status">
+                        <?php foreach (['active'=>'Active','pending'=>'Pending','inactive'=>'Inactive'] as $val => $lbl): ?>
+                            <option value="<?= e($val) ?>" <?= $createDefaults['status'] === $val ? 'selected' : '' ?>><?= e($lbl) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </div>
+            <div class="field">
+                <label style="display:flex; align-items:center; gap: var(--sp-2);">
+                    <input type="checkbox" name="is_owner" value="1" <?= (int)$createDefaults['is_owner'] === 1 ? 'checked' : '' ?>> Owner (uncheck for renter)
+                </label>
+            </div>
+
+            <!-- Password / invitation -->
+            <div style="margin-top: var(--sp-4); padding: var(--sp-4); background: var(--color-warning-bg); border: 1px solid rgba(182,130,42,0.25); border-radius: var(--r-md);">
+                <div class="row row--between" style="margin-bottom: var(--sp-2); flex-wrap: wrap;">
+                    <strong style="color: var(--color-warning);">🔑 Password</strong>
+                    <button type="button" class="btn btn--ghost" id="nu-gen-pw" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);">Generate random</button>
+                </div>
+                <p class="muted" style="font-size: var(--fs-sm); margin: 0 0 var(--sp-3);">
+                    <strong>Leave blank to send an invitation</strong> — the user will receive an email with a one-time link to set their own password (status starts as <code>pending</code>). Or set a password here and (optionally) email it to them as a temporary credential.
+                </p>
+                <div class="form-row form-row--2">
+                    <div class="field">
+                        <label class="field__label" for="nu-pw1">Password</label>
+                        <input class="input" type="text" id="nu-pw1" name="new_password" minlength="8" autocomplete="new-password" placeholder="Leave blank to invite" spellcheck="false">
+                    </div>
+                    <div class="field">
+                        <label class="field__label" for="nu-pw2">Confirm</label>
+                        <input class="input" type="text" id="nu-pw2" name="new_password_confirm" minlength="8" autocomplete="new-password" spellcheck="false">
+                    </div>
+                </div>
+                <label style="display:flex; align-items:center; gap: var(--sp-2); margin-top: var(--sp-3);">
+                    <input type="checkbox" name="send_welcome" value="1" <?= (int)$createDefaults['send_welcome'] === 1 ? 'checked' : '' ?>>
+                    <span>If a password is set above, also email it to the user as a welcome message <span class="muted">(ignored when blank — invitations always email the link)</span></span>
+                </label>
+            </div>
+
+            <div class="row" style="justify-content: flex-end;">
+                <a class="btn btn--ghost" href="/admin/users.php">Cancel</a>
+                <button class="btn btn--primary" type="submit">Create user</button>
+            </div>
+        </form>
+        <script>
+            document.getElementById('nu-gen-pw')?.addEventListener('click', function () {
+                var chars = 'abcdefghjkmnpqrstuvwxyz' + 'ABCDEFGHJKMNPQRSTUVWXYZ' + '23456789' + '!@#$%';
+                var pw = '';
+                if (window.crypto && window.crypto.getRandomValues) {
+                    var bytes = new Uint8Array(14);
+                    crypto.getRandomValues(bytes);
+                    for (var i = 0; i < bytes.length; i++) pw += chars.charAt(bytes[i] % chars.length);
+                } else {
+                    for (var i = 0; i < 14; i++) pw += chars.charAt(Math.floor(Math.random() * chars.length));
+                }
+                document.getElementById('nu-pw1').value = pw;
+                document.getElementById('nu-pw2').value = pw;
+            });
+        </script>
+    </div>
+    <?php endif; ?>
 
     <?php if ($editUser): ?>
     <div class="card card--padded" style="margin: var(--sp-6) 0;">
@@ -316,6 +562,14 @@ require __DIR__ . '/../includes/header.php';
                 <td><?= $u['last_login_at'] ? e(date('M j', strtotime((string)$u['last_login_at']))) : '<span class="muted">never</span>' ?></td>
                 <td style="text-align:right; white-space: nowrap;">
                     <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="?action=edit&id=<?= (int)$u['id'] ?>">Edit</a>
+                    <?php if ($u['status'] !== 'inactive'): ?>
+                    <form method="post" style="display:inline;" onsubmit="return confirm('Send a password reset email to <?= e((string)$u['email']) ?>? Their current password will keep working until they click the link and set a new one.');">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="form" value="send_reset">
+                        <input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
+                        <button class="btn btn--ghost" type="submit" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" title="Email a password reset link">Reset</button>
+                    </form>
+                    <?php endif; ?>
                     <form method="post" style="display:inline;">
                         <?= csrf_field() ?>
                         <input type="hidden" name="form" value="set_status">
