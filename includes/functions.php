@@ -65,6 +65,33 @@ function ensure_default_document_categories(int $assocId): void
     }
 }
 
+// --- rule categories (per-association picklist) ------------------------
+// Mirrors ensure_default_document_categories(). Bootstraps the 15 default
+// rule categories Kevin set on 2026-05-10 the first time an association
+// hits the Rules page with zero categories. Existing associations that
+// already have categories (e.g. the demo seeded by migration 004) are
+// untouched — non-destructive.
+function ensure_default_rule_categories(int $assocId): void
+{
+    $stmt = db()->prepare('SELECT COUNT(*) FROM rule_categories WHERE association_id = ?');
+    $stmt->execute([$assocId]);
+    if ((int)$stmt->fetchColumn() > 0) return;
+
+    $defaults = [
+        'General Conduct',     'Occupancy & Guests', 'Pets',
+        'Sales',               'Rentals',            'Safety & Appearance',
+        'Common Areas',        'Parking & Vehicles', 'Garages',
+        'Laundry',             'Trash & Recycling',  'Storage',
+        'Pool & Recreation',   'Enforcement',        'Fees & Fines',
+    ];
+    $ins = db()->prepare(
+        'INSERT IGNORE INTO rule_categories (association_id, name, sort_order) VALUES (?, ?, ?)'
+    );
+    foreach ($defaults as $i => $name) {
+        $ins->execute([$assocId, $name, ($i + 1) * 10]);
+    }
+}
+
 // --- audit log ----------------------------------------------------------
 // Records actions to the audit_log table. The "actor" is the current session
 // user — which during super-admin impersonation is the *impersonated* user

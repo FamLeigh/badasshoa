@@ -3,6 +3,11 @@ require __DIR__ . '/_bootstrap.php';
 
 $user      = current_user();
 $canManage = role_can_manage(viewing_role());
+
+// Bootstrap the 15 default categories the first time a fresh association
+// hits this page. Idempotent — does nothing once the assoc has any.
+ensure_default_rule_categories($assocId);
+
 $ajax      = isset($_GET['ajax']);
 $flashError    = null;
 $importSummary = null;
