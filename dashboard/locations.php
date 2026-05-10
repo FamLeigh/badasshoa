@@ -12,16 +12,17 @@ $flashError = null;
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'add') {
     csrf_check();
     $name = trim((string)($_POST['name'] ?? ''));
+    $cat  = trim((string)($_POST['category'] ?? ''));
     $desc = trim((string)($_POST['description'] ?? ''));
     if ($name === '') {
         $flashError = 'Name is required.';
     } else {
         try {
             db()->prepare(
-                'INSERT INTO locations (association_id, name, description, sort_order)
-                 VALUES (?, ?, ?, COALESCE((SELECT MAX(sort_order) FROM locations AS x WHERE x.association_id = ?), 0) + 10)'
-            )->execute([$assocId, $name, $desc ?: null, $assocId]);
-            audit('location.added', ['name' => $name], (int)db()->lastInsertId(), 'location');
+                'INSERT INTO locations (association_id, name, category, description, sort_order)
+                 VALUES (?, ?, ?, ?, COALESCE((SELECT MAX(sort_order) FROM locations AS x WHERE x.association_id = ?), 0) + 10)'
+            )->execute([$assocId, $name, $cat ?: null, $desc ?: null, $assocId]);
+            audit('location.added', ['name' => $name, 'category' => $cat], (int)db()->lastInsertId(), 'location');
             flash('success', "Location \"$name\" added.");
             redirect('/dashboard/locations.php');
         } catch (PDOException $e) {
@@ -35,6 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit') 
     csrf_check();
     $lid    = (int)($_POST['id'] ?? 0);
     $name   = trim((string)($_POST['name'] ?? ''));
+    $cat    = trim((string)($_POST['category'] ?? ''));
     $desc   = trim((string)($_POST['description'] ?? ''));
     $active = isset($_POST['is_active']) ? 1 : 0;
 
@@ -48,9 +50,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit') 
     } else {
         try {
             db()->prepare(
-                'UPDATE locations SET name = ?, description = ?, is_active = ? WHERE id = ? AND association_id = ?'
-            )->execute([$name, $desc ?: null, $active, $lid, $assocId]);
-            audit('location.edited', ['from' => $oldName, 'to' => $name, 'active' => (bool)$active], $lid, 'location');
+                'UPDATE locations SET name = ?, category = ?, description = ?, is_active = ? WHERE id = ? AND association_id = ?'
+            )->execute([$name, $cat ?: null, $desc ?: null, $active, $lid, $assocId]);
+            audit('location.edited', ['from' => $oldName, 'to' => $name, 'category' => $cat, 'active' => (bool)$active], $lid, 'location');
             flash('success', "Location updated.");
             redirect('/dashboard/locations.php');
         } catch (PDOException $e) {
@@ -103,7 +105,7 @@ require __DIR__ . '/../includes/header.php';
 
     <?php if ($showAdd || $editLoc):
         $isEdit = $editLoc !== null;
-        $vals = $editLoc ?? ['name'=>'','description'=>'','is_active'=>1,'id'=>0];
+        $vals = $editLoc ?? ['name'=>'','category'=>'','description'=>'','is_active'=>1,'id'=>0];
     ?>
     <div class="card card--padded" style="margin-bottom: var(--sp-6);">
         <div class="card__head">
@@ -114,9 +116,23 @@ require __DIR__ . '/../includes/header.php';
             <?= csrf_field() ?>
             <input type="hidden" name="form" value="<?= $isEdit ? 'edit' : 'add' ?>">
             <?php if ($isEdit): ?><input type="hidden" name="id" value="<?= (int)$vals['id'] ?>"><?php endif; ?>
-            <div class="field">
-                <label class="field__label" for="loc-name">Name</label>
-                <input class="input" id="loc-name" name="name" required maxlength="120" value="<?= e((string)$vals['name']) ?>" placeholder="Clubhouse · Lobby · Pool deck · Roof terrace">
+            <div class="form-row form-row--2">
+                <div class="field">
+                    <label class="field__label" for="loc-name">Name</label>
+                    <input class="input" id="loc-name" name="name" required maxlength="120" value="<?= e((string)$vals['name']) ?>" placeholder="Clubhouse · Garage 64 · Roof terrace">
+                </div>
+                <div class="field">
+                    <label class="field__label" for="loc-cat">Category (optional)</label>
+                    <input class="input" id="loc-cat" name="category" maxlength="50" value="<?= e((string)($vals['category'] ?? '')) ?>" list="loc-cat-list" placeholder="garage · event space · amenity">
+                    <datalist id="loc-cat-list">
+                        <option value="garage">
+                        <option value="parking">
+                        <option value="event space">
+                        <option value="amenity">
+                        <option value="storage">
+                        <option value="utility">
+                    </datalist>
+                </div>
             </div>
             <div class="field">
                 <label class="field__label" for="loc-desc">Description (optional)</label>

@@ -67,13 +67,15 @@ if (!$unit) { http_response_code(404); die('Unit not found'); }
 // --- Save unit specs ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'save_unit') {
     csrf_check();
-    $num   = trim((string)($_POST['unit_number'] ?? ''));
-    $type  = $_POST['type'] ?? 'condo';
-    $beds  = $_POST['bedrooms'] !== '' ? (int)$_POST['bedrooms'] : null;
-    $baths = $_POST['baths'] !== '' ? (float)$_POST['baths'] : null;
-    $sqft  = $_POST['square_footage'] !== '' ? (int)$_POST['square_footage'] : null;
-    $pct   = $_POST['ownership_percent'] !== '' ? (float)$_POST['ownership_percent'] : null;
-    $notes = trim((string)($_POST['notes'] ?? ''));
+    $num     = trim((string)($_POST['unit_number'] ?? ''));
+    $type    = $_POST['type'] ?? 'condo';
+    $beds    = $_POST['bedrooms'] !== '' ? (int)$_POST['bedrooms'] : null;
+    $baths   = $_POST['baths'] !== '' ? (float)$_POST['baths'] : null;
+    $sqft    = $_POST['square_footage'] !== '' ? (int)$_POST['square_footage'] : null;
+    $pct     = $_POST['ownership_percent'] !== '' ? (float)$_POST['ownership_percent'] : null;
+    $garage  = trim((string)($_POST['garage_number'] ?? ''));
+    $parking = trim((string)($_POST['parking_spot'] ?? ''));
+    $notes   = trim((string)($_POST['notes'] ?? ''));
     if (!in_array($type, ['condo','townhouse','single_family','apartment','other'], true)) $type = 'condo';
 
     if ($num === '') {
@@ -82,9 +84,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'save_un
         try {
             db()->prepare(
                 'UPDATE units
-                    SET unit_number = ?, type = ?, bedrooms = ?, baths = ?, square_footage = ?, ownership_percent = ?, notes = ?
+                    SET unit_number = ?, type = ?, bedrooms = ?, baths = ?, square_footage = ?, ownership_percent = ?,
+                        garage_number = ?, parking_spot = ?, notes = ?
                   WHERE id = ? AND association_id = ?'
-            )->execute([$num, $type, $beds, $baths, $sqft, $pct, $notes ?: null, $unitId, $assocId]);
+            )->execute([$num, $type, $beds, $baths, $sqft, $pct, $garage ?: null, $parking ?: null, $notes ?: null, $unitId, $assocId]);
             audit('unit.edited', ['unit_number' => $num], $unitId, 'unit');
             flash('success', 'Unit specs updated.');
             redirect('/dashboard/unit.php?id=' . $unitId);
@@ -223,6 +226,8 @@ require __DIR__ . '/../includes/header.php';
                 <?php endif; ?>
                 <?php if ($unit['square_footage']): ?> · <?= number_format((int)$unit['square_footage']) ?> sqft<?php endif; ?>
                 <?php if ($unit['ownership_percent'] !== null): ?> · <?= rtrim(rtrim(number_format((float)$unit['ownership_percent'], 4, '.', ''), '0'), '.') ?>% ownership<?php endif; ?>
+                <?php if (!empty($unit['garage_number'])): ?> · garage <?= e((string)$unit['garage_number']) ?><?php endif; ?>
+                <?php if (!empty($unit['parking_spot'])): ?> · parking <?= e((string)$unit['parking_spot']) ?><?php endif; ?>
             </p>
             <?php if (!empty($unit['notes'])): ?>
                 <p class="muted" style="font-size: var(--fs-sm); margin-top: var(--sp-1);"><?= e((string)$unit['notes']) ?></p>
@@ -265,6 +270,12 @@ require __DIR__ . '/../includes/header.php';
                     <input class="input" type="number" min="0" max="50000" id="eu-sf" name="square_footage" value="<?= e((string)($unit['square_footage'] ?? '')) ?>"></div>
                 <div class="field"><label class="field__label" for="eu-pct">Ownership %</label>
                     <input class="input" type="number" step="0.0001" min="0" max="100" id="eu-pct" name="ownership_percent" value="<?= e((string)($unit['ownership_percent'] ?? '')) ?>"></div>
+            </div>
+            <div class="form-row form-row--2">
+                <div class="field"><label class="field__label" for="eu-garage">Garage #</label>
+                    <input class="input" id="eu-garage" name="garage_number" maxlength="20" value="<?= e((string)($unit['garage_number'] ?? '')) ?>" placeholder="64"></div>
+                <div class="field"><label class="field__label" for="eu-parking">Parking spot</label>
+                    <input class="input" id="eu-parking" name="parking_spot" maxlength="20" value="<?= e((string)($unit['parking_spot'] ?? '')) ?>" placeholder="P-7"></div>
             </div>
             <div class="field">
                 <label class="field__label" for="eu-notes">Notes</label>
