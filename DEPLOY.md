@@ -55,9 +55,11 @@ scp -P 65002 migrations/014_meeting_minutes.sql u535581001@77.37.59.82:/tmp/
 ssh -p 65002 u535581001@77.37.59.82 \
   'grep "pass" ~/domains/badasshoa.com/public_html/config.php'
 
-# run it
+# run it — strip the `USE badassHOA;` line on the way in (it's there for local
+# dev convenience but the prod user only has access to the prefixed DB name,
+# which is already passed on the command line)
 ssh -p 65002 u535581001@77.37.59.82 \
-  'mysql -u u535581001_kleigh -p<DB_PASSWORD> u535581001_badassHOA < /tmp/014_meeting_minutes.sql'
+  'grep -v "^USE " /tmp/014_meeting_minutes.sql | mysql -u u535581001_kleigh -p<DB_PASSWORD> u535581001_badassHOA'
 
 # verify
 ssh -p 65002 u535581001@77.37.59.82 \

@@ -103,6 +103,26 @@ $userInitial = strtoupper(substr(trim((string)($_SESSION['name'] ?? $_SESSION['e
 </head>
 <body class="<?= e($page_class) ?> <?= e($shellClass) ?>" data-layout="<?= e($page_layout) ?>">
 
+<?php if (!empty($_SESSION['real_user_id'])): ?>
+<div class="impersonation-banner" role="alert">
+    <div class="container row row--between" style="gap: var(--sp-3); flex-wrap: wrap; align-items: center;">
+        <div>
+            <strong>👁 Viewing as <?= e((string)($_SESSION['name'] ?? 'a user')) ?></strong>
+            <span style="opacity: 0.85; font-size: var(--fs-sm);">
+                ·  <?= e(str_replace('_', ' ', (string)($_SESSION['role'] ?? ''))) ?>
+                ·  super admin <?= e((string)($_SESSION['real_user_name'] ?? '')) ?>
+            </span>
+        </div>
+        <form method="post" action="/admin/return-to-admin.php" style="margin: 0;">
+            <?= csrf_field() ?>
+            <button class="btn btn--ghost" type="submit" style="background: rgba(255,255,255,0.15); color: var(--color-white); border-color: rgba(255,255,255,0.3);">
+                Return to admin →
+            </button>
+        </form>
+    </div>
+</div>
+<?php endif; ?>
+
 <?php if ($page_layout === 'public'): ?>
 <header class="site-nav">
     <div class="container site-nav__inner">
@@ -170,6 +190,9 @@ $userInitial = strtoupper(substr(trim((string)($_SESSION['name'] ?? $_SESSION['e
             <?= nav_link('/dashboard/communications.php', 'communications', 'Communications', 'communications', $active) ?>
             <?= nav_link('/dashboard/media.php',       'media',          'Media',          'media',          $active) ?>
             <?= nav_link('/dashboard/faq.php',         'rules',          'FAQ',            'faq',            $active) ?>
+            <?php if ((ROLE_RANK[$_SESSION['role'] ?? ''] ?? 0) >= ROLE_RANK['board_member']): ?>
+                <?= nav_link('/dashboard/activity.php',    'activity',       'Activity',       'activity',       $active) ?>
+            <?php endif; ?>
             <?= nav_link('/dashboard/settings.php',    'settings',       'Settings',       'settings',       $active) ?>
         <?php else: /* admin */ ?>
             <?= nav_link('/admin/',                    'overview',       'Overview',       'overview',       $active) ?>

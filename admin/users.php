@@ -112,9 +112,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'create_
                 flash('success', "Invited \"$email\". They'll get an email with a link to set their password (expires in 1 hour).");
             } elseif ($sendWelcome) {
                 $name = trim($first) ?: 'there';
-                send_mail($email,
-                    'Your BadassHOA account is ready',
-                    "Hi $name,\n\nA BadassHOA account has been created for you.\n\nSign in: https://badasshoa.com/login.php\nEmail: $email\nTemporary password: $pw1\n\nPlease change your password after signing in (Settings → Change password).\n");
+                // Look up association name (if any) so we can frame the email
+                // as coming from the association rather than from BadassHOA generically.
+                $assocName = '';
+                if ($assocId) {
+                    $aStmt = db()->prepare('SELECT name FROM associations WHERE id = ?');
+                    $aStmt->execute([$assocId]);
+                    $assocName = (string)($aStmt->fetchColumn() ?: '');
+                }
+                if ($assocName !== '') {
+                    $subject = "Your {$assocName} portal account is ready";
+                    $body    = "Hi $name,\n\n"
+                             . "{$assocName} has added you to their HOA portal on BadassHOA.\n\n"
+                             . "Sign in: https://badasshoa.com/login.php\nEmail: $email\nTemporary password: $pw1\n\n"
+                             . "Please change your password after signing in (Settings → Change password).\n\n"
+                             . "— {$assocName} (via BadassHOA)";
+                } else {
+                    $subject = 'Your BadassHOA account is ready';
+                    $body    = "Hi $name,\n\nA BadassHOA account has been created for you.\n\nSign in: https://badasshoa.com/login.php\nEmail: $email\nTemporary password: $pw1\n\nPlease change your password after signing in (Settings → Change password).\n";
+                }
+                send_mail($email, $subject, $body);
                 flash('success', "Created user \"$email\". Welcome email sent with the temporary password.");
             } else {
                 flash('success', "Created user \"$email\". Share the password through a secure channel — it's not shown again.");
@@ -236,6 +253,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit_us
 
 $qSearch = trim((string)($_GET['q'] ?? ''));
 $qAssoc  = (int)($_GET['association_id'] ?? 0);
+$qRole   = trim((string)($_GET['role'] ?? ''));
+
+$allowedRoleFilters = ['super_admin','board_admin','board_member','property_manager','resident','renter'];
+if ($qRole !== '' && !in_array($qRole, $allowedRoleFilters, true)) $qRole = '';
 
 $sql = 'SELECT u.*, a.name AS assoc_name
         FROM users u LEFT JOIN associations a ON a.id = u.association_id
@@ -246,7 +267,8 @@ if ($qSearch !== '') {
     $like = "%$qSearch%";
     array_push($params, $like, $like, $like);
 }
-if ($qAssoc) { $sql .= ' AND u.association_id = ?'; $params[] = $qAssoc; }
+if ($qAssoc)        { $sql .= ' AND u.association_id = ?'; $params[] = $qAssoc; }
+if ($qRole !== '')  { $sql .= ' AND u.role = ?';           $params[] = $qRole; }
 $sql .= ' ORDER BY u.created_at DESC LIMIT 200';
 $stmt = db()->prepare($sql);
 $stmt->execute($params);
@@ -531,15 +553,27 @@ require __DIR__ . '/../includes/header.php';
     </div>
     <?php endif; ?>
 
-    <form method="get" class="row" style="margin: var(--sp-6) 0 var(--sp-4);">
-        <input class="input" type="search" name="q" placeholder="Search name or email" value="<?= e($qSearch) ?>" style="max-width: 320px;">
-        <select class="select" name="association_id" style="max-width: 280px;">
+    <form method="get" class="row" style="margin: var(--sp-6) 0 var(--sp-4); gap: var(--sp-2); flex-wrap: wrap;">
+        <input class="input" type="search" name="q" placeholder="Search name or email" value="<?= e($qSearch) ?>" style="max-width: 280px;">
+        <select class="select" name="association_id" style="max-width: 240px;">
             <option value="0">All associations</option>
             <?php foreach ($assocs as $a): ?>
                 <option value="<?= (int)$a['id'] ?>" <?= $qAssoc===(int)$a['id']?'selected':'' ?>><?= e((string)$a['name']) ?></option>
             <?php endforeach; ?>
         </select>
+        <select class="select" name="role" style="max-width: 200px;">
+            <option value="">All roles</option>
+            <option value="super_admin"      <?= $qRole==='super_admin'?'selected':'' ?>>BadassHOA admins</option>
+            <option value="board_admin"      <?= $qRole==='board_admin'?'selected':'' ?>>Board admin</option>
+            <option value="board_member"     <?= $qRole==='board_member'?'selected':'' ?>>Board member</option>
+            <option value="property_manager" <?= $qRole==='property_manager'?'selected':'' ?>>Property manager</option>
+            <option value="resident"         <?= $qRole==='resident'?'selected':'' ?>>Resident</option>
+            <option value="renter"           <?= $qRole==='renter'?'selected':'' ?>>Renter</option>
+        </select>
         <button class="btn btn--ghost" type="submit">Filter</button>
+        <?php if ($qSearch !== '' || $qAssoc || $qRole !== ''): ?>
+            <a class="btn btn--ghost" href="/admin/users.php">Clear</a>
+        <?php endif; ?>
     </form>
 
     <?php if (!$users): ?>
@@ -562,6 +596,13 @@ require __DIR__ . '/../includes/header.php';
                 <td><?= $u['last_login_at'] ? e(date('M j', strtotime((string)$u['last_login_at']))) : '<span class="muted">never</span>' ?></td>
                 <td style="text-align:right; white-space: nowrap;">
                     <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="?action=edit&id=<?= (int)$u['id'] ?>">Edit</a>
+                    <?php if ($u['role'] !== 'super_admin' && $u['status'] !== 'inactive'): ?>
+                    <form method="post" action="/admin/impersonate.php" style="display:inline;" onsubmit="return confirm('Sign in as <?= e((string)$u['email']) ?>? You\'ll see the app the way they do. An orange banner stays at the top until you click “Return to admin.”');">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="user_id" value="<?= (int)$u['id'] ?>">
+                        <button class="btn btn--ghost" type="submit" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" title="Sign in as this user (training/support)">Log in as</button>
+                    </form>
+                    <?php endif; ?>
                     <?php if ($u['status'] !== 'inactive'): ?>
                     <form method="post" style="display:inline;" onsubmit="return confirm('Send a password reset email to <?= e((string)$u['email']) ?>? Their current password will keep working until they click the link and set a new one.');">
                         <?= csrf_field() ?>

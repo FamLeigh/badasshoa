@@ -4,7 +4,77 @@ require __DIR__ . '/_bootstrap.php';
 $user = current_user();
 $canManage = (ROLE_RANK[$user['role']] ?? 0) >= ROLE_RANK['board_member'];
 
+// Ensure the association has the default category set on first visit.
+ensure_default_document_categories($assocId);
+
 $flashError = null;
+
+// --- Add category ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'cat_add') {
+    csrf_check();
+    if (!$canManage) { http_response_code(403); die('Forbidden'); }
+    $name = trim((string)($_POST['name'] ?? ''));
+    if ($name !== '') {
+        try {
+            db()->prepare(
+                'INSERT INTO document_categories (association_id, name, sort_order)
+                 VALUES (?, ?, COALESCE((SELECT MAX(sort_order) FROM document_categories AS x WHERE x.association_id = ?), 0) + 10)'
+            )->execute([$assocId, $name, $assocId]);
+            audit('document_category.added', ['name' => $name], (int)db()->lastInsertId(), 'document_category');
+            flash('success', "Category \"$name\" added.");
+        } catch (PDOException $e) {
+            flash('error', "Category \"$name\" already exists.");
+        }
+    }
+    redirect('/dashboard/documents.php?manage_cats=1');
+}
+
+// --- Rename category ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'cat_rename') {
+    csrf_check();
+    if (!$canManage) { http_response_code(403); die('Forbidden'); }
+    $cid     = (int)($_POST['id'] ?? 0);
+    $newName = trim((string)($_POST['name'] ?? ''));
+    if ($cid && $newName !== '') {
+        // Look up the old name first so we can update existing documents.
+        $oldStmt = db()->prepare('SELECT name FROM document_categories WHERE id = ? AND association_id = ?');
+        $oldStmt->execute([$cid, $assocId]);
+        $oldName = (string)($oldStmt->fetchColumn() ?: '');
+        if ($oldName === '') {
+            flash('error', 'Category not found.');
+        } elseif ($oldName === $newName) {
+            // no-op
+        } else {
+            db()->beginTransaction();
+            try {
+                db()->prepare('UPDATE document_categories SET name = ? WHERE id = ? AND association_id = ?')
+                    ->execute([$newName, $cid, $assocId]);
+                // Keep existing documents in sync — they point to the category by name.
+                db()->prepare('UPDATE documents SET category = ? WHERE association_id = ? AND category = ?')
+                    ->execute([$newName, $assocId, $oldName]);
+                db()->commit();
+                audit('document_category.renamed', ['from' => $oldName, 'to' => $newName], $cid, 'document_category');
+                flash('success', "Renamed \"$oldName\" → \"$newName\".");
+            } catch (PDOException $e) {
+                db()->rollBack();
+                flash('error', "Could not rename — \"$newName\" is already in use.");
+            }
+        }
+    }
+    redirect('/dashboard/documents.php?manage_cats=1');
+}
+
+// --- Delete category ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'cat_delete') {
+    csrf_check();
+    if (!$canManage) { http_response_code(403); die('Forbidden'); }
+    $cid = (int)($_POST['id'] ?? 0);
+    db()->prepare('DELETE FROM document_categories WHERE id = ? AND association_id = ?')
+        ->execute([$cid, $assocId]);
+    audit('document_category.deleted', [], $cid, 'document_category');
+    flash('success', 'Category deleted. Existing documents keep the label.');
+    redirect('/dashboard/documents.php?manage_cats=1');
+}
 
 // --- Upload handler ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'upload') {
@@ -104,12 +174,27 @@ $stmt = db()->prepare($sql);
 $stmt->execute($params);
 $rows = $stmt->fetchAll();
 
-// Distinct categories for filter dropdown.
-$cats = db()->prepare('SELECT DISTINCT category FROM documents WHERE association_id = ? AND category IS NOT NULL ORDER BY category');
-$cats->execute([$assocId]);
-$categories = array_column($cats->fetchAll(), 'category');
+// Curated category list (drives both the upload SELECT and the filter SELECT).
+$catStmt = db()->prepare('SELECT id, name FROM document_categories WHERE association_id = ? ORDER BY sort_order, name');
+$catStmt->execute([$assocId]);
+$categoryRows = $catStmt->fetchAll();
+$categories   = array_column($categoryRows, 'name');
 
-$showUpload = ($_GET['action'] ?? '') === 'new' && $canManage;
+// Filter dropdown also includes any "ghost" categories actually used by documents
+// but no longer in the curated list (kept so old uploads remain filterable).
+$inUseStmt = db()->prepare(
+    'SELECT DISTINCT category FROM documents WHERE association_id = ? AND category IS NOT NULL AND category <> ""'
+);
+$inUseStmt->execute([$assocId]);
+$inUseCats = array_column($inUseStmt->fetchAll(), 'category');
+$filterCategories = $categories;
+foreach ($inUseCats as $c) {
+    if (!in_array($c, $filterCategories, true)) $filterCategories[] = $c;
+}
+sort($filterCategories);
+
+$showUpload    = ($_GET['action'] ?? '') === 'new' && $canManage;
+$showManageCat = ($_GET['manage_cats'] ?? '') === '1' && $canManage;
 $page_title = 'Documents — ' . $association['name'];
 require __DIR__ . '/../includes/header.php';
 ?>
@@ -122,11 +207,64 @@ require __DIR__ . '/../includes/header.php';
             <p class="muted">Bylaws, forms, minutes, insurance certificates — versioned and access-controlled.</p>
         </div>
         <?php if ($canManage): ?>
-            <a class="btn btn--primary" href="?action=new">+ Upload</a>
+            <div class="row" style="gap: var(--sp-2);">
+                <a class="btn btn--ghost" href="?manage_cats=1">Manage categories</a>
+                <a class="btn btn--primary" href="?action=new">+ Upload</a>
+            </div>
         <?php endif; ?>
     </div>
 
     <?php if ($flashError): ?><div class="flash flash--error"><?= e($flashError) ?></div><?php endif; ?>
+
+    <?php if ($showManageCat): ?>
+    <div class="card card--padded" style="margin-bottom: var(--sp-6);">
+        <div class="card__head">
+            <h3 class="card__title">Manage categories</h3>
+            <a class="muted" style="font-size: var(--fs-sm);" href="/dashboard/documents.php">← Back to documents</a>
+        </div>
+        <p class="muted" style="font-size: var(--fs-sm); margin-bottom: var(--sp-4);">
+            Categories drive the dropdown on the upload form and the filter on the documents list. Renaming a category also updates every document already tagged with it. Deleting a category leaves existing documents tagged with the old label (so nothing disappears).
+        </p>
+
+        <form method="post" class="row" style="gap: var(--sp-2); margin-bottom: var(--sp-4); flex-wrap: wrap;">
+            <?= csrf_field() ?>
+            <input type="hidden" name="form" value="cat_add">
+            <input class="input" name="name" required placeholder="New category name" style="max-width: 320px;">
+            <button class="btn btn--primary" type="submit">Add</button>
+        </form>
+
+        <?php if (!$categoryRows): ?>
+            <p class="muted">No categories yet.</p>
+        <?php else: ?>
+        <table class="table">
+            <thead><tr><th>Name</th><th style="text-align:right; width: 220px;">Actions</th></tr></thead>
+            <tbody>
+            <?php foreach ($categoryRows as $cat): ?>
+                <tr>
+                    <td>
+                        <form method="post" class="row" style="gap: var(--sp-2);">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="form" value="cat_rename">
+                            <input type="hidden" name="id" value="<?= (int)$cat['id'] ?>">
+                            <input class="input" name="name" value="<?= e((string)$cat['name']) ?>" required style="max-width: 320px;">
+                            <button class="btn btn--ghost" type="submit" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);">Save</button>
+                        </form>
+                    </td>
+                    <td style="text-align:right;">
+                        <form method="post" style="display:inline;" onsubmit="return confirm('Delete category &quot;<?= e((string)$cat['name']) ?>&quot;? Existing documents will keep the label as a free-text value.');">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="form" value="cat_delete">
+                            <input type="hidden" name="id" value="<?= (int)$cat['id'] ?>">
+                            <button class="btn btn--danger" type="submit" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+        <?php endif; ?>
+    </div>
+    <?php endif; ?>
 
     <?php if ($showUpload): ?>
     <div class="card card--padded" style="margin-bottom: var(--sp-6);">
@@ -141,10 +279,16 @@ require __DIR__ . '/../includes/header.php';
                 </div>
                 <div class="field">
                     <label class="field__label" for="category">Category</label>
-                    <input class="input" id="category" name="category" placeholder="Bylaws / Forms / Minutes / Insurance" list="cats-list">
-                    <datalist id="cats-list">
-                        <?php foreach ($categories as $c): ?><option value="<?= e($c) ?>"><?php endforeach; ?>
-                    </datalist>
+                    <select class="select" id="category" name="category">
+                        <?php foreach ($categories as $c): ?>
+                            <option value="<?= e($c) ?>" <?= $c === 'General' ? 'selected' : '' ?>><?= e($c) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <?php if ($canManage): ?>
+                        <div class="field__hint">
+                            <a href="?manage_cats=1">Manage categories →</a>
+                        </div>
+                    <?php endif; ?>
                 </div>
             </div>
             <div class="form-row form-row--2">
@@ -178,7 +322,7 @@ require __DIR__ . '/../includes/header.php';
         <input class="input" type="search" name="q" placeholder="Search title or description" value="<?= e($qSearch) ?>" style="max-width: 320px;">
         <select class="select" name="category" style="max-width: 220px;">
             <option value="">All categories</option>
-            <?php foreach ($categories as $c): ?>
+            <?php foreach ($filterCategories as $c): ?>
                 <option value="<?= e($c) ?>" <?= $c === $qCategory ? 'selected' : '' ?>><?= e($c) ?></option>
             <?php endforeach; ?>
         </select>

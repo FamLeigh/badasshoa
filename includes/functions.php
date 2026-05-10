@@ -38,10 +38,45 @@ function ensure_dir(string $absPath): void
     }
 }
 
+// --- document categories (per-association picklist) --------------------
+// Bootstraps a sensible default set of document categories for an association
+// the first time they hit the documents page. Idempotent — does nothing once
+// the association has at least one category. Defaults come from the spec
+// Kevin set on 2026-05-10: Bylaws, Minutes, Insurance, Forms, Renters, General.
+function ensure_default_document_categories(int $assocId): void
+{
+    $stmt = db()->prepare('SELECT COUNT(*) FROM document_categories WHERE association_id = ?');
+    $stmt->execute([$assocId]);
+    if ((int)$stmt->fetchColumn() > 0) return;
+
+    $defaults = [
+        ['Bylaws',    10],
+        ['Minutes',   20],
+        ['Insurance', 30],
+        ['Forms',     40],
+        ['Renters',   50],
+        ['General',   60],
+    ];
+    $ins = db()->prepare(
+        'INSERT IGNORE INTO document_categories (association_id, name, sort_order) VALUES (?, ?, ?)'
+    );
+    foreach ($defaults as [$name, $order]) {
+        $ins->execute([$assocId, $name, $order]);
+    }
+}
+
 // --- audit log ----------------------------------------------------------
+// Records actions to the audit_log table. The "actor" is the current session
+// user — which during super-admin impersonation is the *impersonated* user
+// (so an action shows up correctly in their association's activity feed).
+// We auto-tag those rows with an `impersonated_by` metadata key so the trail
+// back to the real super admin is never lost.
 function audit(string $action, array $meta = [], ?int $targetId = null, ?string $targetType = null): void
 {
     try {
+        if (!empty($_SESSION['real_user_id']) && !isset($meta['impersonated_by'])) {
+            $meta['impersonated_by'] = (int)$_SESSION['real_user_id'];
+        }
         db()->prepare(
             'INSERT INTO audit_log
              (actor_user_id, association_id, action, target_type, target_id, ip_address, metadata)
@@ -150,7 +185,11 @@ function send_mail(string $to, string $subject, string $body): void
 // we add here.
 function send_password_link(int $userId, string $purpose = 'reset'): bool
 {
-    $stmt = db()->prepare('SELECT id, first_name, email, status FROM users WHERE id = ? LIMIT 1');
+    $stmt = db()->prepare(
+        'SELECT u.id, u.first_name, u.email, u.status, u.association_id, a.name AS association_name
+         FROM users u LEFT JOIN associations a ON a.id = u.association_id
+         WHERE u.id = ? LIMIT 1'
+    );
     $stmt->execute([$userId]);
     $user = $stmt->fetch();
     if (!$user || $user['status'] === 'inactive') return false;
@@ -165,18 +204,31 @@ function send_password_link(int $userId, string $purpose = 'reset'): bool
          VALUES (?, ?, (NOW() + INTERVAL 1 HOUR))'
     )->execute([$userId, $tokenHash]);
 
-    $base = (string)(config()['app']['base_url'] ?? 'https://badasshoa.com');
-    $url  = rtrim($base, '/') . '/reset.php?token=' . $rawToken;
-    $name = (string)($user['first_name'] ?: 'there');
+    $base       = (string)(config()['app']['base_url'] ?? 'https://badasshoa.com');
+    $url        = rtrim($base, '/') . '/reset.php?token=' . $rawToken;
+    $name       = (string)($user['first_name'] ?: 'there');
+    $assocName  = (string)($user['association_name'] ?? '');
+    $hasAssoc   = $assocName !== '';
 
     if ($purpose === 'invite') {
-        $subject = 'Welcome to BadassHOA — set up your account';
-        $body    = "Hi {$name},\n\n"
-                 . "You've been invited to BadassHOA. Click the link below to set your password and sign in (link expires in 1 hour):\n\n"
-                 . $url . "\n\n"
-                 . "If you weren't expecting this, you can safely ignore this email.\n\n"
-                 . "— BadassHOA";
+        if ($hasAssoc) {
+            $subject = "You've been added to {$assocName} on BadassHOA";
+            $body    = "Hi {$name},\n\n"
+                     . "{$assocName} has added you to their HOA portal on BadassHOA. Click the link below to set your password and get signed in (the link expires in 1 hour):\n\n"
+                     . $url . "\n\n"
+                     . "If you weren't expecting this, you can safely ignore this email.\n\n"
+                     . "— {$assocName} (via BadassHOA)";
+        } else {
+            $subject = 'Welcome to BadassHOA — set up your account';
+            $body    = "Hi {$name},\n\n"
+                     . "You've been added to BadassHOA. Click the link below to set your password and sign in (link expires in 1 hour):\n\n"
+                     . $url . "\n\n"
+                     . "If you weren't expecting this, you can safely ignore this email.\n\n"
+                     . "— BadassHOA";
+        }
     } else {
+        // Password reset is always user-initiated (or admin acting "as the user")
+        // — keep the framing platform-neutral.
         $subject = 'Reset your BadassHOA password';
         $body    = "Hi {$name},\n\n"
                  . "A password reset has been initiated for your BadassHOA account. Click the link below to set a new password (link expires in 1 hour):\n\n"

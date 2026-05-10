@@ -563,6 +563,21 @@
 }
 .site-nav__links > a:not(.btn):hover { color: var(--color-orange); }
 
+/* ============ Impersonation banner (super-admin "Log in as") ============ */
+.impersonation-banner {
+    background: var(--color-orange);
+    color: var(--color-white);
+    padding: var(--sp-3) var(--sp-4);
+    font-size: var(--fs-sm);
+    border-bottom: 2px solid rgba(0,0,0,0.15);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+    /* Stay above the sidebar so it's never visually buried. */
+    position: relative;
+    z-index: calc(var(--z-nav) + 1);
+}
+.impersonation-banner strong { color: var(--color-white); }
+.impersonation-banner .btn { white-space: nowrap; }
+
 /* ============ Left sidebar (app + admin layouts) ============ */
 :root {
     --side-nav-w:           232px;
