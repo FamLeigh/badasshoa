@@ -1,5 +1,14 @@
 [
     {
+        "id": "cl-20260510-073500-a1e2",
+        "at": "2026-05-10T07:35:00-04:00",
+        "type": "feature",
+        "title": "BadassHOA is live in production",
+        "description": "https://badasshoa.com is now serving the real BadassHOA stack — marketing site, signup, login, board dashboards, super-admin panel, public community landings, the works. Real SMTP is wired (success@badasshoa.com via smtp.hostinger.com:465), so password reset, signup notifications, and the contact form all send actual email instead of writing to a log file.",
+        "author": "Reboooot",
+        "link": "/"
+    },
+    {
         "id": "cl-20260509-235151-bde2",
         "at": "2026-05-09T23:51:51+00:00",
         "type": "fix",

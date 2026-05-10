@@ -25,8 +25,11 @@ return [
     ],
 
     'mail' => [
-        // 'log' writes to storage/logs/mail.log (dev). Switch to 'smtp' in Phase 2 when SMTP is wired.
-        'driver' => 'log',
-        'from'   => 'noreply@badasshoa.com',
+        // 'log'   → writes to storage/logs/mail.log (local dev, no SMTP available)
+        // 'mail'  → PHP mail() via host sendmail (Hostinger has hsendmail preconfigured — zero creds)
+        // 'msmtp' → pipe to /usr/bin/msmtp -t (needs ~/.msmtprc with smtp.hostinger.com:587)
+        'driver'     => 'log',
+        'from'       => 'success@badasshoa.com', // must be a real mailbox in your Hostinger account
+        'msmtp_path' => '/usr/bin/msmtp',
     ],
 ];

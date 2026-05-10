@@ -61,10 +61,69 @@ function audit(string $action, array $meta = [], ?int $targetId = null, ?string 
     }
 }
 
-// --- mailer stub --------------------------------------------------------
-// Phase 1: log to file. Replace with real SMTP when ready (Resend/Postmark/Hostinger SMTP).
+// --- mailer --------------------------------------------------------------
+// Driver chosen by config()['mail']['driver']:
+//   'log'   → append to storage/logs/mail.log (local dev, no SMTP available)
+//   'mail'  → PHP's mail() via the host's sendmail (Hostinger ships hsendmail)
+//   'msmtp' → pipe RFC822 message to msmtp -t (uses ~/.msmtprc on the server)
+// On send failure we fall through to log so the message isn't silently lost.
 function send_mail(string $to, string $subject, string $body): void
 {
+    $cfg    = config()['mail'] ?? [];
+    $driver = $cfg['driver']     ?? 'log';
+    $from   = $cfg['from']       ?? 'noreply@badasshoa.com';
+    $bin    = $cfg['msmtp_path'] ?? '/usr/bin/msmtp';
+
+    if ($driver === 'mail') {
+        $headers  = "From: {$from}\r\n";
+        $headers .= "MIME-Version: 1.0\r\n";
+        $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
+        $headers .= "Content-Transfer-Encoding: 8bit\r\n";
+
+        // mb_encode_mimeheader handles non-ASCII subjects safely.
+        $encodedSubject = mb_encode_mimeheader($subject, 'UTF-8');
+
+        // -f sets the envelope sender; only honored if PHP-FPM allows it.
+        if (mail($to, $encodedSubject, $body, $headers, '-f ' . $from)) return;
+
+        error_log("send_mail mail() returned false to={$to}");
+        // fall through to log so the message isn't lost
+    }
+
+    if ($driver === 'msmtp') {
+        $headers  = "From: {$from}\r\n";
+        $headers .= "To: {$to}\r\n";
+        $headers .= 'Subject: ' . mb_encode_mimeheader($subject, 'UTF-8') . "\r\n";
+        $headers .= "MIME-Version: 1.0\r\n";
+        $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
+        $headers .= "Content-Transfer-Encoding: 8bit\r\n";
+
+        $message = $headers . "\r\n" . $body;
+
+        // -t: read recipients from headers. -f: envelope sender (Return-Path).
+        $cmd  = $bin . ' -t -f ' . escapeshellarg($from);
+        $proc = proc_open($cmd, [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ], $pipes);
+
+        if (is_resource($proc)) {
+            fwrite($pipes[0], $message);
+            fclose($pipes[0]);
+            stream_get_contents($pipes[1]); fclose($pipes[1]);
+            $stderr = stream_get_contents($pipes[2]); fclose($pipes[2]);
+            $exit = proc_close($proc);
+
+            if ($exit === 0) return;
+
+            error_log("send_mail msmtp failed (exit {$exit}) to={$to}: {$stderr}");
+            // fall through to log so the message isn't lost
+        } else {
+            error_log("send_mail: could not invoke msmtp at {$bin}");
+        }
+    }
+
     ensure_dir(storage_path('logs'));
     $line = sprintf(
         "[%s] To:%s | Subj:%s\n%s\n---\n",

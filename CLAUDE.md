@@ -18,7 +18,53 @@ Persona: Claude operates here as **"Reboooot"** — seasoned dev + UX designer. 
   - Database: `badassHOA` (to be created — does not exist yet)
 - **MySQL CLI:** `/Applications/MAMP/Library/bin/mysql80/bin/mysql --socket=/Applications/MAMP/tmp/mysql/mysql.sock -u root -proot`
 - **PDO DSN must use:** `mysql:unix_socket=/Applications/MAMP/tmp/mysql/mysql.sock;dbname=badassHOA;charset=utf8mb4` — NOT `host=127.0.0.1;port=3306` from the spec
-- **Live target:** `badasshoa.com` on Hostinger (blank site already provisioned). Claude does **not** have FTP/SSH credentials in this environment. Deployment is currently manual.
+- **Live target:** `https://badasshoa.com` on Hostinger — **deployed 2026-05-10**, see Production environment below.
+
+---
+
+## Production environment (live 2026-05-10)
+
+- **Live URL:** `https://badasshoa.com`
+- **Hosting:** Hostinger shared hosting, same account as sellinglane / BadassNovels / Prayersto
+- **SSH:** `ssh -p 65002 u535581001@77.37.59.82`
+- **Repo dir on server:** `~/badasshoa/` (laptop rsyncs here)
+- **Web dir on server:** `~/domains/badasshoa.com/public_html/` (synced from repo by `deploy.sh`)
+- **PHP:** 8.2.30
+- **DB:** MariaDB 11.8.6 — `u535581001_badassHOA` (user `u535581001_kleigh`)
+- **Mail:** msmtp → `smtp.hostinger.com:465` SSL, mailbox `success@badasshoa.com`. `~/.msmtprc` on server holds creds. Send log at `~/.msmtp.log`. `send_mail()` driver is `msmtp` in prod, `log` locally.
+- **`config.php`:** lives only on the server (not in git). Holds DB + mail creds. Mode 600 at `~/domains/badasshoa.com/public_html/config.php`.
+- **Live super admin:** `me@kevinleigh.com` (seeded in prod with the same password used locally — change via `/dashboard/settings.php` after first login if you want it different).
+
+### Deploy from laptop
+
+```bash
+cd /Users/kevinbleigh/Sites/badasshoa
+bash push.sh   # rsync laptop → server, then runs deploy.sh on the server
+```
+
+`push.sh` (laptop) and `deploy.sh` (server) both exclude `config.php`, `storage/uploads/`, `storage/logs/`, `content/changelog.json`, `*.md`, and `migrations/` — so prod-mutable state is never overwritten. `deploy.sh` also touches every `*.php` to bust opcache.
+
+> Note: `content/changelog.json` is admin-edited via `/admin/changelog.php` on prod. The repo copy is only seeded on first deploy. To bridge a manual local edit to prod, `scp` it once: `scp -P 65002 content/changelog.json u535581001@77.37.59.82:~/domains/badasshoa.com/public_html/content/`.
+
+### Run a new migration on prod
+
+```bash
+# from the laptop, after adding migrations/0XX_thing.sql
+scp -P 65002 migrations/0XX_thing.sql u535581001@77.37.59.82:/tmp/
+ssh -p 65002 u535581001@77.37.59.82 \
+  'mysql -u u535581001_kleigh -p<DB_PASSWORD> u535581001_badassHOA < /tmp/0XX_thing.sql'
+```
+
+(The DB password is in `~/domains/badasshoa.com/public_html/config.php` on the server.)
+
+### Production logs
+
+| Log | Path on server |
+|---|---|
+| PHP errors | `~/domains/badasshoa.com/public_html/storage/logs/php-errors.log` |
+| Mail (only when send fails / driver=log) | `~/domains/badasshoa.com/public_html/storage/logs/mail.log` |
+| msmtp send log (always) | `~/.msmtp.log` |
+| Apache access/error | hPanel → Advanced → Error Logs |
 
 ---
 
@@ -153,10 +199,12 @@ Seeded by `migrations/002_seed_dev.sql`.
 
 ### What's stubbed / what's next
 
-**Stubbed (works in dev, swap before production):**
-- **Email** — `send_mail()` writes to `storage/logs/mail.log`. Wire SMTP (Hostinger / Resend / Postmark) before launch.
-- **Production DB DSN** — `includes/db.php` hardcodes the MAMP socket. Replace before deploying to Hostinger (host/port/user/pass). NOTE: db.php now also pins every PDO connection to UTC via `SET time_zone = '+00:00'` — keep that in production too.
-- **Subdomain-per-tenant routing** — deferred to Phase 2. Phase 1 is single-tenant-per-session via `association_id` from the `users` table; no slug in URL.
+**Production wiring done (2026-05-10):**
+- **Email** — `send_mail()` now branches on `config()['mail']['driver']`: `log` (local), `mail` (PHP mail() via host sendmail), or `msmtp` (production, pipes RFC822 to `/usr/bin/msmtp -t`). Prod uses `msmtp` against `smtp.hostinger.com:465` SSL with mailbox `success@badasshoa.com`. Failed sends fall through to `mail.log` so nothing is silently dropped.
+- **Production DB DSN** — `includes/db.php` reads from `config.php`. The on-server `config.php` (mode 600, never in git) holds the Hostinger DB creds. PDO still pins every connection to UTC via `SET time_zone = '+00:00'`.
+
+**Still deferred:**
+- **Subdomain-per-tenant routing** — Phase 2. Phase 1 is single-tenant-per-session via `association_id` from the `users` table; no slug in URL (the public landing uses path-based slugs but auth + dashboards are per-user).
 
 **Phase 1.5 — DONE (2026-05-09):**
 - ✅ **Password reset flow** — `/forgot.php` (anti-enumeration: same response for unknown emails) + `/reset.php` (SQL-side expiry check). Tokens are 32-byte random, stored as SHA-256 hashes, single-use, 1-hour TTL. Issuing a new token invalidates any prior unused tokens for the user.
@@ -178,8 +226,8 @@ Seeded by `migrations/002_seed_dev.sql`.
 **Phase 2 (planned):**
 - Maintenance request workflow + violation tracking
 - Subdomain or path-prefix multi-tenancy in the URL
-- Real SMTP wiring + email templates
-- Hostinger deploy pipeline
+- ~~Real SMTP wiring + email templates~~ → **SMTP wired 2026-05-10**; email *templates* (HTML versions, branded headers) still TODO
+- ~~Hostinger deploy pipeline~~ → **shipped 2026-05-10** as `push.sh` (laptop) + `deploy.sh` (server)
 
 **Phase 3 (planned):**
 - Payment processing (Stripe)
@@ -212,18 +260,23 @@ This file (CLAUDE.md) keeps an internal-only summary in the section below for cr
 
 ## Where we left off (resume here next session)
 
-**Last session ended:** 2026-05-09 — events + map shipped; geocode-on-save bug fixed.
+**Last session ended:** 2026-05-10 — **shipped to production at https://badasshoa.com**. Schema migrations 001 + 003–013 ran cleanly against `u535581001_badassHOA`, super admin seeded, msmtp wired against `smtp.hostinger.com:465` with `success@badasshoa.com`, deploy automated via `push.sh` (laptop) + `deploy.sh` (server). Smoke tests passed: home/login/admin/forgot all 200, `/admin/` redirects to login when unauthenticated, no PHP errors in log, real SMTP send confirmed (`smtpstatus=250 Ok: queued`).
 
-**Demo state in DB right now:**
-- Association `id=1, slug=demo` (Bellair Condo Association) → 420 N Atlantic Ave, Daytona Beach FL — geocoded to lat 29.2297 / lon −81.0090, map iframe renders.
-- 3 seeded events: "Pool reopening party" (audience=`all`, public), "Annual HOA meeting" (audience=`members`, hidden from landing), "Closed board session" (audience=`board`, hidden).
-- Association `id=3, slug=test` exists but has no address geocoded — its map won't render until someone hits Save on its settings.
+**Local dev state in DB:**
+- Association `id=1, slug=demo` (Bellair Condo Association) → 420 N Atlantic Ave, Daytona Beach FL — geocoded, map iframe renders.
+- 3 seeded events: "Pool reopening party" (`audience=all`, public), "Annual HOA meeting" (`audience=members`), "Closed board session" (`audience=board`).
+- Association `id=3, slug=test` exists but has no address geocoded.
 
-**Demo logins (note Kevin renamed the board user):**
-- Super admin: `me@kevinleigh.com / bhoaK0m3r2.6`
-- Demo board: `me+bellair@kevinleigh.com / changeme!` (was `board@demo.badasshoa.com` before — references in old transcripts may use the old email)
+**Production state in DB:**
+- Empty schema except for one super admin (`me@kevinleigh.com`). No associations, no demo data — production starts clean.
 
-**Quick visual check:** `https://badasshoa.com:8890/demo/` is the public landing, no login required.
+**Logins:**
+- **Local** super admin: `me@kevinleigh.com / bhoaK0m3r2.6`
+- **Local** demo board: `me+bellair@kevinleigh.com / changeme!`
+- **Prod** super admin: `me@kevinleigh.com / bhoaK0m3r2.6` (same hash, can change after first login)
+
+**Quick visual check (local):** `https://badasshoa.com:8890/demo/` is the public landing, no login required.
+**Quick visual check (prod):** `https://badasshoa.com/` is the marketing home; `https://badasshoa.com/login.php` for the auth UI.
 
 **Candidates for next session** (in rough order of "user has been moving in this direction"):
 1. **Board meeting minutes** — separate from announcements, stored as a list of past meetings with date + uploaded PDF + optional summary. Renders in a "Board meetings" section on the landing if any are public.
@@ -238,6 +291,15 @@ This file (CLAUDE.md) keeps an internal-only summary in the section below for cr
 ---
 
 ## Changelog
+
+- **2026-05-10 — Shipped to production at https://badasshoa.com.**
+    - DB `u535581001_badassHOA` provisioned in hPanel; schema migrations 001 + 003–013 imported via SSH (skipped `002_seed_dev.sql` — prod starts clean)
+    - Super admin `me@kevinleigh.com` seeded; bcrypt hash verified by `password_verify` round-trip on the server
+    - `config.php` written directly on the server (mode 600, never in git)
+    - Hostinger placeholder `default.php` removed; first rsync deployed all 200+ files into `~/domains/badasshoa.com/public_html/`
+    - **Real SMTP wired.** `send_mail()` got new `mail` and `msmtp` driver branches in `includes/functions.php`. `~/.msmtprc` rebuilt from scratch to point at `smtp.hostinger.com:465` SSL with mailbox `success@badasshoa.com`. End-to-end probe through `send_mail()` returned `smtpstatus=250 Ok: queued`. Failed sends still fall through to `mail.log` so nothing is silently dropped.
+    - **Deploy automation.** `push.sh` (laptop, rsync + ssh) and `deploy.sh` (server, rsync repo→public_html + opcache bust). One-command deploys from now on: `bash push.sh`.
+    - **Discovery during deploy:** the old `~/.msmtprc` on this Hostinger account was pointing at `127.0.0.1:125` with stale auth — broken before today. Rewriting it to `smtp.hostinger.com:465` would have been required even if BadassHOA hadn't been the trigger. Old file backed up to `~/.msmtprc.bak.<timestamp>`.
 
 - **2026-05-09 — Public community landing + events + map.**
     - Per-association public landing at `/{slug}/` with hero, about, amenities, photos, board (opt-in), documents, events, map, FAQ, announcements, contact form, social footer
