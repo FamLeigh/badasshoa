@@ -14,14 +14,20 @@ $unitsStmt = db()->prepare(
 $unitsStmt->execute([$assocId]);
 $stats['units'] = (int)$unitsStmt->fetchColumn();
 
-// Board members = users with any board-level role
-$boardCount = db()->prepare(
-    "SELECT COUNT(*) FROM users
-     WHERE association_id = ? AND status = 'active'
-       AND role IN ('board_admin','board_member','property_manager')"
-);
-$boardCount->execute([$assocId]);
-$stats['board_members'] = (int)$boardCount->fetchColumn();
+// All active members (everyone signed up — owners, renters, board, PM)
+$memberCount = db()->prepare("SELECT COUNT(*) FROM users WHERE association_id = ? AND status = 'active'");
+$memberCount->execute([$assocId]);
+$stats['members'] = (int)$memberCount->fetchColumn();
+
+// Rules / bylaws / policies (all sources)
+$ruleCount = db()->prepare('SELECT COUNT(*) FROM rules WHERE association_id = ?');
+$ruleCount->execute([$assocId]);
+$stats['rules'] = (int)$ruleCount->fetchColumn();
+
+// Photos = media rows with an image MIME type
+$photoCount = db()->prepare("SELECT COUNT(*) FROM media WHERE association_id = ? AND file_type LIKE 'image/%'");
+$photoCount->execute([$assocId]);
+$stats['photos'] = (int)$photoCount->fetchColumn();
 
 // Total announcements (no time filter)
 $annCount = db()->prepare('SELECT COUNT(*) FROM announcements WHERE association_id = ?');
@@ -69,22 +75,30 @@ require __DIR__ . '/../includes/header.php';
         </div>
     </div>
 
-    <div class="grid grid--5" style="margin-bottom: var(--sp-8);">
+    <div class="dashboard-stats" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--sp-3); margin-bottom: var(--sp-8);">
+        <a class="stat" href="/dashboard/directory.php">
+            <div class="stat__label">Members</div>
+            <div class="stat__value"><?= (int)$stats['members'] ?></div>
+        </a>
         <a class="stat" href="/dashboard/directory.php">
             <div class="stat__label">Units</div>
             <div class="stat__value"><?= (int)$stats['units'] ?></div>
         </a>
-        <a class="stat" href="/dashboard/directory.php">
-            <div class="stat__label">Board members</div>
-            <div class="stat__value"><?= (int)$stats['board_members'] ?></div>
-        </a>
-        <a class="stat" href="/dashboard/communications.php">
-            <div class="stat__label">Posts</div>
-            <div class="stat__value"><?= (int)$stats['announcements'] ?></div>
+        <a class="stat" href="/dashboard/search.php">
+            <div class="stat__label">Rules</div>
+            <div class="stat__value"><?= (int)$stats['rules'] ?></div>
         </a>
         <a class="stat" href="/dashboard/documents.php">
             <div class="stat__label">Documents</div>
             <div class="stat__value"><?= (int)$stats['documents'] ?></div>
+        </a>
+        <a class="stat" href="/dashboard/media.php">
+            <div class="stat__label">Photos</div>
+            <div class="stat__value"><?= (int)$stats['photos'] ?></div>
+        </a>
+        <a class="stat" href="/dashboard/communications.php">
+            <div class="stat__label">Posts</div>
+            <div class="stat__value"><?= (int)$stats['announcements'] ?></div>
         </a>
         <a class="stat" href="/dashboard/committees.php">
             <div class="stat__label">Committees</div>
