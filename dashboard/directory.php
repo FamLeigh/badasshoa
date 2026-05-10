@@ -662,7 +662,17 @@ B2,Sam,Garcia,sam@example.com,,0</pre>
             <?php foreach ($residents as $r): ?>
             <tr>
                 <td><strong><?= e(trim($r['first_name'] . ' ' . $r['last_name']) ?: '—') ?></strong></td>
-                <td><?= e($r['unit_number'] ?: '—') ?></td>
+                <td>
+                    <?php if (!empty($r['unit_number'])): ?>
+                        <?php if ($canManage): ?>
+                            <a href="/dashboard/unit.php?n=<?= urlencode((string)$r['unit_number']) ?>"><?= e((string)$r['unit_number']) ?></a>
+                        <?php else: ?>
+                            <?= e((string)$r['unit_number']) ?>
+                        <?php endif; ?>
+                    <?php else: ?>
+                        —
+                    <?php endif; ?>
+                </td>
                 <td><?= e(str_replace('_',' ',$r['role'])) ?></td>
                 <td><?= $r['is_owner'] ? '<span class="badge badge--success">Owner</span>' : '<span class="badge">Renter</span>' ?></td>
                 <td><?= e($r['email']) ?></td>

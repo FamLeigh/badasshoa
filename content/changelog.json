@@ -1,5 +1,23 @@
 [
     {
+        "id": "cl-20260510-130000-z9z2",
+        "at": "2026-05-10T13:00:00-04:00",
+        "type": "feature",
+        "title": "Co-owners, tenants, and per-unit documents",
+        "description": "Each registered unit now tracks every person living in it — primary owner, co-owners, and tenants — independent of the single-string unit_number on a user record. Managers can add/edit/remove occupants from a unit detail page (/dashboard/unit.php) and upload documents scoped to that specific unit (rental agreements, deeds, insurance certificates). The new \"Unit only\" access level on documents means a rental agreement is visible only to the people listed on that unit plus the board.",
+        "author": "Reboooot",
+        "link": "/dashboard/units.php"
+    },
+    {
+        "id": "cl-20260510-125500-z9y2",
+        "at": "2026-05-10T12:55:00-04:00",
+        "type": "improvement",
+        "title": "At-a-glance dashboard tiles: rules, photos, and total members",
+        "description": "The dashboard home now shows seven counts you can click into instead of five — Members (every active user), Units, Rules, Documents, Photos (image media), Posts, and Committees. The grid auto-fits so it stays tidy on narrow screens.",
+        "author": "Reboooot",
+        "link": "/dashboard/"
+    },
+    {
         "id": "cl-20260510-110000-z9d1",
         "at": "2026-05-10T11:00:00-04:00",
         "type": "design",

@@ -15,10 +15,21 @@ if ($type === 'document') {
     if (!$row) { http_response_code(404); die('Not found'); }
 
     // Access-level enforcement. Uses viewing_role() so view-as-homeowner
-    // properly blocks board-only docs from being downloaded — exit view-as
+    // properly blocks restricted docs from being downloaded — exit view-as
     // mode if you actually need the file.
     if ($row['access_level'] === 'board_only' && !role_can_manage(viewing_role())) {
         http_response_code(403); die('Forbidden');
+    }
+    // unit_only: managers always allowed; otherwise the user must be on
+    // unit_occupants for this document's unit.
+    if ($row['access_level'] === 'unit_only' && !role_can_manage(viewing_role())) {
+        $allowed = false;
+        if (!empty($row['unit_id'])) {
+            $check = db()->prepare('SELECT 1 FROM unit_occupants WHERE unit_id = ? AND user_id = ? LIMIT 1');
+            $check->execute([(int)$row['unit_id'], (int)$_SESSION['user_id']]);
+            $allowed = (bool)$check->fetchColumn();
+        }
+        if (!$allowed) { http_response_code(403); die('Forbidden'); }
     }
     $relative = $row['file_path'];
     $filename = $row['title'];

@@ -85,7 +85,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'upload'
     $description = trim((string)($_POST['description'] ?? ''));
     $category    = trim((string)($_POST['category'] ?? 'General'));
     $access      = $_POST['access_level'] ?? 'members_only';
-    if (!in_array($access, ['public', 'members_only', 'board_only'], true)) $access = 'members_only';
+    $unitId      = $_POST['unit_id'] !== '' ? (int)$_POST['unit_id'] : null;
+    if (!in_array($access, ['public', 'members_only', 'board_only', 'unit_only'], true)) $access = 'members_only';
+    // unit_only without a unit makes no sense — fall back to members_only.
+    if ($access === 'unit_only' && !$unitId) $access = 'members_only';
+    // Validate unit belongs to this association.
+    if ($unitId) {
+        $check = db()->prepare('SELECT 1 FROM units WHERE id = ? AND association_id = ?');
+        $check->execute([$unitId, $assocId]);
+        if (!$check->fetchColumn()) $unitId = null;
+    }
 
     if ($title === '') {
         $flashError = 'Title is required.';
@@ -121,17 +130,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'upload'
                 $flashError = 'Could not save file. Check storage permissions.';
             } else {
                 $stmt = db()->prepare(
-                    'INSERT INTO documents (association_id, title, description, category, file_path, file_type, access_level, uploaded_by, version)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                    'INSERT INTO documents (association_id, unit_id, title, description, category, file_path, file_type, access_level, uploaded_by, version)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
                 );
                 $stmt->execute([
-                    $assocId, $title, $description, $category, $relPath,
+                    $assocId, $unitId, $title, $description, $category, $relPath,
                     $allowed[$ext], $access, (int)$user['id'], '1.0',
                 ]);
                 $newId = (int)db()->lastInsertId();
-                audit('document.uploaded', ['title' => $title, 'access' => $access], $newId, 'document');
+                audit('document.uploaded', ['title' => $title, 'access' => $access, 'unit_id' => $unitId], $newId, 'document');
                 flash('success', "Uploaded \"$title\".");
-                redirect('/dashboard/documents.php');
+                redirect($unitId ? '/dashboard/unit.php?id=' . $unitId : '/dashboard/documents.php');
             }
         }
     }
@@ -158,17 +167,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'delete'
 // --- Listing query (filters) ---
 $qCategory = trim((string)($_GET['category'] ?? ''));
 $qSearch   = trim((string)($_GET['q'] ?? ''));
+$qUnitId   = (int)($_GET['filter_unit_id'] ?? 0);
 
-$sql = 'SELECT d.*, CONCAT(IFNULL(u.first_name,""), " ", IFNULL(u.last_name,"")) AS uploader
-        FROM documents d LEFT JOIN users u ON u.id = d.uploaded_by
+$sql = 'SELECT d.*, CONCAT(IFNULL(u.first_name,""), " ", IFNULL(u.last_name,"")) AS uploader,
+               un.unit_number AS unit_label
+        FROM documents d
+        LEFT JOIN users u ON u.id = d.uploaded_by
+        LEFT JOIN units un ON un.id = d.unit_id
         WHERE d.association_id = ?';
 $params = [$assocId];
 if ($qCategory !== '') { $sql .= ' AND d.category = ?'; $params[] = $qCategory; }
 if ($qSearch !== '')   { $sql .= ' AND (d.title LIKE ? OR d.description LIKE ?)'; $params[] = "%$qSearch%"; $params[] = "%$qSearch%"; }
-// Hide board-only docs from anyone who isn't allowed to manage. Uses viewing_role
-// so view-as-homeowner correctly suppresses them in the listing too.
+if ($qUnitId)          { $sql .= ' AND d.unit_id = ?'; $params[] = $qUnitId; }
+
+// Visibility (uses viewing_role for view-as fidelity):
+//   - Managers see everything.
+//   - Non-managers: board_only docs are hidden; unit_only docs are visible
+//     only to occupants of that unit.
 if (!role_can_manage(viewing_role())) {
-    $sql .= ' AND d.access_level <> "board_only"';
+    $sql .= " AND d.access_level <> 'board_only'
+              AND (d.access_level <> 'unit_only'
+                   OR d.unit_id IN (SELECT unit_id FROM unit_occupants WHERE user_id = ?))";
+    $params[] = (int)$user['id'];
 }
 $sql .= ' ORDER BY d.created_at DESC LIMIT 200';
 $stmt = db()->prepare($sql);
@@ -196,6 +216,17 @@ sort($filterCategories);
 
 $showUpload    = ($_GET['action'] ?? '') === 'new' && $canManage;
 $showManageCat = ($_GET['manage_cats'] ?? '') === '1' && $canManage;
+
+// Pre-selected unit (from /dashboard/unit.php "+ Upload to unit" link, or from filter)
+$preselectUnitId = (int)($_GET['unit_id'] ?? 0);
+
+// Units list for the upload dropdown + listing filter (manager-relevant only).
+$unitsList = [];
+if ($canManage) {
+    $u = db()->prepare('SELECT id, unit_number FROM units WHERE association_id = ? ORDER BY CAST(unit_number AS UNSIGNED), unit_number');
+    $u->execute([$assocId]);
+    $unitsList = $u->fetchAll();
+}
 $page_title = 'Documents — ' . $association['name'];
 require __DIR__ . '/../includes/header.php';
 ?>
@@ -294,18 +325,29 @@ require __DIR__ . '/../includes/header.php';
             </div>
             <div class="form-row form-row--2">
                 <div class="field">
+                    <label class="field__label" for="unit_id">Attach to unit (optional)</label>
+                    <select class="select" id="unit_id" name="unit_id">
+                        <option value="">— Association-wide —</option>
+                        <?php foreach ($unitsList as $u_): ?>
+                            <option value="<?= (int)$u_['id'] ?>" <?= $preselectUnitId === (int)$u_['id'] ? 'selected' : '' ?>>Unit <?= e((string)$u_['unit_number']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <div class="field__hint">Pick a unit for rental agreements, deeds, and anything specific to one home.</div>
+                </div>
+                <div class="field">
                     <label class="field__label" for="access_level">Access</label>
                     <select class="select" id="access_level" name="access_level">
                         <option value="public">Public — anyone with the link</option>
-                        <option value="members_only" selected>Members only</option>
+                        <option value="members_only" <?= !$preselectUnitId ? 'selected' : '' ?>>Members only</option>
                         <option value="board_only">Board only</option>
+                        <option value="unit_only" <?= $preselectUnitId ? 'selected' : '' ?>>Unit only — its occupants + board</option>
                     </select>
                 </div>
-                <div class="field">
-                    <label class="field__label" for="file">File (max 25 MB)</label>
-                    <input class="input" type="file" id="file" name="file" required>
-                    <div class="field__hint">PDF, Word, Excel, images, txt, csv.</div>
-                </div>
+            </div>
+            <div class="field">
+                <label class="field__label" for="file">File (max 25 MB)</label>
+                <input class="input" type="file" id="file" name="file" required>
+                <div class="field__hint">PDF, Word, Excel, images, txt, csv.</div>
             </div>
             <div class="field">
                 <label class="field__label" for="description">Description (optional)</label>
@@ -319,15 +361,26 @@ require __DIR__ . '/../includes/header.php';
     </div>
     <?php endif; ?>
 
-    <form method="get" class="row" style="margin-bottom: var(--sp-4); gap: var(--sp-3);">
-        <input class="input" type="search" name="q" placeholder="Search title or description" value="<?= e($qSearch) ?>" style="max-width: 320px;">
-        <select class="select" name="category" style="max-width: 220px;">
+    <form method="get" class="row" style="margin-bottom: var(--sp-4); gap: var(--sp-3); flex-wrap: wrap;">
+        <input class="input" type="search" name="q" placeholder="Search title or description" value="<?= e($qSearch) ?>" style="max-width: 280px;">
+        <select class="select" name="category" style="max-width: 200px;">
             <option value="">All categories</option>
             <?php foreach ($filterCategories as $c): ?>
                 <option value="<?= e($c) ?>" <?= $c === $qCategory ? 'selected' : '' ?>><?= e($c) ?></option>
             <?php endforeach; ?>
         </select>
+        <?php if ($canManage && $unitsList): ?>
+            <select class="select" name="filter_unit_id" style="max-width: 200px;">
+                <option value="0">All units</option>
+                <?php foreach ($unitsList as $u_): ?>
+                    <option value="<?= (int)$u_['id'] ?>" <?= $qUnitId === (int)$u_['id'] ? 'selected' : '' ?>>Unit <?= e((string)$u_['unit_number']) ?></option>
+                <?php endforeach; ?>
+            </select>
+        <?php endif; ?>
         <button class="btn btn--ghost" type="submit">Filter</button>
+        <?php if ($qSearch !== '' || $qCategory !== '' || $qUnitId): ?>
+            <a class="btn btn--ghost" href="/dashboard/documents.php">Clear</a>
+        <?php endif; ?>
     </form>
 
     <?php if (!$rows): ?>
@@ -339,6 +392,7 @@ require __DIR__ . '/../includes/header.php';
             <tr>
                 <th>Title</th>
                 <th>Category</th>
+                <th>Unit</th>
                 <th>Access</th>
                 <th>Uploaded</th>
                 <th style="text-align:right;">Actions</th>
@@ -346,8 +400,12 @@ require __DIR__ . '/../includes/header.php';
         </thead>
         <tbody>
         <?php foreach ($rows as $r):
-            $accessClass = $r['access_level'] === 'board_only' ? 'badge--navy'
-                         : ($r['access_level'] === 'public' ? 'badge--success' : 'badge--info');
+            $accessClass = match ($r['access_level']) {
+                'board_only' => 'badge--navy',
+                'public'     => 'badge--success',
+                'unit_only'  => 'badge--orange',
+                default      => 'badge--info',
+            };
         ?>
             <tr>
                 <td>
@@ -357,6 +415,13 @@ require __DIR__ . '/../includes/header.php';
                     <?php endif; ?>
                 </td>
                 <td><?= e($r['category'] ?: '—') ?></td>
+                <td>
+                    <?php if (!empty($r['unit_label'])): ?>
+                        <a href="/dashboard/unit.php?id=<?= (int)$r['unit_id'] ?>"><?= e((string)$r['unit_label']) ?></a>
+                    <?php else: ?>
+                        <span class="muted">—</span>
+                    <?php endif; ?>
+                </td>
                 <td><span class="badge <?= $accessClass ?>"><?= e(str_replace('_',' ',$r['access_level'])) ?></span></td>
                 <td>
                     <?= e(date('M j, Y', strtotime($r['created_at']))) ?>
