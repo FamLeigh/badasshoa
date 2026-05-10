@@ -107,6 +107,26 @@ $userInitial = strtoupper(substr(trim((string)($_SESSION['name'] ?? $_SESSION['e
 </head>
 <body class="<?= e($page_class) ?> <?= e($shellClass) ?>" data-layout="<?= e($page_layout) ?>">
 
+<?php
+// Email-paused warning: visible only to super admins (cross-tenant operators)
+// when the mail driver is 'log' in production. Reminds Kevin (and any future
+// admin) that no outbound mail is being sent until config is flipped back.
+$_mailDriver = (string)(config()['mail']['driver'] ?? '');
+$_envProd    = (string)(config()['env'] ?? '') === 'production';
+if ($_envProd && $_mailDriver === 'log' && ($_SESSION['role'] ?? '') === 'super_admin'):
+?>
+<div class="mail-paused-banner" role="status">
+    <div class="container row row--between" style="gap: var(--sp-3); flex-wrap: wrap; align-items: center;">
+        <div>
+            <strong>📨 Email sending is paused.</strong>
+            <span style="opacity: 0.85; font-size: var(--fs-sm);">
+                Outbound mail (invitations, password resets, concern notifications, etc.) is going to <code>storage/logs/mail.log</code> instead of inboxes. Flip <code>config.php → mail.driver</code> back to <code>msmtp</code> on the server when you're ready to resume.
+            </span>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
 <?php if (is_viewing_as()): ?>
 <div class="view-as-banner" role="status">
     <div class="container row row--between" style="gap: var(--sp-3); flex-wrap: wrap; align-items: center;">

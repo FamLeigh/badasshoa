@@ -587,6 +587,20 @@
 }
 .rule-body-toggle:hover { text-decoration: underline; }
 
+/* ============ Email-paused banner (super-admin only, prod-only) ===========
+   Renders when config.mail.driver === 'log' in production so the super admin
+   sees a clear "no email is going out right now" signal on every page. */
+.mail-paused-banner {
+    background: #fff8d6;
+    color: #5d4a00;
+    border-bottom: 2px solid #e9c41a;
+    padding: var(--sp-3) var(--sp-4);
+    font-size: var(--fs-sm);
+    position: relative;
+    z-index: calc(var(--z-nav) + 1);
+}
+.mail-paused-banner strong { color: #5d4a00; }
+
 /* ============ Impersonation banner (super-admin "Log in as") ============ */
 .impersonation-banner {
     background: var(--color-orange);
