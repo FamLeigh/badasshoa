@@ -1,5 +1,14 @@
 [
     {
+        "id": "cl-20260512-110000-concerns2",
+        "at": "2026-05-12T11:00:00-04:00",
+        "type": "feature",
+        "title": "Concerns can now say who or what they're about + cite rules",
+        "description": "The Submit-a-concern form has a new optional 'Who or what is this about?' section with three pickers: a type-ahead member search ('the loud party was at John in 412'), a unit dropdown ('happened in Unit 217'), and a rule citation chip widget ('violates rule 3.4 No barbecues on balconies, type to filter by number or keyword, click chips to remove'). On the concern's detail page the targets surface in a warning-yellow card visible only to the board and the submitter — the person named never sees they were named. Foundation for proper rule-violation tracking down the line.",
+        "author": "Reboooot",
+        "link": "/dashboard/concerns.php?action=submit"
+    },
+    {
         "id": "cl-20260512-100000-marketing",
         "at": "2026-05-12T10:00:00-04:00",
         "type": "content",

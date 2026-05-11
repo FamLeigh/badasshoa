@@ -19,31 +19,78 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'submit'
     $anon     = isset($_POST['is_anonymous']) ? 1 : 0;
     if (!in_array($type, ['complaint','compliment','suggestion'], true)) $type = 'complaint';
 
+    // Optional structured targets — "who/what is this about?"
+    $targetUserId = ($_POST['target_user_id'] ?? '') !== '' ? (int)$_POST['target_user_id'] : null;
+    $targetUnitId = ($_POST['target_unit_id'] ?? '') !== '' ? (int)$_POST['target_unit_id'] : null;
+    // Validate that both belong to this association.
+    if ($targetUserId) {
+        $chk = db()->prepare('SELECT 1 FROM users WHERE id = ? AND association_id = ?');
+        $chk->execute([$targetUserId, $assocId]);
+        if (!$chk->fetchColumn()) $targetUserId = null;
+    }
+    if ($targetUnitId) {
+        $chk = db()->prepare('SELECT 1 FROM units WHERE id = ? AND association_id = ?');
+        $chk->execute([$targetUnitId, $assocId]);
+        if (!$chk->fetchColumn()) $targetUnitId = null;
+    }
+    // Cited rules — array of rule IDs from the multi-pick chip widget.
+    $ruleIds = [];
+    foreach ((array)($_POST['rule_ids'] ?? []) as $rid) {
+        $rid = (int)$rid;
+        if ($rid > 0) $ruleIds[] = $rid;
+    }
+    $ruleIds = array_values(array_unique($ruleIds));
+    if ($ruleIds) {
+        $placeholders = implode(',', array_fill(0, count($ruleIds), '?'));
+        $chk = db()->prepare("SELECT id FROM rules WHERE association_id = ? AND id IN ($placeholders)");
+        $chk->execute(array_merge([$assocId], $ruleIds));
+        $ruleIds = array_map('intval', array_column($chk->fetchAll(), 'id'));
+    }
+
     if ($subject === '')  $flashError = 'Subject is required.';
     elseif ($body === '') $flashError = 'Tell us a bit more — body is required.';
     else {
-        db()->prepare(
-            'INSERT INTO concerns (association_id, submitter_user_id, type, category, subject, body, is_anonymous)
-             VALUES (?, ?, ?, ?, ?, ?, ?)'
-        )->execute([$assocId, (int)$user['id'], $type, $cat ?: null, $subject, $body, $anon]);
-        $newId = (int)db()->lastInsertId();
-        audit('concern.submitted', ['type' => $type, 'subject' => $subject, 'is_anonymous' => $anon], $newId, 'concern');
+        db()->beginTransaction();
+        try {
+            db()->prepare(
+                'INSERT INTO concerns (association_id, submitter_user_id, target_user_id, target_unit_id, type, category, subject, body, is_anonymous)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            )->execute([$assocId, (int)$user['id'], $targetUserId, $targetUnitId, $type, $cat ?: null, $subject, $body, $anon]);
+            $newId = (int)db()->lastInsertId();
 
-        // Notify the board.
-        $name = $anon ? 'A member (anonymous)' : (trim((string)$user['first_name'] . ' ' . (string)$user['last_name']) ?: (string)$user['email']);
-        notify_association_managers(
-            $assocId,
-            "[{$association['name']}] New {$type}: {$subject}",
-            "$name has filed a new {$type} for {$association['name']}.\n\n"
-            . "Subject: {$subject}\n"
-            . ($cat !== '' ? "Category: {$cat}\n" : '')
-            . "\n{$body}\n\n"
-            . "Review and respond:\n"
-            . "https://badasshoa.com/dashboard/concerns.php?id={$newId}\n"
-        );
+            if ($ruleIds) {
+                $ins = db()->prepare('INSERT IGNORE INTO concern_rule_citations (concern_id, rule_id) VALUES (?, ?)');
+                foreach ($ruleIds as $rid) { $ins->execute([$newId, $rid]); }
+            }
+            db()->commit();
+        } catch (Throwable $e) {
+            db()->rollBack();
+            $flashError = 'Submit failed: ' . $e->getMessage();
+        }
 
-        flash('success', 'Submitted. The board will review and respond — you\'ll get an email when they do.');
-        redirect('/dashboard/concerns.php?id=' . $newId);
+        if (!$flashError) {
+            audit('concern.submitted', [
+                'type' => $type, 'subject' => $subject, 'is_anonymous' => $anon,
+                'target_user_id' => $targetUserId, 'target_unit_id' => $targetUnitId,
+                'rules_cited' => count($ruleIds),
+            ], $newId, 'concern');
+
+            // Notify the board.
+            $name = $anon ? 'A member (anonymous)' : (trim((string)$user['first_name'] . ' ' . (string)$user['last_name']) ?: (string)$user['email']);
+            notify_association_managers(
+                $assocId,
+                "[{$association['name']}] New {$type}: {$subject}",
+                "$name has filed a new {$type} for {$association['name']}.\n\n"
+                . "Subject: {$subject}\n"
+                . ($cat !== '' ? "Category: {$cat}\n" : '')
+                . "\n{$body}\n\n"
+                . "Review and respond:\n"
+                . "https://badasshoa.com/dashboard/concerns.php?id={$newId}\n"
+            );
+
+            flash('success', 'Submitted. The board will review and respond — you\'ll get an email when they do.');
+            redirect('/dashboard/concerns.php?id=' . $newId);
+        }
     }
 }
 
@@ -155,17 +202,37 @@ if ($detailId) {
     $stmt = db()->prepare(
         'SELECT c.*,
                 TRIM(CONCAT(IFNULL(s.first_name,""), " ", IFNULL(s.last_name,""))) AS submitter_name,
-                s.email AS submitter_email
+                s.email AS submitter_email,
+                TRIM(CONCAT(IFNULL(t.first_name,""), " ", IFNULL(t.last_name,""))) AS target_name,
+                t.unit_number AS target_user_unit,
+                u.unit_number AS target_unit_number
            FROM concerns c
            LEFT JOIN users s ON s.id = c.submitter_user_id
+           LEFT JOIN users t ON t.id = c.target_user_id
+           LEFT JOIN units u ON u.id = c.target_unit_id
           WHERE c.id = ? AND c.association_id = ?'
     );
     $stmt->execute([$detailId, $assocId]);
     $detail = $stmt->fetch() ?: null;
 
-    // Submitters can only see their own concerns. Managers see all.
+    // Submitters can only see their own concerns. Managers see all. Target
+    // persons are NOT given visibility — they never see they were named.
     if ($detail && !$canManage && (int)$detail['submitter_user_id'] !== (int)$user['id']) {
         $detail = null; // pretend it doesn't exist
+    }
+
+    // Cited rules (visible to board + submitter only — same gate as the row itself).
+    $citedRules = [];
+    if ($detail) {
+        $rStmt = db()->prepare(
+            'SELECT r.id, r.rule_number, r.title, r.source
+               FROM concern_rule_citations crc
+               JOIN rules r ON r.id = crc.rule_id
+              WHERE crc.concern_id = ?
+              ORDER BY CAST(r.rule_number AS UNSIGNED), r.rule_number'
+        );
+        $rStmt->execute([$detailId]);
+        $citedRules = $rStmt->fetchAll();
     }
 
     if ($detail) {
@@ -232,6 +299,33 @@ if (!$detail && ($_GET['action'] ?? '') !== 'submit') {
 
 $showSubmit = ($_GET['action'] ?? '') === 'submit';
 
+// Picker sources for the submit form: members for "about a person",
+// units for "about a unit", and rules for citations. Loaded once.
+$membersForPicker = [];
+$unitsForPicker   = [];
+$rulesForPicker   = [];
+if ($showSubmit) {
+    $m = db()->prepare("SELECT id, first_name, last_name, unit_number
+                          FROM users
+                         WHERE association_id = ? AND status <> 'inactive'
+                         ORDER BY last_name, first_name");
+    $m->execute([$assocId]);
+    $membersForPicker = $m->fetchAll();
+
+    $u = db()->prepare('SELECT id, unit_number FROM units
+                         WHERE association_id = ?
+                         ORDER BY CAST(unit_number AS UNSIGNED), unit_number');
+    $u->execute([$assocId]);
+    $unitsForPicker = $u->fetchAll();
+
+    $r = db()->prepare('SELECT id, rule_number, title, source
+                         FROM rules
+                        WHERE association_id = ?
+                        ORDER BY CAST(rule_number AS UNSIGNED), rule_number');
+    $r->execute([$assocId]);
+    $rulesForPicker = $r->fetchAll();
+}
+
 $active = 'concerns';
 $page_title = 'Concerns — ' . $association['name'];
 require __DIR__ . '/../includes/header.php';
@@ -280,6 +374,40 @@ function concern_status_badge(string $s): string {
         </div>
         <?php endif; ?>
     </div>
+
+    <?php $hasTargets = !empty($detail['target_user_id']) || !empty($detail['target_unit_id']) || !empty($citedRules); ?>
+    <?php if ($hasTargets): ?>
+        <div class="card card--padded" style="margin-bottom: var(--sp-4); border-left: 3px solid var(--color-warning); background: var(--color-warning-bg);">
+            <strong>About:</strong>
+            <ul style="margin: var(--sp-2) 0 0; padding-left: 1.2em; font-size: var(--fs-sm);">
+                <?php if (!empty($detail['target_user_id']) && !empty($detail['target_name'])): ?>
+                    <li>
+                        <strong><?= e((string)$detail['target_name']) ?></strong>
+                        <?php if (!empty($detail['target_user_unit'])): ?>
+                            <span class="muted">· Unit <?= e((string)$detail['target_user_unit']) ?></span>
+                        <?php endif; ?>
+                    </li>
+                <?php endif; ?>
+                <?php if (!empty($detail['target_unit_id']) && !empty($detail['target_unit_number'])): ?>
+                    <li><strong>Unit <?= e((string)$detail['target_unit_number']) ?></strong></li>
+                <?php endif; ?>
+                <?php if (!empty($citedRules)): ?>
+                    <li>
+                        <strong>Cited rule<?= count($citedRules) === 1 ? '' : 's' ?>:</strong>
+                        <?php foreach ($citedRules as $i => $cr): ?>
+                            <a href="/dashboard/rule.php?id=<?= (int)$cr['id'] ?>" target="_blank" rel="noopener">
+                                <?php if (!empty($cr['rule_number'])): ?>#<?= e((string)$cr['rule_number']) ?> ·<?php endif; ?>
+                                <?= e((string)$cr['title']) ?>
+                            </a><?= $i < count($citedRules) - 1 ? '; ' : '' ?>
+                        <?php endforeach; ?>
+                    </li>
+                <?php endif; ?>
+            </ul>
+            <?php if (!empty($detail['target_user_id'])): ?>
+                <p class="muted" style="font-size: var(--fs-xs); margin: var(--sp-2) 0 0;">⚠ Privacy: the named person doesn't see they were named — board + submitter only.</p>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
 
     <?php if ($canManage && !empty($relatedWorkOrders)): ?>
         <div class="card card--padded" style="margin-bottom: var(--sp-4); border-left: 3px solid var(--color-info); background: var(--color-info-bg);">
@@ -418,6 +546,63 @@ function concern_status_badge(string $s): string {
             <label class="field__label" for="cb">Details</label>
             <textarea class="textarea" id="cb" name="body" rows="6" required placeholder="What happened, when, where, and what would resolve it?"></textarea>
         </div>
+
+        <!-- Optional structured targets — who/what is this about? -->
+        <fieldset style="border: 1px solid var(--color-border); border-radius: var(--r-md); padding: var(--sp-3) var(--sp-4); margin-bottom: var(--sp-4);">
+            <legend style="padding: 0 var(--sp-2); color: var(--color-text-soft); font-size: var(--fs-sm);">Who or what is this about? <span class="muted">(optional)</span></legend>
+            <p class="muted" style="font-size: var(--fs-xs); margin: 0 0 var(--sp-3);">⚠ The person named below <strong>does not see</strong> their name — only the board + you do.</p>
+
+            <div class="form-row form-row--2">
+                <div class="field" style="position: relative;">
+                    <label class="field__label" for="c-person">About a person</label>
+                    <?php
+                    $personTypeahead = [];
+                    foreach ($membersForPicker as $m) {
+                        $nm = trim((string)$m['first_name'] . ' ' . (string)$m['last_name']);
+                        if ($nm === '') continue;
+                        $personTypeahead[] = ['id' => (int)$m['id'], 'name' => $nm, 'unit' => (string)($m['unit_number'] ?? '')];
+                    }
+                    ?>
+                    <input class="input" type="text" id="c-person-search" autocomplete="off"
+                           placeholder="Type a name…"
+                           data-typeahead='<?= e(json_encode($personTypeahead, JSON_HEX_APOS | JSON_HEX_QUOT)) ?>'
+                           aria-autocomplete="list" aria-controls="c-person-results">
+                    <input type="hidden" id="c-person" name="target_user_id" value="">
+                    <div id="c-person-results" class="typeahead-list" role="listbox" hidden></div>
+                </div>
+                <div class="field">
+                    <label class="field__label" for="c-unit">About a unit</label>
+                    <select class="select" id="c-unit" name="target_unit_id">
+                        <option value="">— not unit-specific —</option>
+                        <?php foreach ($unitsForPicker as $u): ?>
+                            <option value="<?= (int)$u['id'] ?>">Unit <?= e((string)$u['unit_number']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </div>
+
+            <div class="field" style="position: relative;">
+                <label class="field__label" for="c-rule-search">Cite rule(s)</label>
+                <?php
+                $ruleTypeahead = [];
+                foreach ($rulesForPicker as $r) {
+                    $ruleTypeahead[] = [
+                        'id'    => (int)$r['id'],
+                        'num'   => (string)($r['rule_number'] ?? ''),
+                        'title' => (string)$r['title'],
+                        'src'   => (string)($r['source'] ?? ''),
+                    ];
+                }
+                ?>
+                <input class="input" type="text" id="c-rule-search" autocomplete="off"
+                       placeholder="Type a rule number or keyword to add (e.g. '3.4' or 'noise')…"
+                       data-rule-typeahead='<?= e(json_encode($ruleTypeahead, JSON_HEX_APOS | JSON_HEX_QUOT)) ?>'>
+                <div id="c-rule-results" class="typeahead-list" role="listbox" hidden></div>
+                <div id="c-rule-chips" style="display:flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;"></div>
+                <div class="field__hint">Pick the rule(s) this concern relates to. Searchable by number or title.</div>
+            </div>
+        </fieldset>
+
         <label style="display:flex; align-items:center; gap: var(--sp-2); margin-bottom: var(--sp-2);">
             <input type="checkbox" name="is_anonymous">
             <span>Submit anonymously — board won't see your name. (You still get email updates.)</span>
@@ -520,5 +705,149 @@ function concern_status_badge(string $s): string {
     <?php endif; ?>
 
 </div>
+
+<?php if ($showSubmit): ?>
+<style>
+    .typeahead-list {
+        position: absolute; top: 100%; left: 0; right: 0; z-index: 50;
+        max-height: 280px; overflow-y: auto;
+        background: #fff; border: 1px solid var(--color-border); border-radius: var(--r-md);
+        box-shadow: 0 8px 24px rgba(15,31,61,0.12);
+        margin-top: 2px;
+    }
+    .typeahead-list[hidden] { display: none; }
+    .typeahead-item {
+        padding: 8px 12px; cursor: pointer; font-size: var(--fs-sm);
+        display: flex; justify-content: space-between; align-items: baseline; gap: var(--sp-3);
+    }
+    .typeahead-item:hover, .typeahead-item.is-active { background: var(--color-surface); }
+    .typeahead-item .meta { color: var(--color-text-soft); font-size: var(--fs-xs); }
+    .typeahead-empty { padding: 8px 12px; color: var(--color-text-soft); font-size: var(--fs-sm); font-style: italic; }
+    .rule-chip {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 4px 10px; border-radius: 999px;
+        background: var(--color-warning-bg); color: var(--color-warning);
+        border: 1px solid rgba(182,130,42,0.25);
+        font-size: var(--fs-xs);
+    }
+    .rule-chip button {
+        border: 0; background: transparent; cursor: pointer; padding: 0; color: inherit;
+        font-size: 14px; line-height: 1;
+    }
+</style>
+<script>
+(function () {
+    // ----- Person typeahead (single-select) -----
+    var pInput  = document.getElementById('c-person-search');
+    var pHidden = document.getElementById('c-person');
+    var pList   = document.getElementById('c-person-results');
+    if (pInput && pHidden && pList) {
+        var pData = JSON.parse(pInput.getAttribute('data-typeahead') || '[]');
+        var pActive = -1; var pMatches = [];
+        function norm(s) { return (s || '').toLowerCase(); }
+        function pRender(q) {
+            q = norm(q.trim());
+            pMatches = !q ? pData.slice(0, 10) :
+                pData.filter(function (m) {
+                    return norm(m.name).indexOf(q) !== -1 || norm(m.unit).indexOf(q) !== -1;
+                }).slice(0, 10);
+            pList.innerHTML = '';
+            if (!pMatches.length) { pList.innerHTML = '<div class="typeahead-empty">No members match.</div>'; pList.hidden = false; return; }
+            pMatches.forEach(function (m, i) {
+                var row = document.createElement('div');
+                row.className = 'typeahead-item' + (i === pActive ? ' is-active' : '');
+                row.innerHTML = '<span>' + esc(m.name) + '</span>' + (m.unit ? '<span class="meta">Unit ' + esc(m.unit) + '</span>' : '');
+                row.addEventListener('mousedown', function (e) { e.preventDefault(); pPick(m); });
+                pList.appendChild(row);
+            });
+            pList.hidden = false;
+        }
+        function pPick(m) { pInput.value = m.name + (m.unit ? ' · Unit ' + m.unit : ''); pHidden.value = m.id; pList.hidden = true; pActive = -1; }
+        pInput.addEventListener('focus', function () { pRender(pInput.value); });
+        pInput.addEventListener('input', function () { pHidden.value = ''; pActive = -1; pRender(pInput.value); });
+        pInput.addEventListener('keydown', function (e) {
+            if (pList.hidden) return;
+            if (e.key === 'ArrowDown') { e.preventDefault(); pActive = Math.min(pMatches.length - 1, pActive + 1); pRender(pInput.value); }
+            else if (e.key === 'ArrowUp') { e.preventDefault(); pActive = Math.max(0, pActive - 1); pRender(pInput.value); }
+            else if (e.key === 'Enter' && pActive >= 0) { e.preventDefault(); pPick(pMatches[pActive]); }
+            else if (e.key === 'Escape') { pList.hidden = true; }
+        });
+        document.addEventListener('click', function (e) {
+            if (e.target !== pInput && !pList.contains(e.target)) pList.hidden = true;
+        });
+    }
+
+    // ----- Rule typeahead with chips (multi-select) -----
+    var rInput = document.getElementById('c-rule-search');
+    var rList  = document.getElementById('c-rule-results');
+    var rChips = document.getElementById('c-rule-chips');
+    if (rInput && rList && rChips) {
+        var rData = JSON.parse(rInput.getAttribute('data-rule-typeahead') || '[]');
+        var selected = {}; // id → rule
+        var rActive = -1; var rMatches = [];
+
+        function rRender(q) {
+            q = (q || '').toLowerCase().trim();
+            rMatches = rData.filter(function (r) {
+                if (selected[r.id]) return false;
+                if (!q) return true;
+                return ('#' + r.num).toLowerCase().indexOf(q) !== -1
+                    || r.num.toLowerCase().indexOf(q) !== -1
+                    || r.title.toLowerCase().indexOf(q) !== -1;
+            }).slice(0, 10);
+            rList.innerHTML = '';
+            if (!rMatches.length) { rList.innerHTML = '<div class="typeahead-empty">No rules match (or all matches already added).</div>'; rList.hidden = false; return; }
+            rMatches.forEach(function (m, i) {
+                var row = document.createElement('div');
+                row.className = 'typeahead-item' + (i === rActive ? ' is-active' : '');
+                row.innerHTML = '<span><strong>' + (m.num ? '#' + esc(m.num) + ' · ' : '') + '</strong>' + esc(m.title) + '</span>'
+                              + '<span class="meta">' + esc(m.src) + '</span>';
+                row.addEventListener('mousedown', function (e) { e.preventDefault(); rAdd(m); });
+                rList.appendChild(row);
+            });
+            rList.hidden = false;
+        }
+        function rAdd(m) {
+            selected[m.id] = m;
+            rDrawChips();
+            rInput.value = '';
+            rRender('');
+            rInput.focus();
+        }
+        function rRemove(id) { delete selected[id]; rDrawChips(); rRender(rInput.value); }
+        function rDrawChips() {
+            rChips.innerHTML = '';
+            Object.keys(selected).forEach(function (id) {
+                var m = selected[id];
+                var c = document.createElement('span');
+                c.className = 'rule-chip';
+                c.innerHTML = (m.num ? '#' + esc(m.num) + ' · ' : '') + esc(m.title) + '<button type="button" aria-label="Remove">×</button>'
+                            + '<input type="hidden" name="rule_ids[]" value="' + m.id + '">';
+                c.querySelector('button').addEventListener('click', function () { rRemove(m.id); });
+                rChips.appendChild(c);
+            });
+        }
+        rInput.addEventListener('focus', function () { rRender(rInput.value); });
+        rInput.addEventListener('input', function () { rActive = -1; rRender(rInput.value); });
+        rInput.addEventListener('keydown', function (e) {
+            if (rList.hidden) return;
+            if (e.key === 'ArrowDown') { e.preventDefault(); rActive = Math.min(rMatches.length - 1, rActive + 1); rRender(rInput.value); }
+            else if (e.key === 'ArrowUp') { e.preventDefault(); rActive = Math.max(0, rActive - 1); rRender(rInput.value); }
+            else if (e.key === 'Enter' && rActive >= 0) { e.preventDefault(); rAdd(rMatches[rActive]); }
+            else if (e.key === 'Escape') { rList.hidden = true; }
+        });
+        document.addEventListener('click', function (e) {
+            if (e.target !== rInput && !rList.contains(e.target) && !rChips.contains(e.target)) rList.hidden = true;
+        });
+    }
+
+    function esc(s) {
+        return String(s).replace(/[&<>"']/g, function (c) {
+            return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c];
+        });
+    }
+})();
+</script>
+<?php endif; ?>
 
 <?php require __DIR__ . '/../includes/footer.php'; ?>
