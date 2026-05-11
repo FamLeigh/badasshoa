@@ -17,6 +17,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'add') {
     $baths   = $_POST['baths'] !== '' ? (float)$_POST['baths'] : null;
     $sqft    = $_POST['square_footage'] !== '' ? (int)$_POST['square_footage'] : null;
     $pct     = $_POST['ownership_percent'] !== '' ? (float)$_POST['ownership_percent'] : null;
+    $hoaA    = $_POST['annual_hoa_assessment']    !== '' ? (float)$_POST['annual_hoa_assessment']    : null;
+    $garA    = $_POST['annual_garage_assessment'] !== '' ? (float)$_POST['annual_garage_assessment'] : null;
     $garage  = trim((string)($_POST['garage_number'] ?? ''));
     $parking = trim((string)($_POST['parking_spot'] ?? ''));
     $notes   = trim((string)($_POST['notes'] ?? ''));
@@ -27,9 +29,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'add') {
     } else {
         try {
             db()->prepare(
-                'INSERT INTO units (association_id, unit_number, type, bedrooms, baths, square_footage, ownership_percent, garage_number, parking_spot, notes)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-            )->execute([$assocId, $num, $type, $beds, $baths, $sqft, $pct, $garage ?: null, $parking ?: null, $notes ?: null]);
+                'INSERT INTO units (association_id, unit_number, type, bedrooms, baths, square_footage, ownership_percent, annual_hoa_assessment, annual_garage_assessment, garage_number, parking_spot, notes)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            )->execute([$assocId, $num, $type, $beds, $baths, $sqft, $pct, $hoaA, $garA, $garage ?: null, $parking ?: null, $notes ?: null]);
             $newId = (int)db()->lastInsertId();
             audit('unit.added', ['unit_number' => $num], $newId, 'unit');
             flash('success', "Unit \"$num\" registered.");
@@ -79,6 +81,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'import'
                 $baths   = $get('baths');
                 $sqft    = $get('square_footage');
                 $pct     = $get('ownership_percent');
+                $hoaA    = $get('annual_hoa_assessment');
+                $garA    = $get('annual_garage_assessment');
                 $garage  = $get('garage_number');
                 $parking = $get('parking_spot');
                 $rNotes  = $get('notes');
@@ -97,6 +101,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'import'
                     $baths !== '' ? (float)$baths : null,
                     $sqft  !== '' ? (int)$sqft : null,
                     $pct   !== '' ? (float)$pct : null,
+                    $hoaA  !== '' ? (float)$hoaA : null,
+                    $garA  !== '' ? (float)$garA : null,
                     $garage  ?: null,
                     $parking ?: null,
                     $rNotes  ?: null,
@@ -106,6 +112,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'import'
                     db()->prepare(
                         'UPDATE units
                             SET type = ?, bedrooms = ?, baths = ?, square_footage = ?, ownership_percent = ?,
+                                annual_hoa_assessment = ?, annual_garage_assessment = ?,
                                 garage_number = ?, parking_spot = ?, notes = ?
                           WHERE id = ?'
                     )->execute(array_merge($params, [$existingId]));
@@ -113,8 +120,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'import'
                 } else {
                     db()->prepare(
                         'INSERT INTO units (association_id, unit_number, type, bedrooms, baths, square_footage,
-                                            ownership_percent, garage_number, parking_spot, notes)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                                            ownership_percent, annual_hoa_assessment, annual_garage_assessment,
+                                            garage_number, parking_spot, notes)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
                     )->execute(array_merge([$assocId, $num], $params));
                     $added++;
                 }
@@ -197,12 +205,13 @@ require __DIR__ . '/../includes/header.php';
         <p class="muted" style="font-size: var(--fs-sm);">
             Required column: <code>unit_number</code>. Optional: <code>type</code> (condo / townhouse / single_family / apartment / other),
             <code>bedrooms</code>, <code>baths</code> (e.g. 2.5), <code>square_footage</code>, <code>ownership_percent</code>
-            (e.g. 0.4521), <code>garage_number</code>, <code>parking_spot</code>, <code>notes</code>.
+            (e.g. 0.4521), <code>annual_hoa_assessment</code>, <code>annual_garage_assessment</code>,
+            <code>garage_number</code>, <code>parking_spot</code>, <code>notes</code>.
             Existing unit numbers are <strong>updated</strong> with the new values; new ones are inserted. Header row required.
         </p>
-        <pre style="background: var(--color-surface-2); padding: var(--sp-3); border-radius: var(--r-md); font-size: var(--fs-xs); overflow-x:auto;">unit_number,type,bedrooms,baths,square_footage,ownership_percent,garage_number,parking_spot,notes
-101A,condo,2,2.0,1100,0.4521,12,P-7,Corner unit
-421,condo,3,2.5,1450,0.6800,64,,Roof access</pre>
+        <pre style="background: var(--color-surface-2); padding: var(--sp-3); border-radius: var(--r-md); font-size: var(--fs-xs); overflow-x:auto;">unit_number,type,bedrooms,baths,square_footage,ownership_percent,annual_hoa_assessment,annual_garage_assessment,garage_number,parking_spot,notes
+101A,condo,2,2.0,1100,0.4521,4800.00,600.00,12,P-7,Corner unit
+421,condo,3,2.5,1450,0.6800,5400.00,720.00,64,,Roof access</pre>
 
         <form method="post" enctype="multipart/form-data" class="form">
             <?= csrf_field() ?>
@@ -269,6 +278,16 @@ require __DIR__ . '/../includes/header.php';
                 <div class="field">
                     <label class="field__label" for="u-parking">Parking spot</label>
                     <input class="input" id="u-parking" name="parking_spot" maxlength="20" placeholder="P-7">
+                </div>
+            </div>
+            <div class="form-row form-row--2">
+                <div class="field">
+                    <label class="field__label" for="u-hoa">Annual HOA assessment ($)</label>
+                    <input class="input" type="number" step="0.01" min="0" id="u-hoa" name="annual_hoa_assessment" placeholder="4800.00">
+                </div>
+                <div class="field">
+                    <label class="field__label" for="u-gara">Annual garage assessment ($)</label>
+                    <input class="input" type="number" step="0.01" min="0" id="u-gara" name="annual_garage_assessment" placeholder="600.00">
                 </div>
             </div>
             <div class="field">
