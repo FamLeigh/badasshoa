@@ -1,5 +1,14 @@
 [
     {
+        "id": "cl-20260512-090000-batch",
+        "at": "2026-05-12T09:00:00-04:00",
+        "type": "feature",
+        "title": "Architectural review + global search + insurance tracker + settings bug fix",
+        "description": "Three new tools and a critical bug fix:\n\n🏗 Architectural Review at /dashboard/arc.php — owners submit requests to change anything exterior (paint, dish, deck, windows, landscaping) with category, dates, contractor info, estimated cost. Board reviews with a thread, approves / denies / approves-with-conditions, and the submitter gets an email when the decision lands.\n\n🔎 Global search box in the top bar — one search hits rules, documents, announcements, events, concerns, ARC requests, and members. Click any result to open it directly. Honors access controls (board-only docs hide from non-managers, members see only their own concerns + ARC).\n\n📋 Insurance + COIs at /dashboard/insurance.php — track the association's policies and contractor certificates of insurance. Status badges color-code by expiry: expired (red), 30 days (yellow), 90 days (blue), beyond (green). Optional link to the actual PDF on file.\n\n🛡 BUG FIX: editing the Association profile (name / slug / address) used to also wipe the Landing content (vision, about, amenities, contact info, social links) because both forms posted to the same handler that overwrote every column. Each form now scopes its update to its own field set.",
+        "author": "Reboooot",
+        "link": "/dashboard/arc.php"
+    },
+    {
         "id": "cl-20260512-070000-tahead",
         "at": "2026-05-12T07:00:00-04:00",
         "type": "improvement",

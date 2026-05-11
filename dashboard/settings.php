@@ -97,76 +97,90 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'update'
     $twitterUrl   = $normalizeUrl((string)($_POST['twitter_url']   ?? ''));
     $nextdoorUrl  = $normalizeUrl((string)($_POST['nextdoor_url']  ?? ''));
 
-    if ($name === '') {
+    // Which section of the page submitted? Either form posts here, but each
+    // edits a disjoint slice of the row. Without this, posting the Profile
+    // form would clobber the landing-content fields with empty strings.
+    $section = $_POST['section'] ?? 'profile';
+    if (!in_array($section, ['profile', 'content'], true)) $section = 'profile';
+
+    if ($section === 'profile' && $name === '') {
         $flashError = 'Association name is required.';
     } elseif (!$flashError) {
-        // Build dynamic SET clause for image/text fields that may or may not change
-        $extraSql = '';
-        $extraArgs = [];
 
-        // Logo
-        if ($removeLogo) {
-            $extraSql .= ', logo_path = NULL';
-            $existing = (string)($association['logo_path'] ?? '');
-            if ($existing) { $abs = storage_path($existing); if (is_file($abs)) @unlink($abs); }
-        } elseif ($newLogoPath) {
-            $extraSql .= ', logo_path = ?';
-            $extraArgs[] = $newLogoPath;
-        }
+        if ($section === 'profile') {
+            // ---------- PROFILE: name, slug, address, branding, color, public toggle ----------
+            $extraSql = ''; $extraArgs = [];
 
-        // Hero image
-        if ($removeHero) {
-            $extraSql .= ', hero_image_path = NULL';
-            $existing = (string)($association['hero_image_path'] ?? '');
-            if ($existing) { $abs = storage_path($existing); if (is_file($abs)) @unlink($abs); }
-        } elseif ($newHeroPath) {
-            $extraSql .= ', hero_image_path = ?';
-            $extraArgs[] = $newHeroPath;
-        }
+            if ($removeLogo) {
+                $extraSql .= ', logo_path = NULL';
+                $existing = (string)($association['logo_path'] ?? '');
+                if ($existing) { $abs = storage_path($existing); if (is_file($abs)) @unlink($abs); }
+            } elseif ($newLogoPath) {
+                $extraSql .= ', logo_path = ?'; $extraArgs[] = $newLogoPath;
+            }
+            if ($removeHero) {
+                $extraSql .= ', hero_image_path = NULL';
+                $existing = (string)($association['hero_image_path'] ?? '');
+                if ($existing) { $abs = storage_path($existing); if (is_file($abs)) @unlink($abs); }
+            } elseif ($newHeroPath) {
+                $extraSql .= ', hero_image_path = ?'; $extraArgs[] = $newHeroPath;
+            }
 
-        // Geocode the address (best-effort — silent fail). Re-geocode if address changed OR lat/lon is missing.
-        $oldAddrSig = trim(($association['address'] ?? '') . '|' . ($association['city'] ?? '') . '|' . ($association['state_region'] ?? '') . '|' . ($association['postal_code'] ?? '') . '|' . ($association['country'] ?? ''));
-        $newAddrSig = trim(($address ?? '') . '|' . ($city ?? '') . '|' . ($stateReg ?? '') . '|' . ($postal ?? '') . '|' . ($country ?? ''));
-        $hasAddr = $newAddrSig !== '||||';
-        $missingCoords = empty($association['latitude']) || empty($association['longitude']);
-        $latLon = null;
-        if ($hasAddr && ($newAddrSig !== $oldAddrSig || $missingCoords)) {
-            $queryStr = trim(implode(' ', array_filter([$address, $city, $stateReg, $postal, $country])));
-            $latLon = geocode_address($queryStr);
-            $extraSql .= ', latitude = ?, longitude = ?';
-            $extraArgs[] = $latLon['lat'] ?? null;
-            $extraArgs[] = $latLon['lon'] ?? null;
-        }
+            // Geocode the address (best-effort — silent fail). Re-geocode if address changed OR lat/lon is missing.
+            $oldAddrSig = trim(($association['address'] ?? '') . '|' . ($association['city'] ?? '') . '|' . ($association['state_region'] ?? '') . '|' . ($association['postal_code'] ?? '') . '|' . ($association['country'] ?? ''));
+            $newAddrSig = trim(($address ?? '') . '|' . ($city ?? '') . '|' . ($stateReg ?? '') . '|' . ($postal ?? '') . '|' . ($country ?? ''));
+            $hasAddr = $newAddrSig !== '||||';
+            $missingCoords = empty($association['latitude']) || empty($association['longitude']);
+            if ($hasAddr && ($newAddrSig !== $oldAddrSig || $missingCoords)) {
+                $queryStr = trim(implode(' ', array_filter([$address, $city, $stateReg, $postal, $country])));
+                $latLon = geocode_address($queryStr);
+                $extraSql .= ', latitude = ?, longitude = ?';
+                $extraArgs[] = $latLon['lat'] ?? null;
+                $extraArgs[] = $latLon['lon'] ?? null;
+            }
 
-        $slugChanged = $subdomain !== (string)$association['subdomain'];
-        db()->prepare(
-            "UPDATE associations
-             SET name = ?, subdomain = ?, address = ?, city = ?, state_region = ?, postal_code = ?, country = ?,
-                 unit_count = ?, primary_color = ?, public_landing_enabled = ?,
-                 vision_statement = ?, about_text = ?, amenities_text = ?, contact_email = ?, contact_phone = ?,
-                 website_url = ?, facebook_url = ?, instagram_url = ?, twitter_url = ?, nextdoor_url = ?
-                 $extraSql
-             WHERE id = ?"
-        )->execute(array_merge(
-            [
-                $name, $subdomain,
-                $address ?: null, $city ?: null, $stateReg ?: null, $postal ?: null, $country,
-                $units, $primary, $publicLanding,
-                $vision ?: null, $aboutText ?: null, $amenitiesText ?: null, $contactEmail ?: null, $contactPhone ?: null,
+            $slugChanged = $subdomain !== (string)$association['subdomain'];
+            db()->prepare(
+                "UPDATE associations
+                 SET name = ?, subdomain = ?, address = ?, city = ?, state_region = ?, postal_code = ?, country = ?,
+                     unit_count = ?, primary_color = ?, public_landing_enabled = ?
+                     $extraSql
+                 WHERE id = ?"
+            )->execute(array_merge(
+                [
+                    $name, $subdomain,
+                    $address ?: null, $city ?: null, $stateReg ?: null, $postal ?: null, $country,
+                    $units, $primary, $publicLanding,
+                ],
+                $extraArgs,
+                [$assocId]
+            ));
+            audit('association.profile_updated', [
+                'name' => $name,
+                'public_landing_enabled' => $publicLanding,
+                'logo_changed' => $newLogoPath !== null || $removeLogo,
+                'hero_changed' => $newHeroPath !== null || $removeHero,
+                'slug_changed' => $slugChanged,
+                'new_slug' => $slugChanged ? $subdomain : null,
+            ]);
+            flash('success', 'Profile saved.');
+        } else {
+            // ---------- CONTENT: landing copy + social links (does NOT touch profile fields) ----------
+            db()->prepare(
+                "UPDATE associations
+                 SET vision_statement = ?, about_text = ?, amenities_text = ?,
+                     contact_email = ?, contact_phone = ?,
+                     website_url = ?, facebook_url = ?, instagram_url = ?, twitter_url = ?, nextdoor_url = ?
+                 WHERE id = ?"
+            )->execute([
+                $vision ?: null, $aboutText ?: null, $amenitiesText ?: null,
+                $contactEmail ?: null, $contactPhone ?: null,
                 $websiteUrl, $facebookUrl, $instagramUrl, $twitterUrl, $nextdoorUrl,
-            ],
-            $extraArgs,
-            [$assocId]
-        ));
-        audit('association.updated', [
-            'name' => $name,
-            'public_landing_enabled' => $publicLanding,
-            'logo_changed' => $newLogoPath !== null || $removeLogo,
-            'hero_changed' => $newHeroPath !== null || $removeHero,
-            'slug_changed' => $slugChanged,
-            'new_slug' => $slugChanged ? $subdomain : null,
-        ]);
-        flash('success', 'Settings saved.');
+                $assocId,
+            ]);
+            audit('association.content_updated', ['has_about' => $aboutText !== '', 'has_vision' => $vision !== '']);
+            flash('success', 'Landing content saved.');
+        }
         redirect('/dashboard/settings.php');
     }
 }
@@ -193,6 +207,7 @@ require __DIR__ . '/../includes/header.php';
         <form method="post" class="form" enctype="multipart/form-data" data-address-lookup>
             <?= csrf_field() ?>
             <input type="hidden" name="form" value="update">
+            <input type="hidden" name="section" value="profile">
             <fieldset style="border:0; padding:0; margin:0;" <?= $canEdit ? '' : 'disabled' ?>>
                 <div class="form-row form-row--2">
                     <div class="field">
@@ -286,6 +301,7 @@ require __DIR__ . '/../includes/header.php';
         <form method="post" class="form" enctype="multipart/form-data">
             <?= csrf_field() ?>
             <input type="hidden" name="form" value="update">
+            <input type="hidden" name="section" value="content">
             <input type="hidden" name="name" value="<?= e((string)$association['name']) ?>">
             <input type="hidden" name="subdomain" value="<?= e((string)$association['subdomain']) ?>">
             <input type="hidden" name="address" value="<?= e((string)($association['address'] ?? '')) ?>">

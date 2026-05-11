@@ -194,6 +194,26 @@ if ($_envProd && $_mailDriver === 'log' && ($_SESSION['role'] ?? '') === 'super_
 </header>
 <?php elseif ($page_layout === 'app' || $page_layout === 'admin'): ?>
 
+<style>
+    .topbar-search {
+        display:flex; align-items:center; gap: 8px;
+        margin-left: auto; margin-right: 12px;
+        background: var(--color-surface, #f4f3ed);
+        border: 1px solid var(--color-border, #d8d4c2);
+        border-radius: 999px; padding: 4px 14px;
+        max-width: 360px; flex: 1 1 320px;
+        transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+    }
+    .topbar-search:focus-within { background: #fff; border-color: var(--color-navy, #0f1f3d); box-shadow: 0 0 0 3px rgba(15,31,61,0.10); }
+    .topbar-search__icon { color: var(--color-text-soft, #5a5a6e); font-size: 14px; }
+    .topbar-search input[type="search"] {
+        flex: 1; border: 0; background: transparent; outline: 0;
+        font: inherit; font-size: 14px; padding: 6px 0; color: var(--color-text, #111);
+    }
+    .topbar-search input[type="search"]::placeholder { color: var(--color-text-soft, #5a5a6e); }
+    @media (max-width: 800px) { .topbar-search { display: none; } }
+</style>
+
 <!-- Mobile top bar (only visible < 900px) -->
 <div class="mobile-topbar">
     <button type="button" class="mobile-topbar__menu" id="mobile-menu-btn" aria-label="Open menu">
@@ -240,6 +260,12 @@ if ($page_layout === 'app' && isset($association) && $association):
             <?php endif; ?>
         </span>
     </a>
+    <?php if ($page_layout === 'app'): ?>
+    <form action="/dashboard/find.php" method="get" class="topbar-search" role="search">
+        <span class="topbar-search__icon" aria-hidden="true">🔎</span>
+        <input type="search" name="q" placeholder="Search everything…" autocomplete="off" minlength="2" required value="<?= e((string)($_GET['q'] ?? '')) ?>">
+    </form>
+    <?php endif; ?>
     <button type="button" class="app-topbar__toggle side-nav__toggle" id="side-nav-toggle" aria-label="Collapse sidebar" title="Collapse sidebar">
         <?= nav_icon('collapse') ?>
     </button>
@@ -278,9 +304,11 @@ if ($page_layout === 'app' && isset($association) && $association):
             <?= nav_link('/dashboard/committees.php',  'committees',     'Committees',     'committees',     $active) ?>
             <?= nav_link('/dashboard/events.php',      'committees',     'Events',         'events',         $active) ?>
             <?= nav_link('/dashboard/concerns.php',    'concerns',       'Concerns',       'concerns',       $active) ?>
+            <?= nav_link('/dashboard/arc.php',         'documents',      'Arch. review',   'arc',            $active) ?>
             <?php if (role_can_manage(viewing_role())): ?>
                 <?= nav_link('/dashboard/work-orders.php', 'concerns',       'Work orders',    'work-orders',    $active) ?>
                 <?= nav_link('/dashboard/employees.php',   'directory',      'Employees',      'employees',      $active) ?>
+                <?= nav_link('/dashboard/insurance.php',   'documents',      'Insurance',      'insurance',      $active) ?>
                 <?= nav_link('/dashboard/contacts.php',    'contacts',       'Contacts',       'contacts',       $active) ?>
             <?php endif; ?>
             <?= nav_link('/dashboard/media.php',       'media',          'Media',          'media',          $active) ?>
