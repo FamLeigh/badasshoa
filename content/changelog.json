@@ -1,5 +1,14 @@
 [
     {
+        "id": "cl-20260511-213000-fix2",
+        "at": "2026-05-11T21:30:00-04:00",
+        "type": "fix",
+        "title": "Picking a board office auto-promotes the role",
+        "description": "Before: setting a board office on a member whose role was Resident or Renter silently dropped the office (since offices only apply to board roles). The form gave no feedback, which is exactly how Polly and John ended up appearing not to save. Now: picking any board office on a resident or renter auto-promotes them to Board member (least-privilege board role), and the success flash spells out what happened. Property managers keep their existing role.",
+        "author": "Reboooot",
+        "link": "/dashboard/directory.php"
+    },
+    {
         "id": "cl-20260511-203000-fix1",
         "at": "2026-05-11T20:30:00-04:00",
         "type": "fix",

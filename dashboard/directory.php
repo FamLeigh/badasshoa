@@ -157,6 +157,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'invite'
 
     $office = $_POST['board_office'] ?? '';
     if ($office !== '' && !array_key_exists($office, board_offices())) $office = '';
+    // If a board office is selected but the role is currently resident/renter,
+    // auto-promote to board_member — picking an office is a clear signal that
+    // this person is on the board. (Picking board_admin would over-grant
+    // privileges, so we land on the least-privilege board role.) Property
+    // managers keep their role.
+    if ($office !== '' && in_array($role, ['resident','renter'], true)) {
+        $role = 'board_member';
+    }
     // Office only applies to board roles + PM. Clear it otherwise.
     if (!in_array($role, ['board_admin','board_member','property_manager'], true)) $office = '';
 
@@ -260,6 +268,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit') 
 
     $office = $_POST['board_office'] ?? '';
     if ($office !== '' && !array_key_exists($office, board_offices())) $office = '';
+    $autoPromoted = false;
+    // If a board office is selected but the role is currently resident/renter,
+    // auto-promote to board_member. Without this the silent strip-office
+    // behavior catches admins by surprise (already happened twice).
+    if ($office !== '' && in_array($role, ['resident','renter'], true)) {
+        $role = 'board_member';
+        $autoPromoted = true;
+    }
     // Office only applies to board roles + PM. Clear it otherwise so a demoted
     // board member doesn't keep an orphaned "President" label.
     if (!in_array($role, ['board_admin','board_member','property_manager'], true)) $office = '';
@@ -343,8 +359,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit') 
                     audit('user.edited', [
                         'email' => $email, 'role' => $role, 'status' => $status,
                         'board_office' => $office ?: null,
+                        'auto_promoted_to_board_member' => $autoPromoted,
                     ], $id, 'user');
-                    flash('success', 'Member updated.');
+                    $msg = 'Member updated.';
+                    if (!empty($autoPromoted)) {
+                        $msg .= ' Role auto-promoted to <strong>Board member</strong> because a board office (' . htmlspecialchars(board_office_label($office), ENT_QUOTES, 'UTF-8') . ') was selected.';
+                    }
+                    flash('success', $msg);
                     redirect('/dashboard/directory.php');
                 }
             }
