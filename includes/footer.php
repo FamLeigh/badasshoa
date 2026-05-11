@@ -15,10 +15,15 @@
             <a href="/login.php">Sign in</a>
         </div>
         <div class="site-foot__legal muted">
-            &copy; <?= (int)date('Y') ?> BadassHOA. Built for boards that ship.
+            &copy; <?= (int)date('Y') ?> Savvy Brain LLC and Kevin B. Leigh. Powered by BadassHOA.
         </div>
     </div>
 </footer>
+<?php else: ?>
+<!-- Tiny copyright stripe for app + admin pages -->
+<div class="app-foot" style="text-align: center; padding: var(--sp-3); color: var(--color-text-soft); font-size: var(--fs-xs);">
+    &copy; <?= (int)date('Y') ?> Savvy Brain LLC and Kevin B. Leigh · Powered by BadassHOA
+</div>
 <?php endif; ?>
 
 <?php $jsPath = __DIR__ . '/../assets/js/app.js'; $jsVer = is_file($jsPath) ? filemtime($jsPath) : ''; ?>

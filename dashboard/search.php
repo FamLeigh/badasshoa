@@ -229,6 +229,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'suggest
     redirect('/dashboard/search.php?action=suggestions');
 }
 
+// --- Toggle review flag on a rule ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'review_flag') {
+    csrf_check();
+    if (!$canManage) { http_response_code(403); die('Forbidden'); }
+    $rid  = (int)($_POST['id'] ?? 0);
+    $on   = isset($_POST['on']) && $_POST['on'] === '1';
+    $note = trim((string)($_POST['review_note'] ?? ''));
+    if ($on) {
+        db()->prepare(
+            'UPDATE rules
+                SET review_flag = 1, review_note = ?, review_flagged_at = NOW(), review_flagged_by_user_id = ?
+              WHERE id = ? AND association_id = ?'
+        )->execute([$note ?: null, (int)$user['id'], $rid, $assocId]);
+        audit('rule.flagged_for_review', ['note' => mb_strimwidth($note, 0, 80, '…')], $rid, 'rule');
+        flash('success', 'Flagged for review.');
+    } else {
+        db()->prepare(
+            'UPDATE rules
+                SET review_flag = 0, review_note = NULL, review_flagged_at = NULL, review_flagged_by_user_id = NULL
+              WHERE id = ? AND association_id = ?'
+        )->execute([$rid, $assocId]);
+        audit('rule.review_cleared', [], $rid, 'rule');
+        flash('success', 'Review flag cleared.');
+    }
+    redirect($_POST['back'] ?? '/dashboard/search.php');
+}
+
 // --- Delete rule ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'delete') {
     csrf_check();
@@ -429,7 +456,7 @@ $results = [];
 // a browsable list. Was previously search-only, which made an association
 // with hundreds of imported rules look empty until you typed something.
 if ($q === '') {
-    $sql = "SELECT id, title, body, category, source, rule_number, effective_date
+    $sql = "SELECT id, title, body, category, source, rule_number, effective_date, review_flag, review_note
               FROM rules WHERE association_id = ?";
     $params = [$assocId];
     if (in_array($source, ['bylaw','board_rule','policy'], true)) {
@@ -444,7 +471,7 @@ if ($q === '') {
 }
 
 if ($q !== '') {
-    $sql = "SELECT id, title, body, category, source, rule_number, effective_date,
+    $sql = "SELECT id, title, body, category, source, rule_number, effective_date, review_flag, review_note,
                    MATCH(title, body) AGAINST (? IN NATURAL LANGUAGE MODE) AS score
             FROM rules
             WHERE association_id = ?
@@ -459,7 +486,7 @@ if ($q !== '') {
     $results = $stmt->fetchAll();
 
     if (empty($results)) {
-        $sql = "SELECT id, title, body, category, source, rule_number, effective_date
+        $sql = "SELECT id, title, body, category, source, rule_number, effective_date, review_flag, review_note
                 FROM rules WHERE association_id = ? AND (title LIKE ? OR body LIKE ?)";
         $params = [$assocId, "%$q%", "%$q%"];
         if (in_array($source, ['bylaw','board_rule','policy'], true)) {
@@ -1051,10 +1078,23 @@ function rule_form_card(?array $editing, array $categories): void {
                                 <span class="badge" style="background: var(--color-warning-bg); color: var(--color-warning); border: 1px solid rgba(182,130,42,0.25);"><?= e($r['category']) ?></span>
                             <?php endif; ?>
                             <?php if ($r['effective_date']): ?><span class="muted" style="font-size: var(--fs-xs);">&middot; in effect <?= e(date('M j, Y', strtotime((string)$r['effective_date']))) ?></span><?php endif; ?>
+                            <?php if (!empty($r['review_flag'])): ?>
+                                <span class="badge badge--error" style="font-size: var(--fs-xs);" title="<?= e((string)($r['review_note'] ?? 'Flagged for board review')) ?>">🚩 Needs review</span>
+                            <?php endif; ?>
                         </div>
                         <div class="row" style="gap: var(--sp-2);">
                             <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="/dashboard/rule.php?id=<?= (int)$r['id'] ?>">Open</a>
                             <?php if ($canManage): ?>
+                            <?php if (empty($r['review_flag'])): ?>
+                                <form method="post" style="display:inline;" onsubmit="var n = prompt('Optional note about why this rule needs review:'); if (n === null) return false; this.querySelector('[name=review_note]').value = n; return true;">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="form" value="review_flag">
+                                    <input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
+                                    <input type="hidden" name="on" value="1">
+                                    <input type="hidden" name="review_note" value="">
+                                    <button class="btn btn--ghost" type="submit" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" title="Flag for board review">🚩 Flag</button>
+                                </form>
+                            <?php endif; ?>
                             <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="?action=edit&id=<?= (int)$r['id'] ?>">Edit</a>
                             <form method="post" style="display:inline;" onsubmit="return confirm('Delete this rule?');">
                                 <?= csrf_field() ?>
@@ -1087,10 +1127,23 @@ function rule_form_card(?array $editing, array $categories): void {
                                 <span class="badge" style="background: var(--color-warning-bg); color: var(--color-warning); border: 1px solid rgba(182,130,42,0.25);"><?= e($r['category']) ?></span>
                             <?php endif; ?>
                             <?php if ($r['effective_date']): ?><span class="muted" style="font-size: var(--fs-xs);">&middot; in effect <?= e(date('M j, Y', strtotime((string)$r['effective_date']))) ?></span><?php endif; ?>
+                            <?php if (!empty($r['review_flag'])): ?>
+                                <span class="badge badge--error" style="font-size: var(--fs-xs);" title="<?= e((string)($r['review_note'] ?? 'Flagged for board review')) ?>">🚩 Needs review</span>
+                            <?php endif; ?>
                         </div>
                         <div class="row" style="gap: var(--sp-2);">
                             <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="/dashboard/rule.php?id=<?= (int)$r['id'] ?>">Open</a>
                             <?php if ($canManage): ?>
+                            <?php if (empty($r['review_flag'])): ?>
+                                <form method="post" style="display:inline;" onsubmit="var n = prompt('Optional note about why this rule needs review:'); if (n === null) return false; this.querySelector('[name=review_note]').value = n; return true;">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="form" value="review_flag">
+                                    <input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
+                                    <input type="hidden" name="on" value="1">
+                                    <input type="hidden" name="review_note" value="">
+                                    <button class="btn btn--ghost" type="submit" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" title="Flag for board review">🚩 Flag</button>
+                                </form>
+                            <?php endif; ?>
                             <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="?action=edit&id=<?= (int)$r['id'] ?>">Edit</a>
                             <form method="post" style="display:inline;" onsubmit="return confirm('Delete this rule?');">
                                 <?= csrf_field() ?>

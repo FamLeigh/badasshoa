@@ -191,15 +191,15 @@ if (!$detail && ($_GET['action'] ?? '') !== 'submit') {
     if ($canManage) {
         $statusFilter = $_GET['status'] ?? 'open';
         $typeFilter   = $_GET['type'] ?? '';
-        $where  = ['association_id = ?'];
+        $where  = ['c.association_id = ?'];
         $params = [$assocId];
-        if ($statusFilter === 'open')      { $where[] = "status IN ('new','in_progress')"; }
-        elseif (in_array($statusFilter, ['new','in_progress','resolved','closed'], true)) { $where[] = 'status = ?'; $params[] = $statusFilter; }
-        if (in_array($typeFilter, ['complaint','compliment','suggestion'], true)) { $where[] = 'type = ?'; $params[] = $typeFilter; }
+        if ($statusFilter === 'open')      { $where[] = "c.status IN ('new','in_progress')"; }
+        elseif (in_array($statusFilter, ['new','in_progress','resolved','closed'], true)) { $where[] = 'c.status = ?'; $params[] = $statusFilter; }
+        if (in_array($typeFilter, ['complaint','compliment','suggestion'], true)) { $where[] = 'c.type = ?'; $params[] = $typeFilter; }
         $sql = 'SELECT c.*, TRIM(CONCAT(IFNULL(s.first_name,""), " ", IFNULL(s.last_name,""))) AS submitter_name
                   FROM concerns c LEFT JOIN users s ON s.id = c.submitter_user_id
-                 WHERE ' . implode(' AND ', $where) . '
-                 ORDER BY (status="new") DESC, c.updated_at DESC LIMIT 200';
+                 WHERE ' . implode(' AND ', $where) . "
+                 ORDER BY (c.status='new') DESC, c.updated_at DESC LIMIT 200";
         $stmt = db()->prepare($sql);
         $stmt->execute($params);
         $listing = $stmt->fetchAll();
