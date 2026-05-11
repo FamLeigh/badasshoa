@@ -167,6 +167,25 @@ function ensure_default_rule_categories(int $assocId): void
     }
 }
 
+// --- placeholder email helpers ------------------------------------------
+// Roster imports (e.g. /dashboard/directory.php's CSV importer) synthesize
+// a placeholder email like noemail+<hex>@placeholder.local for residents
+// whose real address isn't on file yet. These helpers let UI code render
+// "(no email on file)" or hide the field rather than expose the synthetic
+// address.
+function is_placeholder_email(?string $email): bool
+{
+    return is_string($email) && str_ends_with($email, '@placeholder.local');
+}
+
+function display_email(?string $email, string $emptyLabel = '— no email on file —'): string
+{
+    if ($email === null || $email === '' || is_placeholder_email($email)) {
+        return $emptyLabel;
+    }
+    return $email;
+}
+
 // --- printable headers / footers ----------------------------------------
 // Used by /dashboard/rule.php, rules-print.php, document.php, committee-flyer.php
 // (and any future print views) so every printed page leads with the

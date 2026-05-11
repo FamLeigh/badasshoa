@@ -35,11 +35,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'import'
                         $key = strtolower(trim(str_replace(' ', '_', (string)$name)));
                         $headerMap[$key] = $i;
                     }
-                    foreach (['unit_number','first_name','last_name','email'] as $req) {
-                        if (!isset($headerMap[$req])) {
-                            $flashError = "Missing required column: $req. Required: unit_number, first_name, last_name, email. Optional: phone, is_owner.";
-                            break 2;
-                        }
+                    // Only unit_number is required now — names and email can be filled in later.
+                    if (!isset($headerMap['unit_number'])) {
+                        $flashError = "Missing required column: unit_number. Required: unit_number. Optional: first_name, last_name, email, phone, is_owner.";
+                        break;
                     }
                     continue;
                 }
@@ -54,13 +53,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'import'
                 $isOwner    = in_array($isOwnerRaw, ['1','y','yes','owner','true'], true) ? 1
                             : (in_array($isOwnerRaw, ['0','n','no','renter','false'], true) ? 0 : 1);
 
-                if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                    $errors[] = "Row $row: invalid email";
+                if ($unit === '' && $first === '' && $last === '' && $email === '') {
+                    continue; // blank row, ignore
+                }
+
+                $hasRealEmail = $email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL);
+
+                if ($email !== '' && !$hasRealEmail) {
+                    $errors[] = "Row $row: invalid email \"$email\" (left blank instead?)";
                     continue;
                 }
-                $check = db()->prepare('SELECT id FROM users WHERE email = ?');
-                $check->execute([$email]);
-                if ($check->fetchColumn()) { $skipped++; continue; }
+
+                if ($hasRealEmail) {
+                    // Skip if a user with this real email already exists.
+                    $check = db()->prepare('SELECT id FROM users WHERE email = ?');
+                    $check->execute([$email]);
+                    if ($check->fetchColumn()) { $skipped++; continue; }
+                    $finalEmail = $email;
+                } else {
+                    // No email on file — synthesize a unique placeholder that satisfies the
+                    // UNIQUE NOT NULL constraint and is parseable later when the real email
+                    // becomes available. Pattern: noemail+<8-hex>@placeholder.local
+                    $finalEmail = 'noemail+' . bin2hex(random_bytes(4)) . '@placeholder.local';
+                }
 
                 $tempPass = bin2hex(random_bytes(6));
                 $hash     = password_hash($tempPass, PASSWORD_BCRYPT, ['cost' => 12]);
@@ -68,12 +83,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'import'
                 db()->prepare(
                     'INSERT INTO users (association_id, first_name, last_name, email, phone, password_hash, role, unit_number, is_owner, status)
                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, "pending")'
-                )->execute([$assocId, $first, $last, $email, $phone ?: null, $hash, $role, $unit ?: null, $isOwner]);
+                )->execute([$assocId, $first, $last, $finalEmail, $phone ?: null, $hash, $role, $unit ?: null, $isOwner]);
                 $newId = (int)db()->lastInsertId();
-                send_mail($email, "You've been invited to {$association['name']}",
-                    "Hi $first,\n\nYou've been added to {$association['name']} on BadassHOA.\n\nSign in: " .
-                    (config()['app']['base_url'] ?? '') . "/login.php\nEmail: $email\nTemporary password: $tempPass\n(Change it on first sign-in.)\n");
-                audit('user.imported', ['email' => $email, 'unit' => $unit], $newId, 'user');
+
+                // Only send the welcome email when we have a real address.
+                if ($hasRealEmail) {
+                    send_mail($finalEmail, "You've been invited to {$association['name']}",
+                        "Hi $first,\n\nYou've been added to {$association['name']} on BadassHOA.\n\nSign in: " .
+                        (config()['app']['base_url'] ?? '') . "/login.php\nEmail: $finalEmail\nTemporary password: $tempPass\n(Change it on first sign-in.)\n");
+                }
+                audit('user.imported', ['email' => $hasRealEmail ? $finalEmail : '(no email)', 'unit' => $unit], $newId, 'user');
                 $added++;
             }
             fclose($fh);
@@ -397,7 +416,7 @@ require __DIR__ . '/../includes/header.php';
             <div class="form-row form-row--2">
                 <div class="field">
                     <label class="field__label" for="ee">Email</label>
-                    <input class="input" type="email" id="ee" name="email" required value="<?= e((string)$editUser['email']) ?>">
+                    <input class="input" type="email" id="ee" name="email" required value="<?= e(is_placeholder_email((string)$editUser['email']) ? '' : (string)$editUser['email']) ?>" placeholder="<?= is_placeholder_email((string)$editUser['email']) ? 'no email on file yet' : '' ?>">
                 </div>
                 <div class="field">
                     <label class="field__label" for="ep">Phone</label>
@@ -546,13 +565,13 @@ require __DIR__ . '/../includes/header.php';
     <div class="card card--padded" style="margin-bottom: var(--sp-6);">
         <h3 class="card__title">Import members from CSV</h3>
         <p class="muted" style="font-size: var(--fs-sm);">
-            Required columns: <code>unit_number, first_name, last_name, email</code>.
-            Optional: <code>phone, is_owner</code> (1/0 or yes/no).
-            Each new member gets a temporary password emailed to them.
+            Required column: <code>unit_number</code>.
+            Optional: <code>first_name, last_name, email, phone, is_owner</code> (1/0 or yes/no).
+            Rows without an email are imported with a placeholder address — the user shows in the directory as <em>(no email on file)</em> and gets no welcome email. Edit them later via the Directory's Edit button to set a real email.
         </p>
         <pre style="background: var(--color-surface-2); padding: var(--sp-3); border-radius: var(--r-md); font-size: var(--fs-xs); overflow-x:auto;">unit_number,first_name,last_name,email,phone,is_owner
 101,Maria,Rodriguez,maria@example.com,555-0101,1
-102A,James,Lee,james@example.com,555-0102,1
+102A,James,Lee,,,1
 B2,Sam,Garcia,sam@example.com,,0</pre>
         <form method="post" enctype="multipart/form-data" class="form">
             <?= csrf_field() ?>
@@ -670,7 +689,7 @@ B2,Sam,Garcia,sam@example.com,,0</pre>
                 </div>
                 <strong><?= e(trim($b['first_name'] . ' ' . $b['last_name']) ?: $b['email']) ?></strong>
                 <div class="muted" style="font-size: var(--fs-sm);">
-                    <?= e($b['email']) ?><?php if ($b['phone']): ?> &middot; <?= e($b['phone']) ?><?php endif; ?>
+                    <?= is_placeholder_email((string)$b['email']) ? '<em class="muted">— no email on file —</em>' : e((string)$b['email']) ?><?php if ($b['phone']): ?> &middot; <?= e($b['phone']) ?><?php endif; ?>
                 </div>
             </div>
         <?php endforeach; ?>
@@ -727,7 +746,7 @@ B2,Sam,Garcia,sam@example.com,,0</pre>
                 </td>
                 <td><?= e(str_replace('_',' ',$r['role'])) ?></td>
                 <td><?= $r['is_owner'] ? '<span class="badge badge--success">Owner</span>' : '<span class="badge">Renter</span>' ?></td>
-                <td><?= e($r['email']) ?></td>
+                <td><?= is_placeholder_email((string)$r['email']) ? '<em class="muted">—</em>' : e((string)$r['email']) ?></td>
                 <td><?= e($r['phone'] ?: '—') ?></td>
                 <?php if ($canManage): ?>
                 <td style="text-align:right; white-space: nowrap;">
