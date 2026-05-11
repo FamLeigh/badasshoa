@@ -1,5 +1,14 @@
 [
     {
+        "id": "cl-20260512-140000-renters2",
+        "at": "2026-05-12T14:00:00-04:00",
+        "type": "improvement",
+        "title": "Renters: Settings and Committees hidden",
+        "description": "Renters no longer see the Settings or Committees links in the sidebar, and the pages themselves redirect renters back to the dashboard if they hit the URLs directly. Settings exposes association admin info that's not useful to tenants; Committees are an owner/board space and renters already can't join. Owners and board members are unaffected.",
+        "author": "Reboooot",
+        "link": "/dashboard/"
+    },
+    {
         "id": "cl-20260512-130000-renters",
         "at": "2026-05-12T13:00:00-04:00",
         "type": "improvement",

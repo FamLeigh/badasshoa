@@ -1,6 +1,12 @@
 <?php
 require __DIR__ . '/_bootstrap.php';
 
+// Committees are an owner/board space — renters can't join (already
+// enforced on POST) and don't need the listing either.
+if (viewing_role() === 'renter') {
+    redirect('/dashboard/');
+}
+
 $user      = current_user();
 $canManage = role_can_manage(viewing_role());
 $flashError = null;

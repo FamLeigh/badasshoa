@@ -304,7 +304,9 @@ if ($page_layout === 'app' && isset($association) && $association):
                 <?= nav_link('/dashboard/contacts.php',    'contacts',       'Contacts',       'contacts',       $active) ?>
                 <?= nav_link('/dashboard/parking.php',     'parking',        'Parking',        'parking',        $active) ?>
             <?php endif; ?>
-            <?= nav_link('/dashboard/committees.php',  'committees',     'Committees',     'committees',     $active) ?>
+            <?php if (viewing_role() !== 'renter'): /* committees are owner/board territory */ ?>
+                <?= nav_link('/dashboard/committees.php', 'committees',  'Committees',     'committees',     $active) ?>
+            <?php endif; ?>
             <?= nav_link('/dashboard/concerns.php',    'concerns',       'Concerns',       'concerns',       $active) ?>
             <?= nav_link('/dashboard/arc.php',         'documents',      'Arch. review',   'arc',            $active) ?>
             <?php if (role_can_manage(viewing_role())): ?>
