@@ -109,14 +109,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'import'
                 ];
 
                 if ($existingId) {
-                    db()->prepare(
-                        'UPDATE units
-                            SET type = ?, bedrooms = ?, baths = ?, square_footage = ?, ownership_percent = ?,
-                                annual_hoa_assessment = ?, annual_garage_assessment = ?,
-                                garage_number = ?, parking_spot = ?, notes = ?
-                          WHERE id = ?'
-                    )->execute(array_merge($params, [$existingId]));
-                    $updated++;
+                    // Skip — don't overwrite an existing unit's data. To change
+                    // an existing unit, edit it directly via /dashboard/unit.php.
+                    $skipped++;
                 } else {
                     db()->prepare(
                         'INSERT INTO units (association_id, unit_number, type, bedrooms, baths, square_footage,
@@ -128,7 +123,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'import'
                 }
             }
             fclose($fh);
-            $importSummary = ['added' => $added, 'updated' => $updated, 'skipped' => $skipped, 'errors' => $errors];
+            $importSummary = ['added' => $added, 'skipped' => $skipped, 'errors' => $errors];
             audit('units.imported', $importSummary);
         }
     }
@@ -183,8 +178,10 @@ require __DIR__ . '/../includes/header.php';
 
     <?php if ($importSummary): ?>
         <div class="flash flash--success">
-            Imported <strong><?= (int)$importSummary['added'] ?></strong> new unit<?= $importSummary['added']===1?'':'s' ?>,
-            updated <strong><?= (int)$importSummary['updated'] ?></strong> existing.
+            Imported <strong><?= (int)$importSummary['added'] ?></strong> new unit<?= $importSummary['added']===1?'':'s' ?>.
+            <?php if ((int)$importSummary['skipped'] > 0): ?>
+                Skipped <strong><?= (int)$importSummary['skipped'] ?></strong> row<?= $importSummary['skipped']===1?'':'s' ?> with unit numbers that already exist — edit those units one at a time from the units list to change them.
+            <?php endif; ?>
             <?php if (!empty($importSummary['errors'])): ?>
                 <details style="margin-top: var(--sp-2);">
                     <summary><?= count($importSummary['errors']) ?> row<?= count($importSummary['errors'])===1?'':'s' ?> errored</summary>
@@ -207,7 +204,7 @@ require __DIR__ . '/../includes/header.php';
             <code>bedrooms</code>, <code>baths</code> (e.g. 2.5), <code>square_footage</code>, <code>ownership_percent</code>
             (e.g. 0.4521), <code>annual_hoa_assessment</code>, <code>annual_garage_assessment</code>,
             <code>garage_number</code>, <code>parking_spot</code>, <code>notes</code>.
-            Existing unit numbers are <strong>updated</strong> with the new values; new ones are inserted. Header row required.
+            <strong>Existing unit numbers are skipped</strong> — only new ones get inserted, so re-running the same CSV is safe and won't overwrite hand-edits. To change a unit, edit it from <a href="/dashboard/units.php">the units list</a>. Header row required.
         </p>
         <pre style="background: var(--color-surface-2); padding: var(--sp-3); border-radius: var(--r-md); font-size: var(--fs-xs); overflow-x:auto;">unit_number,type,bedrooms,baths,square_footage,ownership_percent,annual_hoa_assessment,annual_garage_assessment,garage_number,parking_spot,notes
 101A,condo,2,2.0,1100,0.4521,4800.00,600.00,12,P-7,Corner unit
