@@ -157,6 +157,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit_us
     $last    = trim((string)($_POST['last_name'] ?? ''));
     $email   = trim((string)($_POST['email'] ?? ''));
     $phone   = trim((string)($_POST['phone'] ?? ''));
+    $phone2  = trim((string)($_POST['phone2'] ?? ''));
+    $email2  = trim((string)($_POST['email2'] ?? ''));
+    if ($email2 !== '' && !filter_var($email2, FILTER_VALIDATE_EMAIL)) $email2 = '';
     $mAddr   = trim((string)($_POST['mailing_address'] ?? ''));
     $mCity   = trim((string)($_POST['mailing_city'] ?? ''));
     $mState  = trim((string)($_POST['mailing_state_region'] ?? ''));
@@ -222,13 +225,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit_us
                 try {
                     db()->prepare(
                         'UPDATE users
-                         SET first_name = ?, last_name = ?, email = ?, phone = ?,
+                         SET first_name = ?, last_name = ?, email = ?, email2 = ?, phone = ?, phone2 = ?,
                              mailing_address = ?, mailing_city = ?, mailing_state_region = ?,
                              mailing_postal_code = ?, mailing_country = ?,
                              role = ?, status = ?, unit_number = ?, association_id = ?, is_owner = ?
                          WHERE id = ?'
                     )->execute([
-                        $first, $last, $email, $phone ?: null,
+                        $first, $last, $email, $email2 ?: null, $phone ?: null, $phone2 ?: null,
                         $mAddr ?: null, $mCity ?: null, $mState ?: null, $mPostal ?: null, $mCtry ?: null,
                         $role, $status, $unit ?: null, $assocId, $isOwner,
                         $uid,
@@ -471,6 +474,16 @@ require __DIR__ . '/../includes/header.php';
                 <div class="field">
                     <label class="field__label" for="eu-phone">Phone</label>
                     <input class="input" id="eu-phone" name="phone" value="<?= e((string)($editUser['phone'] ?? '')) ?>">
+                </div>
+            </div>
+            <div class="form-row form-row--2">
+                <div class="field">
+                    <label class="field__label" for="eu-email2">Second email <span class="muted" style="font-weight: 400;">(optional)</span></label>
+                    <input class="input" type="email" id="eu-email2" name="email2" value="<?= e((string)($editUser['email2'] ?? '')) ?>" placeholder="personal or spouse">
+                </div>
+                <div class="field">
+                    <label class="field__label" for="eu-phone2">Second phone <span class="muted" style="font-weight: 400;">(optional)</span></label>
+                    <input class="input" id="eu-phone2" name="phone2" value="<?= e((string)($editUser['phone2'] ?? '')) ?>" placeholder="cell or work">
                 </div>
             </div>
 

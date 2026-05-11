@@ -13,6 +13,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'save') 
     $first   = trim((string)($_POST['first_name'] ?? ''));
     $last    = trim((string)($_POST['last_name'] ?? ''));
     $phone   = trim((string)($_POST['phone'] ?? ''));
+    $phone2  = trim((string)($_POST['phone2'] ?? ''));
+    $email2  = trim((string)($_POST['email2'] ?? ''));
+    if ($email2 !== '' && !filter_var($email2, FILTER_VALIDATE_EMAIL)) $email2 = '';
     $bio     = trim((string)($_POST['bio'] ?? ''));
     $mAddr   = trim((string)($_POST['mailing_address'] ?? ''));
     $mCity   = trim((string)($_POST['mailing_city'] ?? ''));
@@ -62,12 +65,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'save') 
     if (!$flashError) {
         db()->prepare(
             'UPDATE users
-                SET first_name = ?, last_name = ?, phone = ?, bio = ?, avatar_path = ?,
+                SET first_name = ?, last_name = ?, phone = ?, phone2 = ?, email2 = ?,
+                    bio = ?, avatar_path = ?,
                     mailing_address = ?, mailing_city = ?, mailing_state_region = ?,
                     mailing_postal_code = ?, mailing_country = ?
               WHERE id = ?'
         )->execute([
-            $first, $last, $phone ?: null, $bio ?: null, $avatarPath,
+            $first, $last, $phone ?: null, $phone2 ?: null, $email2 ?: null,
+            $bio ?: null, $avatarPath,
             $mAddr ?: null, $mCity ?: null, $mState ?: null, $mPostal ?: null, $mCtry ?: null,
             (int)$user['id'],
         ]);
@@ -139,11 +144,21 @@ require __DIR__ . '/../includes/header.php';
             <div class="field">
                 <label class="field__label" for="pf-email">Email</label>
                 <input class="input" type="email" id="pf-email" value="<?= e((string)$me['email']) ?>" disabled>
-                <div class="field__hint">Email changes are handled by an admin — ask the board.</div>
+                <div class="field__hint">Primary email changes are handled by an admin — ask the board.</div>
             </div>
             <div class="field">
                 <label class="field__label" for="pf-phone">Phone</label>
                 <input class="input" type="tel" id="pf-phone" name="phone" value="<?= e((string)($me['phone'] ?? '')) ?>">
+            </div>
+        </div>
+        <div class="form-row form-row--2">
+            <div class="field">
+                <label class="field__label" for="pf-email2">Second email <span class="muted" style="font-weight: 400;">(optional)</span></label>
+                <input class="input" type="email" id="pf-email2" name="email2" value="<?= e((string)($me['email2'] ?? '')) ?>" placeholder="personal or spouse">
+            </div>
+            <div class="field">
+                <label class="field__label" for="pf-phone2">Second phone <span class="muted" style="font-weight: 400;">(optional)</span></label>
+                <input class="input" type="tel" id="pf-phone2" name="phone2" value="<?= e((string)($me['phone2'] ?? '')) ?>" placeholder="cell or work">
             </div>
         </div>
 
