@@ -31,11 +31,11 @@ $rules = $stmt->fetchAll();
 </style>
 </head><body>
 
+<?= print_header_html($association) ?>
+
 <h1 class="cover">Rules &amp; Bylaws</h1>
 <div class="cover-meta">
-    <?= e((string)$association['name']) ?> ·
-    <?= count($rules) ?> rule<?= count($rules)===1?'':'s' ?> ·
-    Printed <?= e(date('M j, Y')) ?>
+    <?= count($rules) ?> rule<?= count($rules)===1?'':'s' ?> · Printed <?= e(date('M j, Y')) ?>
 </div>
 
 <?php if (!$rules): ?>
@@ -54,6 +54,8 @@ $rules = $stmt->fetchAll();
     </div>
     <?php endforeach; ?>
 <?php endif; ?>
+
+<?= print_footer_html('Printed ' . date('M j, Y')) ?>
 
 <script>window.addEventListener('load', function(){ window.print(); });</script>
 </body></html>

@@ -59,12 +59,12 @@ if ($printMode) {
         @media print { @page { margin: 0.7in; } a { color: inherit; text-decoration: none; } }
     </style>
     </head><body>
+    <?= print_header_html($association) ?>
     <h1><?= e((string)$doc['title']) ?></h1>
     <div class="meta">
-        <?= e((string)$association['name']) ?>
-        <?php if (!empty($doc['category'])): ?> · <?= e((string)$doc['category']) ?><?php endif; ?>
-        <?php if (!empty($doc['unit_label'])): ?> · Unit <?= e((string)$doc['unit_label']) ?><?php endif; ?>
-        · Created <?= e(date('M j, Y', strtotime((string)$doc['created_at']))) ?>
+        <?php if (!empty($doc['category'])): ?><?= e((string)$doc['category']) ?> · <?php endif; ?>
+        <?php if (!empty($doc['unit_label'])): ?>Unit <?= e((string)$doc['unit_label']) ?> · <?php endif; ?>
+        Created <?= e(date('M j, Y', strtotime((string)$doc['created_at']))) ?>
         <?php if ($doc['uploaded_by']): ?> · by <?= e(trim((string)$doc['uploader_name']) ?: 'unknown') ?><?php endif; ?>
     </div>
     <div class="body">
@@ -73,9 +73,7 @@ if ($printMode) {
         <?php endif; ?>
         <?= (string)$doc['body_html'] /* board-trusted HTML from Quill */ ?>
     </div>
-    <div class="footer">
-        Printed <?= e(date('M j, Y')) ?> from <?= e((string)$association['name']) ?> via BadassHOA
-    </div>
+    <?= print_footer_html('Printed ' . date('M j, Y')) ?>
     <script>window.addEventListener('load', function(){ window.print(); });</script>
     </body></html>
     <?php

@@ -62,7 +62,9 @@ $loginUrl   = 'https://badasshoa.com/login.php';
 </style>
 </head><body>
 
-<div class="eyebrow">Get involved · <?= e($assocName) ?></div>
+<?= print_header_html($association) ?>
+
+<div class="eyebrow">Get involved</div>
 <h1>Join the<br><?= e((string)$committee['name']) ?></h1>
 
 <?php if (!empty($committee['description'])): ?>
@@ -88,9 +90,7 @@ $loginUrl   = 'https://badasshoa.com/login.php';
     , click <strong>Committees</strong>, find <strong><?= e((string)$committee['name']) ?></strong>, and hit <strong>Join</strong>. That's it.
 </div>
 
-<div class="foot">
-    <?= e($assocName) ?> · Posted <?= e(date('M j, Y')) ?> · Powered by BadassHOA
-</div>
+<?= print_footer_html('Posted ' . date('M j, Y')) ?>
 
 <script>window.addEventListener('load', function(){ window.print(); });</script>
 </body></html>

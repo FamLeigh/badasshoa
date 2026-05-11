@@ -33,6 +33,7 @@ if ($printMode) {
         @media print { @page { margin: 0.7in; } }
     </style>
     </head><body>
+    <?= print_header_html($association) ?>
     <div class="meta">
         <?php if ($rule['rule_number']): ?><strong>#<?= e((string)$rule['rule_number']) ?></strong> · <?php endif; ?>
         <?= e(ucfirst(str_replace('_',' ',(string)$rule['source']))) ?>
@@ -41,9 +42,7 @@ if ($printMode) {
     </div>
     <h1><?= e((string)$rule['title']) ?></h1>
     <div class="body"><?= e(trim(strip_tags(str_replace(['&nbsp;', "\xc2\xa0"], ' ', (string)$rule['body'])))) ?></div>
-    <div class="footer">
-        <?= e((string)$association['name']) ?> — Rules · Printed <?= e(date('M j, Y')) ?>
-    </div>
+    <?= print_footer_html('Rule printed ' . date('M j, Y')) ?>
     <script>window.addEventListener('load', function(){ window.print(); });</script>
     </body></html>
     <?php

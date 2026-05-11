@@ -167,6 +167,65 @@ function ensure_default_rule_categories(int $assocId): void
     }
 }
 
+// --- printable headers / footers ----------------------------------------
+// Used by /dashboard/rule.php, rules-print.php, document.php, committee-flyer.php
+// (and any future print views) so every printed page leads with the
+// association's logo + address + phone and ends with the standard copyright +
+// powered-by footer. Self-contained inline styles so the helper drops into the
+// minimal HTML each print page emits without depending on app.css.
+function print_header_html(array $assoc): string
+{
+    $name  = (string)($assoc['name']         ?? '');
+    $addr  = trim((string)($assoc['address'] ?? ''));
+    $city  = trim((string)($assoc['city']    ?? ''));
+    $state = trim((string)($assoc['state_region'] ?? ''));
+    $zip   = trim((string)($assoc['postal_code']  ?? ''));
+    $phone = trim((string)($assoc['contact_phone'] ?? ''));
+    $email = trim((string)($assoc['contact_email'] ?? ''));
+    $hasLogo = !empty($assoc['logo_path']);
+    $logoUrl = $hasLogo ? '/branding.php?id=' . (int)($assoc['id'] ?? 0) : '';
+
+    $cityLine = trim(
+        ($city !== '' ? $city : '') .
+        ($city !== '' && $state !== '' ? ', ' : '') .
+        ($state !== '' ? $state : '') .
+        ($zip !== '' ? ' ' . $zip : '')
+    );
+
+    $out  = '<div class="print-header" style="display:flex; align-items:center; gap: 16pt; margin-bottom: 18pt; padding-bottom: 12pt; border-bottom: 2px solid #0f1f3d;">';
+    if ($hasLogo) {
+        $out .= '<img src="' . e($logoUrl) . '" alt="" style="height: 56pt; max-width: 120pt; object-fit: contain; flex: 0 0 auto;">';
+    }
+    $out .= '<div style="flex: 1; line-height: 1.35;">';
+    $out .= '<div style="font-size: 14pt; font-weight: 800; color: #0f1f3d;">' . e($name) . '</div>';
+    if ($addr !== '' || $cityLine !== '') {
+        $out .= '<div style="font-size: 9pt; color: #4a5060;">'
+              . ($addr !== '' ? e($addr) : '')
+              . (($addr !== '' && $cityLine !== '') ? ' · ' : '')
+              . ($cityLine !== '' ? e($cityLine) : '')
+              . '</div>';
+    }
+    if ($phone !== '' || $email !== '') {
+        $out .= '<div style="font-size: 9pt; color: #4a5060;">'
+              . ($phone !== '' ? e($phone) : '')
+              . (($phone !== '' && $email !== '') ? ' · ' : '')
+              . ($email !== '' ? e($email) : '')
+              . '</div>';
+    }
+    $out .= '</div></div>';
+    return $out;
+}
+
+function print_footer_html(string $context = ''): string
+{
+    $year  = (int)date('Y');
+    $extra = $context !== '' ? e($context) . ' · ' : '';
+    return '<div class="print-foot" style="margin-top: 24pt; padding-top: 10pt; border-top: 1px solid #d9d3c5; color: #6b7280; font-size: 8pt; text-align: center;">'
+         . $extra
+         . '&copy; ' . $year . ' Savvy Brain LLC and Kevin B. Leigh · Powered by BadassHOA'
+         . '</div>';
+}
+
 // --- email all managers of an association --------------------------------
 // Used when a member submits a rule suggestion (board needs a heads-up).
 // "Manager" = any role in MANAGE_ROLES belonging to that association,
