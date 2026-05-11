@@ -189,6 +189,27 @@ $rows = db()->prepare(
 $rows->execute([$assocId]);
 $spots = $rows->fetchAll();
 
+// --- CSV export ---
+if (($_GET['export'] ?? '') === 'csv') {
+    audit('parking_spots.exported', ['count' => count($spots)]);
+    $filename = 'parking-' . preg_replace('/[^a-z0-9-]+/i', '-', strtolower((string)$association['name'])) . '-' . date('Y-m-d') . '.csv';
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    $out = fopen('php://output', 'w');
+    fputcsv($out, ['kind','number','unit_number','primary_owner','notes','is_active']);
+    foreach ($spots as $s) {
+        fputcsv($out, [
+            $s['kind'], $s['number'],
+            $s['unit_number'] ?? '',
+            $s['primary_owner_name'] ?? '',
+            $s['notes'] ?? '',
+            (int)$s['is_active'],
+        ]);
+    }
+    fclose($out);
+    exit;
+}
+
 // All units for the assign dropdown.
 $unitsAll = db()->prepare('SELECT id, unit_number FROM units WHERE association_id = ? ORDER BY CAST(unit_number AS UNSIGNED), unit_number');
 $unitsAll->execute([$assocId]);
@@ -222,7 +243,10 @@ require __DIR__ . '/../includes/header.php';
             <p class="muted">Garages, surface spots, covered, tandem — numbered and (optionally) assigned to a unit.</p>
         </div>
         <?php if (!$showAdd && !$editSpot && !$showImport): ?>
-            <div class="row" style="gap: var(--sp-2);">
+            <div class="row" style="gap: var(--sp-2); flex-wrap: wrap;">
+                <a class="btn btn--ghost" href="/dashboard/parking-print.php" target="_blank" rel="noopener" title="Single-column list printout">🖨 Print list</a>
+                <a class="btn btn--ghost" href="/dashboard/parking-print.php?cols=3" target="_blank" rel="noopener" title="Compact three-column printout">🖨 3-column</a>
+                <a class="btn btn--ghost" href="?export=csv" title="Download every spot as CSV">⬇ Export CSV</a>
                 <a class="btn btn--ghost" href="?action=import">⬆ Import CSV</a>
                 <a class="btn btn--primary" href="?action=new">+ New spot</a>
             </div>
@@ -344,55 +368,86 @@ tandem,T-3,,Visitor / unassigned,1</pre>
     </div>
     <?php endif; ?>
 
-    <?php foreach ($KINDS as $kind => $kindLabel):
-        $items = $byKind[$kind];
+    <?php
+    // Optional ?kind= filter chip. When set, narrow the table to just that kind.
+    $kindFilter = $_GET['kind'] ?? '';
+    if (!array_key_exists($kindFilter, $KINDS)) $kindFilter = '';
+    $rowsToShow = $kindFilter === '' ? $spots : array_values(array_filter($spots, fn($s) => $s['kind'] === $kindFilter));
     ?>
-    <div style="margin-bottom: var(--sp-6);">
-        <div class="row row--between" style="margin-bottom: var(--sp-3); align-items: baseline;">
-            <h2 style="font-size: var(--fs-xl); margin: 0;">
-                <?= e($kindLabel) ?>
-                <span class="muted" style="font-size: var(--fs-sm); font-weight: 400;">— <?= count($items) ?></span>
-            </h2>
-            <a class="muted" style="font-size: var(--fs-sm);" href="?action=new&kind=<?= e($kind) ?>">+ Add <?= e(strtolower($kindLabel)) ?></a>
-        </div>
-
-        <?php if (!$items): ?>
-            <p class="muted" style="font-size: var(--fs-sm);">— none yet —</p>
-        <?php else: ?>
-        <div style="overflow-x:auto;">
-        <table class="table">
-            <thead><tr><th>Number</th><th>Assigned to unit</th><th>Primary owner</th><th>Notes</th><th>Status</th><th style="text-align:right;">Actions</th></tr></thead>
-            <tbody>
-            <?php foreach ($items as $s): ?>
-                <tr style="<?= (int)$s['is_active'] === 0 ? 'opacity: 0.55;' : '' ?>">
-                    <td><strong><?= e((string)$s['number']) ?></strong></td>
-                    <td>
-                        <?php if (!empty($s['unit_number'])): ?>
-                            <a href="/dashboard/unit.php?id=<?= (int)$s['assigned_unit_id'] ?>">Unit <?= e((string)$s['unit_number']) ?></a>
-                        <?php else: ?>
-                            <span class="muted">— unassigned —</span>
-                        <?php endif; ?>
-                    </td>
-                    <td><?= !empty($s['primary_owner_name']) ? e((string)$s['primary_owner_name']) : '<span class="muted">—</span>' ?></td>
-                    <td><span class="muted" style="font-size: var(--fs-sm);"><?= !empty($s['notes']) ? e(mb_strimwidth((string)$s['notes'], 0, 60, '…')) : '—' ?></span></td>
-                    <td><?= (int)$s['is_active'] === 1 ? '<span class="badge badge--success">active</span>' : '<span class="badge">inactive</span>' ?></td>
-                    <td style="text-align:right; white-space: nowrap;">
-                        <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="?action=edit&id=<?= (int)$s['id'] ?>">Edit</a>
-                        <form method="post" style="display:inline;" onsubmit="return confirm('Delete <?= e($kindLabel) ?> <?= e((string)$s['number']) ?>?');">
-                            <?= csrf_field() ?>
-                            <input type="hidden" name="form" value="delete">
-                            <input type="hidden" name="id" value="<?= (int)$s['id'] ?>">
-                            <button class="btn btn--ghost" type="submit" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs); color: var(--color-error);">Delete</button>
-                        </form>
-                    </td>
-                </tr>
-            <?php endforeach; ?>
-            </tbody>
-        </table>
-        </div>
-        <?php endif; ?>
+    <div class="row" style="gap: var(--sp-2); margin-bottom: var(--sp-3); flex-wrap: wrap;">
+        <a class="badge <?= $kindFilter === '' ? 'badge--navy' : '' ?>"
+           href="/dashboard/parking.php" style="text-decoration:none; <?= $kindFilter !== '' ? 'opacity: 0.6;' : '' ?>">
+            All <span style="margin-left: 4px;"><?= count($spots) ?></span>
+        </a>
+        <?php foreach ($KINDS as $k => $lbl):
+            $n = count($byKind[$k]);
+            if ($n === 0) continue; // hide empty kinds — Kevin doesn't want placeholders
+            $active = $kindFilter === $k;
+        ?>
+            <a class="badge <?= $active ? 'badge--navy' : '' ?>"
+               href="?kind=<?= e($k) ?>"
+               style="text-decoration:none; <?= !$active ? 'opacity: 0.6;' : '' ?>">
+                <?= e($lbl) ?> <span style="margin-left: 4px;"><?= $n ?></span>
+            </a>
+        <?php endforeach; ?>
     </div>
-    <?php endforeach; ?>
+
+    <?php if (!$rowsToShow): ?>
+        <div class="card card--padded center" style="padding: var(--sp-8) var(--sp-6);">
+            <p class="muted">No parking spots yet. <a href="?action=new">Add the first one</a> or <a href="?action=import">import a CSV</a>.</p>
+        </div>
+    <?php else: ?>
+    <div style="overflow-x:auto;">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Kind</th>
+                <th>Number</th>
+                <th>Assigned to unit</th>
+                <th>Primary owner</th>
+                <th>Notes</th>
+                <th>Status</th>
+                <th style="text-align:right;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+        <?php foreach ($rowsToShow as $s):
+            $kindClass = match ($s['kind']) {
+                'garage'  => 'badge--navy',
+                'surface' => 'badge--info',
+                'covered' => 'badge--success',
+                'tandem'  => 'badge--warning',
+                default   => '',
+            };
+        ?>
+            <tr style="<?= (int)$s['is_active'] === 0 ? 'opacity: 0.55;' : '' ?>">
+                <td><span class="badge <?= $kindClass ?>"><?= e((string)$KINDS[$s['kind']]) ?></span></td>
+                <td><strong><?= e((string)$s['number']) ?></strong></td>
+                <td>
+                    <?php if (!empty($s['unit_number'])): ?>
+                        <a href="/dashboard/unit.php?id=<?= (int)$s['assigned_unit_id'] ?>">Unit <?= e((string)$s['unit_number']) ?></a>
+                    <?php else: ?>
+                        <span class="muted">— unassigned —</span>
+                    <?php endif; ?>
+                </td>
+                <td><?= !empty($s['primary_owner_name']) ? e((string)$s['primary_owner_name']) : '<span class="muted">—</span>' ?></td>
+                <td><span class="muted" style="font-size: var(--fs-sm);"><?= !empty($s['notes']) ? e(mb_strimwidth((string)$s['notes'], 0, 60, '…')) : '—' ?></span></td>
+                <td><?= (int)$s['is_active'] === 1 ? '<span class="badge badge--success">active</span>' : '<span class="badge">inactive</span>' ?></td>
+                <td style="text-align:right; white-space: nowrap;">
+                    <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="?action=edit&id=<?= (int)$s['id'] ?>">Edit</a>
+                    <form method="post" style="display:inline;" onsubmit="return confirm('Delete <?= e($KINDS[$s['kind']]) ?> <?= e((string)$s['number']) ?>?');">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="form" value="delete">
+                        <input type="hidden" name="id" value="<?= (int)$s['id'] ?>">
+                        <button class="btn btn--ghost" type="submit" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs); color: var(--color-error);">Delete</button>
+                    </form>
+                </td>
+            </tr>
+        <?php endforeach; ?>
+        </tbody>
+    </table>
+    </div>
+    <?php endif; ?>
 
 </div>
 
