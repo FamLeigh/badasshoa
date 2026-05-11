@@ -1,5 +1,14 @@
 [
     {
+        "id": "cl-20260511-153000-bo01",
+        "at": "2026-05-11T15:30:00-04:00",
+        "type": "feature",
+        "title": "Board officer titles + contacts overhaul + rule-suggestion edits",
+        "description": "Board members + property managers can now hold an officer title (President, Vice President, Secretary, Treasurer, Secretary-Treasurer, or Director). The title shows on the directory and \"Meet your board\" landing section in canonical order — President first. It's display-only; admin capabilities still flow from the role. Contacts page is now a single flat list (no more per-category sections) with two new print buttons: contacts-only, and contacts + board members & managers. Admins can also now edit a pending rule suggestion's wording before approving — a new Save edits (keep pending) button lets you clean up text without committing yes/no. Dashboard event count now correctly includes recurring occurrences (a weekly meeting seeded back in March still shows on the tile).",
+        "author": "Reboooot",
+        "link": "/dashboard/directory.php"
+    },
+    {
         "id": "cl-20260511-140000-ev01",
         "at": "2026-05-11T14:00:00-04:00",
         "type": "feature",

@@ -91,12 +91,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'delete'
     redirect('/dashboard/contacts.php');
 }
 
-// --- Load all + group by kind ---
-$rows = db()->prepare('SELECT * FROM association_contacts WHERE association_id = ? ORDER BY kind, sort_order, label');
+// --- Load all (single flat list, sorted by kind priority then alpha) ---
+$rows = db()->prepare(
+    "SELECT * FROM association_contacts
+      WHERE association_id = ?
+      ORDER BY FIELD(kind, 'emergency','non_emergency','utility','contractor','other'),
+               sort_order, label"
+);
 $rows->execute([$assocId]);
 $all = $rows->fetchAll();
-$byKind = array_fill_keys(array_keys($KINDS), []);
-foreach ($all as $r) $byKind[$r['kind']][] = $r;
 
 $showAdd = ($_GET['action'] ?? '') === 'new';
 $editContact = null;
@@ -120,7 +123,11 @@ require __DIR__ . '/../includes/header.php';
             <p class="muted">Emergency &amp; non-emergency phone numbers, recommended contractors, utility providers — anything the board points residents to.</p>
         </div>
         <?php if (!$showAdd && !$editContact): ?>
-            <a class="btn btn--primary" href="?action=new">+ New contact</a>
+            <div class="row" style="gap: var(--sp-2); flex-wrap: wrap;">
+                <a class="btn btn--ghost" href="/dashboard/contacts-print.php" target="_blank" rel="noopener" title="Printable list of contacts">🖨 Print contacts</a>
+                <a class="btn btn--ghost" href="/dashboard/contacts-print.php?include_board=1" target="_blank" rel="noopener" title="Printable list — contacts plus board members & property managers">🖨 Print + board</a>
+                <a class="btn btn--primary" href="?action=new">+ New contact</a>
+            </div>
         <?php endif; ?>
     </div>
 
@@ -207,65 +214,70 @@ require __DIR__ . '/../includes/header.php';
     </div>
     <?php endif; ?>
 
-    <?php foreach ($KINDS as $kind => $kmeta):
-        $items = $byKind[$kind];
+    <?php
+    $hasContractor = false;
+    foreach ($all as $_r) { if ($_r['kind'] === 'contractor') { $hasContractor = true; break; } }
     ?>
-    <div style="margin-bottom: var(--sp-6);">
-        <div class="row row--between" style="margin-bottom: var(--sp-3); align-items: baseline;">
-            <h2 style="font-size: var(--fs-xl); margin: 0;"><?= e($kmeta['label']) ?> <span class="muted" style="font-size: var(--fs-sm); font-weight: 400;">— <?= count($items) ?></span></h2>
-            <a class="muted" style="font-size: var(--fs-sm);" href="?action=new&kind=<?= e($kind) ?>">+ Add <?= e(strtolower($kmeta['label'])) ?></a>
+    <?php if ($hasContractor): ?>
+        <p class="muted" style="font-size: var(--fs-xs); padding: var(--sp-2) var(--sp-3); background: var(--color-warning-bg); border-radius: var(--r-sm); margin-bottom: var(--sp-3);">
+            <strong>Disclaimer:</strong> Contractors below are listed as a convenience for residents. <?= e((string)$association['name']) ?> doesn't guarantee their work and isn't responsible for the quality, pricing, or outcome of any service performed. Get your own quotes and references.
+        </p>
+    <?php endif; ?>
+
+    <?php if (!$all): ?>
+        <div class="card card--padded center" style="padding: var(--sp-12) var(--sp-6);">
+            <p class="muted">No contacts on file yet.</p>
+            <p style="margin-top: var(--sp-4);"><a class="btn btn--primary" href="?action=new">+ Add the first one</a></p>
         </div>
-
-        <?php if ($kind === 'contractor' && $items): ?>
-            <p class="muted" style="font-size: var(--fs-xs); padding: var(--sp-2) var(--sp-3); background: var(--color-warning-bg); border-radius: var(--r-sm); margin-bottom: var(--sp-3);">
-                <strong>Disclaimer:</strong> Contractors below are listed as a convenience for residents. <?= e((string)$association['name']) ?> doesn't guarantee their work and isn't responsible for the quality, pricing, or outcome of any service performed. Get your own quotes and references.
-            </p>
-        <?php endif; ?>
-
-        <?php if (!$items): ?>
-            <p class="muted" style="font-size: var(--fs-sm);">— none yet —</p>
-        <?php else: ?>
-        <div style="overflow-x:auto;">
-        <table class="table">
-            <thead>
-                <tr><th>Label</th><?php if ($kind === 'contractor'): ?><th>Trade</th><?php endif; ?><th>Phone</th><th>Email / Web</th><th>Public?</th><th></th></tr>
-            </thead>
-            <tbody>
-            <?php foreach ($items as $r): ?>
-                <tr>
-                    <td>
-                        <strong><?= e((string)$r['label']) ?></strong>
-                        <?php if (!empty($r['notes'])): ?>
-                            <div class="muted" style="font-size: var(--fs-xs);"><?= e(mb_strimwidth((string)$r['notes'], 0, 80, '…')) ?></div>
-                        <?php endif; ?>
-                    </td>
-                    <?php if ($kind === 'contractor'): ?>
-                        <td><?= e((string)($r['trade'] ?? '')) ?: '—' ?></td>
+    <?php else: ?>
+    <div style="overflow-x:auto;">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Type</th>
+                <th>Label</th>
+                <th>Trade</th>
+                <th>Phone</th>
+                <th>Email / Web</th>
+                <th>Public?</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        <?php foreach ($all as $r):
+            $kmeta = $KINDS[$r['kind']] ?? ['label' => $r['kind'], 'cls' => ''];
+        ?>
+            <tr>
+                <td><span class="badge <?= e($kmeta['cls']) ?>"><?= e($kmeta['label']) ?></span></td>
+                <td>
+                    <strong><?= e((string)$r['label']) ?></strong>
+                    <?php if (!empty($r['notes'])): ?>
+                        <div class="muted" style="font-size: var(--fs-xs);"><?= e(mb_strimwidth((string)$r['notes'], 0, 80, '…')) ?></div>
                     <?php endif; ?>
-                    <td><?= $r['phone'] ? '<a href="tel:' . e((string)$r['phone']) . '">' . e((string)$r['phone']) . '</a>' : '<span class="muted">—</span>' ?></td>
-                    <td>
-                        <?php if (!empty($r['email'])): ?><a href="mailto:<?= e((string)$r['email']) ?>"><?= e((string)$r['email']) ?></a><br><?php endif; ?>
-                        <?php if (!empty($r['url'])): ?><a href="<?= e((string)$r['url']) ?>" target="_blank" rel="noopener"><?= e(parse_url((string)$r['url'], PHP_URL_HOST) ?: $r['url']) ?></a><?php endif; ?>
-                        <?php if (empty($r['email']) && empty($r['url'])): ?><span class="muted">—</span><?php endif; ?>
-                    </td>
-                    <td><?= (int)$r['is_public'] === 1 ? '<span class="badge badge--success">yes</span>' : '<span class="muted">no</span>' ?></td>
-                    <td style="text-align:right; white-space: nowrap;">
-                        <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="?action=edit&id=<?= (int)$r['id'] ?>">Edit</a>
-                        <form method="post" style="display:inline;" onsubmit="return confirm('Delete this contact?');">
-                            <?= csrf_field() ?>
-                            <input type="hidden" name="form" value="delete">
-                            <input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
-                            <button class="btn btn--ghost" type="submit" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs); color: var(--color-error);">Delete</button>
-                        </form>
-                    </td>
-                </tr>
-            <?php endforeach; ?>
-            </tbody>
-        </table>
-        </div>
-        <?php endif; ?>
+                </td>
+                <td><?= !empty($r['trade']) ? e((string)$r['trade']) : '<span class="muted">—</span>' ?></td>
+                <td><?= $r['phone'] ? '<a href="tel:' . e((string)$r['phone']) . '">' . e((string)$r['phone']) . '</a>' : '<span class="muted">—</span>' ?></td>
+                <td>
+                    <?php if (!empty($r['email'])): ?><a href="mailto:<?= e((string)$r['email']) ?>"><?= e((string)$r['email']) ?></a><br><?php endif; ?>
+                    <?php if (!empty($r['url'])): ?><a href="<?= e((string)$r['url']) ?>" target="_blank" rel="noopener"><?= e(parse_url((string)$r['url'], PHP_URL_HOST) ?: $r['url']) ?></a><?php endif; ?>
+                    <?php if (empty($r['email']) && empty($r['url'])): ?><span class="muted">—</span><?php endif; ?>
+                </td>
+                <td><?= (int)$r['is_public'] === 1 ? '<span class="badge badge--success">yes</span>' : '<span class="muted">no</span>' ?></td>
+                <td style="text-align:right; white-space: nowrap;">
+                    <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="?action=edit&id=<?= (int)$r['id'] ?>">Edit</a>
+                    <form method="post" style="display:inline;" onsubmit="return confirm('Delete this contact?');">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="form" value="delete">
+                        <input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
+                        <button class="btn btn--ghost" type="submit" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs); color: var(--color-error);">Delete</button>
+                    </form>
+                </td>
+            </tr>
+        <?php endforeach; ?>
+        </tbody>
+    </table>
     </div>
-    <?php endforeach; ?>
+    <?php endif; ?>
 
 </div>
 

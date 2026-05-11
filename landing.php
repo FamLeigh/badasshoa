@@ -69,15 +69,23 @@ $faqStmt = db()->prepare('SELECT question, answer FROM faqs WHERE association_id
 $faqStmt->execute([(int)$assoc['id']]);
 $faqs = $faqStmt->fetchAll();
 
-// Active board members who've opted in to the public listing
+// Active board members who've opted in to the public listing.
+// Sort by office seniority (President → ... → Director) first; anyone with
+// no office on file sorts after, by role tier then name.
 $boardStmt = db()->prepare(
-    "SELECT id, first_name, last_name, role, unit_number, avatar_path, bio
+    "SELECT id, first_name, last_name, role, board_office, unit_number, avatar_path, bio
      FROM users
      WHERE association_id = ?
        AND status = 'active'
        AND show_on_public_landing = 1
        AND role IN ('board_admin','board_member','property_manager')
-     ORDER BY FIELD(role, 'board_admin', 'property_manager', 'board_member'),
+     ORDER BY FIELD(board_office,
+                    'president','vice_president','secretary','treasurer',
+                    'secretary_treasurer','director') = 0,
+              FIELD(board_office,
+                    'president','vice_president','secretary','treasurer',
+                    'secretary_treasurer','director'),
+              FIELD(role, 'board_admin', 'property_manager', 'board_member'),
               last_name, first_name"
 );
 $boardStmt->execute([(int)$assoc['id']]);
@@ -258,16 +266,25 @@ $page_layout = 'public_landing'; // Avoids the public marketing nav; landing has
                 $last  = trim((string)$bm['last_name']);
                 $displayName = $first . ($last !== '' ? ' ' . mb_substr($last, 0, 1) . '.' : '');
                 $initial = strtoupper(mb_substr($displayName ?: '?', 0, 1));
-                $roleLabel = match ($bm['role']) {
-                    'board_admin'      => 'Board Admin',
-                    'property_manager' => 'Property Manager',
-                    default            => 'Board Member',
-                };
-                $roleClass = match ($bm['role']) {
-                    'board_admin'      => 'badge--orange',
-                    'property_manager' => 'badge--info',
-                    default            => 'badge--navy',
-                };
+                $officeLbl = board_office_label((string)($bm['board_office'] ?? ''));
+                // When an office is set, the office *is* the headline title; the role
+                // (board_admin / board_member) is a permission detail residents
+                // don't need to see. When no office is set, fall back to the role.
+                if ($officeLbl !== '') {
+                    $headline = $officeLbl;
+                    $headlineClass = 'badge--orange';
+                } else {
+                    $headline = match ($bm['role']) {
+                        'board_admin'      => 'Board Admin',
+                        'property_manager' => 'Property Manager',
+                        default            => 'Board Member',
+                    };
+                    $headlineClass = match ($bm['role']) {
+                        'board_admin'      => 'badge--orange',
+                        'property_manager' => 'badge--info',
+                        default            => 'badge--navy',
+                    };
+                }
             ?>
             <div class="landing-board__card">
                 <?php if (!empty($bm['avatar_path'])): ?>
@@ -276,7 +293,7 @@ $page_layout = 'public_landing'; // Avoids the public marketing nav; landing has
                     <span class="landing-board__avatar"><?= e($initial) ?></span>
                 <?php endif; ?>
                 <div class="landing-board__name"><?= e($displayName ?: 'Board Member') ?></div>
-                <span class="badge <?= $roleClass ?>"><?= e($roleLabel) ?></span>
+                <span class="badge <?= $headlineClass ?>"><?= e($headline) ?></span>
                 <?php if (!empty($bm['bio'])): ?>
                     <p class="muted" style="margin-top: var(--sp-2); font-size: var(--fs-sm); white-space: pre-wrap;"><?= e((string)$bm['bio']) ?></p>
                 <?php endif; ?>

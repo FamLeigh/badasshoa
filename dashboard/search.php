@@ -114,6 +114,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'suggest
     }
 }
 
+// --- Edit a pending suggestion (without approving) -----------------------
+// Admins clean up wording / fix category / etc. before deciding. The status
+// stays 'pending' — only the content changes.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'suggest_edit') {
+    csrf_check();
+    if (!$canManage) { http_response_code(403); die('Forbidden'); }
+    $sid    = (int)($_POST['id'] ?? 0);
+    $title  = trim((string)($_POST['title'] ?? ''));
+    $body   = (string)($_POST['body'] ?? '');
+    $source = $_POST['source'] ?? 'board_rule';
+    $cat    = trim((string)($_POST['category'] ?? ''));
+    if (!in_array($source, ['bylaw','board_rule','policy'], true)) $source = 'board_rule';
+
+    $check = db()->prepare('SELECT 1 FROM rule_suggestions WHERE id = ? AND association_id = ? AND status = "pending"');
+    $check->execute([$sid, $assocId]);
+    if (!$check->fetchColumn()) {
+        flash('error', 'Suggestion not found or already decided.');
+        redirect('/dashboard/search.php?action=suggestions');
+    }
+
+    $bodyText = trim(strip_tags(str_replace(['&nbsp;', "\xc2\xa0"], ' ', $body)));
+    if ($title === '')        { $flashError = 'Title is required.'; }
+    elseif ($bodyText === '') { $flashError = 'Body is required.'; }
+    else {
+        db()->prepare(
+            'UPDATE rule_suggestions
+                SET title = ?, body = ?, source = ?, category = ?
+              WHERE id = ? AND association_id = ?'
+        )->execute([$title, $body, $source, $cat ?: null, $sid, $assocId]);
+        audit('rule_suggestion.edited', ['title' => $title], $sid, 'rule_suggestion');
+        flash('success', "Suggestion updated. Still pending — approve or reject when ready.");
+        redirect('/dashboard/search.php?action=approve&id=' . $sid);
+    }
+}
+
 // --- Approve a suggestion -> creates a real rule -------------------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'suggest_approve') {
     csrf_check();
@@ -996,7 +1031,7 @@ function rule_form_card(?array $editing, array $categories): void {
                                 <span class="side-nav__avatar" style="width: 28px; height: 28px; flex: 0 0 28px; background: var(--color-text-soft);"><?= e(strtoupper(mb_substr((string)($sug['suggester_name'] ?: $sug['suggester_email'] ?: '?'), 0, 1))) ?></span>
                             <?php endif; ?>
                             <div style="line-height: 1.2;">
-                                <strong style="font-size: var(--fs-sm);">Suggested by <?= e(trim((string)$sug['suggester_name']) ?: (string)($sug['suggester_email'] ?? '— unknown —')) ?></strong>
+                                <strong style="font-size: var(--fs-sm);">Suggested by <?= e(trim((string)$sug['suggester_name']) ?: (string)($sug['suggester_email'] ?? '') ?: '— suggester removed —') ?></strong>
                                 <?php if (!empty($sug['suggester_email']) && trim((string)$sug['suggester_name']) !== ''): ?>
                                     <div class="muted" style="font-size: var(--fs-xs);"><?= e((string)$sug['suggester_email']) ?></div>
                                 <?php endif; ?>
@@ -1053,7 +1088,7 @@ function rule_form_card(?array $editing, array $categories): void {
                 <span class="side-nav__avatar" style="width: 36px; height: 36px; flex: 0 0 36px; background: var(--color-text-soft);"><?= e(strtoupper(mb_substr((string)($approvingSug['suggester_name'] ?: $approvingSug['suggester_email'] ?: '?'), 0, 1))) ?></span>
             <?php endif; ?>
             <div style="line-height: 1.2;">
-                <strong>Suggested by <?= e(trim((string)$approvingSug['suggester_name']) ?: (string)($approvingSug['suggester_email'] ?? '— unknown —')) ?></strong>
+                <strong>Suggested by <?= e(trim((string)$approvingSug['suggester_name']) ?: (string)($approvingSug['suggester_email'] ?? '') ?: '— suggester removed —') ?></strong>
                 <div class="muted" style="font-size: var(--fs-xs);">
                     <?= !empty($approvingSug['suggester_email']) ? e((string)$approvingSug['suggester_email']) . ' · ' : '' ?>
                     submitted <?= e(date('M j, Y', strtotime((string)$approvingSug['suggested_at']))) ?>
@@ -1063,7 +1098,6 @@ function rule_form_card(?array $editing, array $categories): void {
 
         <form method="post" class="form">
             <?= csrf_field() ?>
-            <input type="hidden" name="form" value="suggest_approve">
             <input type="hidden" name="id" value="<?= (int)$approvingSug['id'] ?>">
 
             <div class="form-row form-row--2">
@@ -1109,9 +1143,15 @@ function rule_form_card(?array $editing, array $categories): void {
                 <label class="field__label" for="ap-body">Rule body</label>
                 <textarea class="textarea" id="ap-body" name="body" rows="6" required><?= e((string)$approvingSug['body']) ?></textarea>
             </div>
-            <div class="row" style="justify-content: flex-end;">
+            <div class="row" style="justify-content: space-between; gap: var(--sp-2); flex-wrap: wrap;">
                 <a class="btn btn--ghost" href="?action=suggestions">Cancel</a>
-                <button class="btn btn--primary" type="submit">Approve and publish</button>
+                <div class="row" style="gap: var(--sp-2);">
+                    <button class="btn btn--ghost" type="submit" name="form" value="suggest_edit"
+                            title="Save your edits and leave this suggestion pending — decide later">
+                        💾 Save edits (keep pending)
+                    </button>
+                    <button class="btn btn--primary" type="submit" name="form" value="suggest_approve">Approve and publish</button>
+                </div>
             </div>
         </form>
     </div>

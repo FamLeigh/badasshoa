@@ -167,6 +167,37 @@ function ensure_default_rule_categories(int $assocId): void
     }
 }
 
+// --- board office labels -------------------------------------------------
+// users.board_office (added in migration 029) is a display-only label for
+// board members + property managers. It does NOT affect permissions — those
+// still flow from `role` (board_admin = manager, board_member = view-only).
+// One office per person; NULL means "no specific office on file".
+function board_offices(): array
+{
+    return [
+        'president'           => 'President',
+        'vice_president'      => 'Vice President',
+        'secretary'           => 'Secretary',
+        'treasurer'           => 'Treasurer',
+        'secretary_treasurer' => 'Secretary-Treasurer',
+        'director'            => 'Director',
+    ];
+}
+
+function board_office_label(?string $office): string
+{
+    if ($office === null || $office === '') return '';
+    return board_offices()[$office] ?? '';
+}
+
+// Canonical seniority sort. Use as the second key after FIELD() in SQL or as
+// PHP-side sort tiebreaker. Lower number = higher in the listing.
+function board_office_rank(?string $office): int
+{
+    $order = array_flip(array_keys(board_offices()));
+    return isset($order[$office]) ? (int)$order[$office] : 99;
+}
+
 // --- placeholder email helpers ------------------------------------------
 // Roster imports (e.g. /dashboard/directory.php's CSV importer) synthesize
 // a placeholder email like noemail+<hex>@placeholder.local for residents

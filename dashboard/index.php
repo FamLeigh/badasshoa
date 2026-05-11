@@ -44,13 +44,11 @@ $comms = db()->prepare('SELECT COUNT(*) FROM committees WHERE association_id = ?
 $comms->execute([$assocId]);
 $stats['committees'] = (int)$comms->fetchColumn();
 
-// Upcoming events (today and forward)
-$evStmt = db()->prepare(
-    'SELECT COUNT(*) FROM events
-      WHERE association_id = ? AND starts_at >= NOW()'
-);
-$evStmt->execute([$assocId]);
-$stats['events'] = (int)$evStmt->fetchColumn();
+// Upcoming events count is computed AFTER the upcoming-events expansion below
+// (a single recurring series seeded back in March still produces future
+// occurrences — a naive `starts_at >= NOW()` count misses those). $stats['events']
+// is filled in once $upcomingEvents is available.
+$stats['events'] = 0;
 
 // Open concerns (anything not closed/resolved)
 $conStmt = db()->prepare(
@@ -96,8 +94,12 @@ $upStmt = db()->prepare(
       LIMIT 100"
 );
 $upStmt->execute(array_merge([$assocId], $allowedAudiences));
-$upcomingEvents = expand_events($upStmt->fetchAll(), false, 60);
-if (count($upcomingEvents) > 5) $upcomingEvents = array_slice($upcomingEvents, 0, 5);
+$expandedUpcoming = expand_events($upStmt->fetchAll(), false, 60);
+// Tile count = total expanded upcoming occurrences in the 60-day window
+// (this includes every recurring occurrence, so a weekly meeting counts once
+// per upcoming week, matching what's actually on the schedule).
+$stats['events']  = count($expandedUpcoming);
+$upcomingEvents   = array_slice($expandedUpcoming, 0, 5);
 
 $user = current_user();
 $hour = (int)date('G');

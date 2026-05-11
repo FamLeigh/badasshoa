@@ -155,6 +155,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'invite'
     if (!in_array($role, $allowedRoles, true)) $role = 'resident';
     $showOnLanding = isset($_POST['show_on_public_landing']) ? 1 : 0;
 
+    $office = $_POST['board_office'] ?? '';
+    if ($office !== '' && !array_key_exists($office, board_offices())) $office = '';
+    // Office only applies to board roles + PM. Clear it otherwise.
+    if (!in_array($role, ['board_admin','board_member','property_manager'], true)) $office = '';
+
     // Optional password override — admin can type one or use Generate Random.
     $pw1 = (string)($_POST['new_password'] ?? '');
     $pw2 = (string)($_POST['new_password_confirm'] ?? '');
@@ -183,10 +188,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'invite'
                 // Status = active so they can log in immediately and change password via /forgot.php
                 // or /dashboard/settings.php.
                 $stmt = db()->prepare(
-                    'INSERT INTO users (association_id, first_name, last_name, email, phone, password_hash, role, unit_number, is_owner, show_on_public_landing, status)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "active")'
+                    'INSERT INTO users (association_id, first_name, last_name, email, phone, password_hash, role, board_office, unit_number, is_owner, show_on_public_landing, status)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "active")'
                 );
-                $stmt->execute([$assocId, $first, $last, $email, $phone ?: null, $hash, $role, $unit ?: null, $isOwner, $showOnLanding]);
+                $stmt->execute([$assocId, $first, $last, $email, $phone ?: null, $hash, $role, $office ?: null, $unit ?: null, $isOwner, $showOnLanding]);
                 $newId = (int)db()->lastInsertId();
 
                 $pwLine = $customPassword
@@ -253,6 +258,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit') 
     if (!in_array($status, $allowedStatus, true)) $status = 'active';
     $showOnLanding = isset($_POST['show_on_public_landing']) ? 1 : 0;
 
+    $office = $_POST['board_office'] ?? '';
+    if ($office !== '' && !array_key_exists($office, board_offices())) $office = '';
+    // Office only applies to board roles + PM. Clear it otherwise so a demoted
+    // board member doesn't keep an orphaned "President" label.
+    if (!in_array($role, ['board_admin','board_member','property_manager'], true)) $office = '';
+
     // Verify the row belongs to this association.
     $check = db()->prepare('SELECT 1 FROM users WHERE id = ? AND association_id = ?');
     $check->execute([$id, $assocId]);
@@ -280,13 +291,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit') 
                         'UPDATE users SET first_name = ?, last_name = ?, email = ?, email2 = ?, phone = ?, phone2 = ?,
                                            mailing_address = ?, mailing_city = ?, mailing_state_region = ?,
                                            mailing_postal_code = ?, mailing_country = ?,
-                                           unit_number = ?, role = ?, is_owner = ?, status = ?,
+                                           unit_number = ?, role = ?, board_office = ?, is_owner = ?, status = ?,
                                            show_on_public_landing = ?
                          WHERE id = ? AND association_id = ?'
                     )->execute([
                         $first, $last, $email, $email2 ?: null, $phone ?: null, $phone2 ?: null,
                         $mAddr ?: null, $mCity ?: null, $mState ?: null, $mPostal ?: null, $mCtry ?: null,
-                        $unit ?: null, $role, $isOwner, $status, $showOnLanding,
+                        $unit ?: null, $role, $office ?: null, $isOwner, $status, $showOnLanding,
                         $id, $assocId,
                     ]);
 
@@ -338,11 +349,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit') 
     }
 }
 
-// Board members
+// Board members. Sort by office seniority first (President → ... → Director),
+// then anyone without an office (NULL bubbles to the end via FIELD()), then by
+// role tier as the previous secondary sort, then by name.
 $boardStmt = db()->prepare(
     "SELECT * FROM users
      WHERE association_id = ? AND role IN ('board_admin','board_member','property_manager') AND status='active'
-     ORDER BY FIELD(role,'board_admin','board_member','property_manager'), last_name, first_name"
+     ORDER BY FIELD(board_office,
+                    'president','vice_president','secretary','treasurer',
+                    'secretary_treasurer','director') = 0,
+              FIELD(board_office,
+                    'president','vice_president','secretary','treasurer',
+                    'secretary_treasurer','director'),
+              FIELD(role,'board_admin','board_member','property_manager'),
+              last_name, first_name"
 );
 $boardStmt->execute([$assocId]);
 $board = $boardStmt->fetchAll();
@@ -519,7 +539,17 @@ require __DIR__ . '/../includes/header.php';
                     </select>
                 </div>
             </div>
-            <div class="form-row form-row--2">
+            <div class="form-row" style="display:grid; grid-template-columns: 1.4fr 1fr 1fr; gap: var(--sp-3);">
+                <div class="field">
+                    <label class="field__label" for="eo">Board office <span class="muted" style="font-weight: normal;">(board roles only)</span></label>
+                    <select class="select" id="eo" name="board_office">
+                        <option value="">— no office —</option>
+                        <?php foreach (board_offices() as $val => $label): ?>
+                            <option value="<?= e($val) ?>" <?= (($editUser['board_office'] ?? '') === $val) ? 'selected' : '' ?>><?= e($label) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <div class="field__hint">Display label only. Doesn't change admin capabilities — those still flow from the role.</div>
+                </div>
                 <div class="field">
                     <label class="field__label" for="es">Status</label>
                     <select class="select" id="es" name="status">
@@ -673,12 +703,24 @@ B2,Sam,Garcia,sam@example.com,,,,0</pre>
                         <option value="property_manager">Property manager</option>
                     </select>
                 </div>
+                <div class="field">
+                    <label class="field__label" for="ioffice">Board office <span class="muted" style="font-weight: normal;">(board roles only)</span></label>
+                    <select class="select" id="ioffice" name="board_office">
+                        <option value="">— no office —</option>
+                        <?php foreach (board_offices() as $val => $label): ?>
+                            <option value="<?= e($val) ?>"><?= e($label) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row form-row--2">
                 <div class="field" style="justify-content: center;">
                     <label class="field__label">&nbsp;</label>
                     <label style="display:flex; align-items:center; gap: var(--sp-2); font-size: var(--fs-sm);">
                         <input type="checkbox" name="show_on_public_landing" value="1"> Show in "Meet your board" (board roles only)
                     </label>
                 </div>
+                <div class="field"><!-- spacer --></div>
             </div>
 
             <!-- Optional password override -->
@@ -730,9 +772,12 @@ B2,Sam,Garcia,sam@example.com,,,,0</pre>
         <p class="muted">No board members on file yet.</p>
     <?php else: ?>
     <div class="grid grid--3" style="margin-bottom: var(--sp-8);">
-        <?php foreach ($board as $b): ?>
+        <?php foreach ($board as $b): $officeLbl = board_office_label((string)($b['board_office'] ?? '')); ?>
             <div class="card">
-                <div class="row" style="margin-bottom: var(--sp-2);">
+                <div class="row" style="margin-bottom: var(--sp-2); gap: var(--sp-2); flex-wrap: wrap;">
+                    <?php if ($officeLbl !== ''): ?>
+                        <span class="badge badge--orange"><?= e($officeLbl) ?></span>
+                    <?php endif; ?>
                     <span class="badge badge--navy"><?= e(str_replace('_',' ',$b['role'])) ?></span>
                 </div>
                 <strong><?= e(trim($b['first_name'] . ' ' . $b['last_name']) ?: $b['email']) ?></strong>
