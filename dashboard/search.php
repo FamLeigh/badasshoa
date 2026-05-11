@@ -672,8 +672,18 @@ function rule_form_card(?array $editing, array $categories): void {
             <p class="muted">Search, manage, and import your association's rules.</p>
         </div>
         <div class="row" style="gap: var(--sp-2); flex-wrap: wrap;">
+            <?php
+            // Show "Show all rules" whenever the user is on any sub-view of this page
+            // (categories, import, suggest, suggestions, approve, edit, new). Lets them
+            // get back to the default listing in one click instead of having to find
+            // the small "← Back" link inside each card.
+            $onSubView = $showCats || $showImp || $showAdd || $showEdit || $showSuggest || $showSuggestQueue || $approvingSug !== null;
+            ?>
+            <?php if ($onSubView): ?>
+                <a class="btn btn--primary" href="/dashboard/search.php">← Show all rules</a>
+            <?php endif; ?>
             <a class="btn btn--ghost" href="/dashboard/rules-print.php" target="_blank" rel="noopener" title="Open a print-friendly listing of every rule in number order">🖨 Print all</a>
-            <a class="btn <?= $canManage ? 'btn--ghost' : 'btn--primary' ?>" href="?action=suggest">+ Suggest a rule</a>
+            <a class="btn <?= $canManage ? 'btn--ghost' : ($onSubView ? 'btn--ghost' : 'btn--primary') ?>" href="?action=suggest">+ Suggest a rule</a>
             <?php if ($canManage): ?>
                 <a class="btn btn--ghost" href="?action=suggestions">
                     Suggestions<?php if ($pendingSugCount): ?>
