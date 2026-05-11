@@ -53,6 +53,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'upload'
     }
 }
 
+// --- Edit metadata (caption, category, visibility, linked_type) ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit') {
+    csrf_check();
+    if (!$canManage) { http_response_code(403); die('Forbidden'); }
+
+    $id         = (int)($_POST['id'] ?? 0);
+    $caption    = trim((string)($_POST['caption'] ?? ''));
+    $category   = trim((string)($_POST['category'] ?? ''));
+    $visibility = $_POST['visibility'] ?? 'private';
+    $linkedType = $_POST['linked_type'] ?? 'general';
+    if (!in_array($visibility, ['public','private'], true))                               $visibility = 'private';
+    if (!in_array($linkedType, ['general','work_order','violation','announcement'], true)) $linkedType = 'general';
+
+    $check = db()->prepare('SELECT 1 FROM media WHERE id = ? AND association_id = ?');
+    $check->execute([$id, $assocId]);
+    if (!$check->fetchColumn()) {
+        $flashError = 'Image not found.';
+    } else {
+        db()->prepare(
+            'UPDATE media SET caption = ?, category = ?, visibility = ?, linked_type = ?
+              WHERE id = ? AND association_id = ?'
+        )->execute([$caption ?: null, $category ?: null, $visibility, $linkedType, $id, $assocId]);
+        audit('media.edited', ['caption' => mb_strimwidth($caption, 0, 60, '…'), 'visibility' => $visibility], $id, 'media');
+        flash('success', 'Image info updated.');
+        redirect('/dashboard/media.php?tab=' . $visibility);
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'delete') {
     csrf_check();
     if (!$canManage) { http_response_code(403); die('Forbidden'); }
@@ -79,6 +107,15 @@ $stmt->execute([$assocId, $tab]);
 $items = $stmt->fetchAll();
 
 $showUpload = ($_GET['action'] ?? '') === 'new' && $canManage;
+
+$editItem = null;
+if (($_GET['action'] ?? '') === 'edit' && $canManage) {
+    $eid = (int)($_GET['id'] ?? 0);
+    $stmt = db()->prepare('SELECT * FROM media WHERE id = ? AND association_id = ?');
+    $stmt->execute([$eid, $assocId]);
+    $editItem = $stmt->fetch() ?: null;
+}
+
 $page_title = 'Media — ' . $association['name'];
 require __DIR__ . '/../includes/header.php';
 ?>
@@ -96,6 +133,57 @@ require __DIR__ . '/../includes/header.php';
     </div>
 
     <?php if ($flashError): ?><div class="flash flash--error"><?= e($flashError) ?></div><?php endif; ?>
+
+    <?php if ($editItem): ?>
+    <div class="card card--padded" style="margin-bottom: var(--sp-6); display:flex; gap: var(--sp-5); flex-wrap: wrap;">
+        <div style="flex: 0 0 auto;">
+            <img src="/dashboard/file.php?type=media&id=<?= (int)$editItem['id'] ?>" alt="" style="width: 200px; height: 200px; object-fit: cover; border-radius: var(--r-md);">
+        </div>
+        <div style="flex: 1; min-width: 280px;">
+            <div class="card__head">
+                <h3 class="card__title">Edit image info</h3>
+                <a class="muted" style="font-size: var(--fs-sm);" href="/dashboard/media.php?tab=<?= e((string)$editItem['visibility']) ?>">← Back</a>
+            </div>
+            <p class="muted" style="font-size: var(--fs-sm); margin-bottom: var(--sp-3);">
+                Editing metadata only. To replace the actual image, delete this one and upload again.
+            </p>
+            <form method="post" class="form">
+                <?= csrf_field() ?>
+                <input type="hidden" name="form" value="edit">
+                <input type="hidden" name="id" value="<?= (int)$editItem['id'] ?>">
+                <div class="form-row form-row--2">
+                    <div class="field">
+                        <label class="field__label" for="emvis">Visibility</label>
+                        <select class="select" id="emvis" name="visibility">
+                            <option value="public"  <?= $editItem['visibility']==='public'?'selected':'' ?>>Public — gallery</option>
+                            <option value="private" <?= $editItem['visibility']==='private'?'selected':'' ?>>Private — board only</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label class="field__label" for="emlinked">Linked to</label>
+                        <select class="select" id="emlinked" name="linked_type">
+                            <?php foreach (['general'=>'General','work_order'=>'Work order','violation'=>'Violation','announcement'=>'Announcement'] as $v=>$lbl): ?>
+                                <option value="<?= e($v) ?>" <?= $editItem['linked_type']===$v?'selected':'' ?>><?= e($lbl) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                </div>
+                <div class="field">
+                    <label class="field__label" for="emcat">Category</label>
+                    <input class="input" id="emcat" name="category" value="<?= e((string)($editItem['category'] ?? '')) ?>" placeholder="Pool / Lobby / Roof / Damage">
+                </div>
+                <div class="field">
+                    <label class="field__label" for="emcap">Caption</label>
+                    <input class="input" id="emcap" name="caption" value="<?= e((string)($editItem['caption'] ?? '')) ?>">
+                </div>
+                <div class="row" style="justify-content: flex-end;">
+                    <a class="btn btn--ghost" href="/dashboard/media.php?tab=<?= e((string)$editItem['visibility']) ?>">Cancel</a>
+                    <button class="btn btn--primary" type="submit">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <?php endif; ?>
 
     <?php if ($showUpload): ?>
     <div class="card card--padded" style="margin-bottom: var(--sp-6);">
@@ -152,12 +240,15 @@ require __DIR__ . '/../includes/header.php';
                     <div class="gallery__caption"><?= e($m['caption']) ?></div>
                 <?php endif; ?>
                 <?php if ($canManage): ?>
-                <form method="post" style="position:absolute; top:6px; right:6px; margin:0;" onsubmit="return confirm('Delete this image?');">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="form" value="delete">
-                    <input type="hidden" name="id" value="<?= (int)$m['id'] ?>">
-                    <button class="btn btn--danger" style="padding: 0.2rem 0.5rem; font-size: var(--fs-xs);" type="submit">×</button>
-                </form>
+                <div style="position:absolute; top:6px; right:6px; display:flex; gap: 4px;">
+                    <a href="?action=edit&id=<?= (int)$m['id'] ?>" class="btn btn--ghost" style="padding: 0.2rem 0.5rem; font-size: var(--fs-xs); background: rgba(255,255,255,0.92);" title="Edit info">Edit</a>
+                    <form method="post" style="margin:0;" onsubmit="return confirm('Delete this image?');">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="form" value="delete">
+                        <input type="hidden" name="id" value="<?= (int)$m['id'] ?>">
+                        <button class="btn btn--danger" style="padding: 0.2rem 0.5rem; font-size: var(--fs-xs);" type="submit" title="Delete">×</button>
+                    </form>
+                </div>
                 <?php endif; ?>
             </div>
         <?php endforeach; ?>
