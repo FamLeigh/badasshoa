@@ -89,6 +89,15 @@ $stmt = db()->prepare('SELECT * FROM users WHERE id = ?');
 $stmt->execute([(int)$user['id']]);
 $me = $stmt->fetch();
 
+// Employment records for this user (read-only on profile — board edits via /dashboard/employees.php).
+$myJobsStmt = db()->prepare(
+    "SELECT * FROM employees
+      WHERE association_id = ? AND user_id = ?
+      ORDER BY (status = 'active') DESC, COALESCE(start_date, '1900-01-01') DESC"
+);
+$myJobsStmt->execute([$assocId, (int)$user['id']]);
+$myJobs = $myJobsStmt->fetchAll();
+
 // Documents the board has scoped to me (e.g. a lease, an appointment letter).
 // Respects access_level: board_only is hidden from non-managers; everything
 // else is visible to the member it's scoped to.
@@ -214,6 +223,42 @@ require __DIR__ . '/../includes/header.php';
             <button class="btn btn--primary" type="submit">Save profile</button>
         </div>
     </form>
+
+    <?php if ($myJobs): ?>
+    <div class="card card--padded" style="margin-top: var(--sp-6);">
+        <h2 style="font-size: var(--fs-xl); margin: 0 0 var(--sp-3);">💼 Your employment</h2>
+        <p class="muted" style="font-size: var(--fs-sm); margin-bottom: var(--sp-3);">Edits are handled by the board. If anything below is wrong, let them know.</p>
+        <div class="stack-md">
+        <?php foreach ($myJobs as $j):
+            $pay = match ($j['pay_type']) {
+                'hourly' => $j['hourly_rate'] !== null ? '$' . number_format((float)$j['hourly_rate'], 2) . '/hr' : '',
+                'salary' => $j['salary']      !== null ? '$' . number_format((float)$j['salary'], 0) . '/yr' : '',
+                'flat'   => $j['flat_amount'] !== null ? '$' . number_format((float)$j['flat_amount'], 2) . '/job' : '',
+                default  => 'Unpaid',
+            };
+        ?>
+            <div style="<?= $j['status'] === 'inactive' ? 'opacity: 0.6;' : '' ?>">
+                <div class="row" style="gap: var(--sp-2); margin-bottom: var(--sp-1); flex-wrap: wrap;">
+                    <strong><?= e((string)$j['job_title']) ?></strong>
+                    <span class="badge" style="font-size: var(--fs-xs);"><?= e(ucfirst((string)$j['employment_type'])) ?></span>
+                    <span class="badge <?= $j['status']==='active' ? 'badge--success' : '' ?>" style="font-size: var(--fs-xs);"><?= e((string)$j['status']) ?></span>
+                </div>
+                <div class="muted" style="font-size: var(--fs-sm);">
+                    <?= e($pay) ?>
+                    <?php if (!empty($j['start_date']) || !empty($j['end_date'])): ?>
+                        <?= !empty($pay) ? ' · ' : '' ?>
+                        <?php if (!empty($j['start_date'])): ?><?= e(date('M Y', strtotime((string)$j['start_date']))) ?><?php endif; ?>
+                        <?php if (!empty($j['end_date'])): ?> – <?= e(date('M Y', strtotime((string)$j['end_date']))) ?><?php elseif (!empty($j['start_date'])): ?> – present<?php endif; ?>
+                    <?php endif; ?>
+                </div>
+                <?php if (!empty($j['notes'])): ?>
+                    <p class="muted" style="font-size: var(--fs-sm); margin: var(--sp-1) 0 0; white-space: pre-wrap;"><?= e((string)$j['notes']) ?></p>
+                <?php endif; ?>
+            </div>
+        <?php endforeach; ?>
+        </div>
+    </div>
+    <?php endif; ?>
 
     <?php if ($myDocs): ?>
     <div class="card card--padded" style="margin-top: var(--sp-6);">

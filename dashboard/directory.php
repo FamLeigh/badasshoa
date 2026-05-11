@@ -403,20 +403,25 @@ $rentersOnly = (viewing_role() === 'renter');
 if ($rentersOnly) {
     $residents = [];
 } else {
-    $sql = "SELECT * FROM users WHERE association_id = ? AND status <> 'inactive'";
+    $sql = "SELECT u.*,
+                   (SELECT job_title FROM employees e
+                     WHERE e.user_id = u.id AND e.association_id = u.association_id AND e.status = 'active'
+                     ORDER BY e.id DESC LIMIT 1) AS employee_job_title
+              FROM users u
+             WHERE u.association_id = ? AND u.status <> 'inactive'";
     $params = [$assocId];
     if ($qSearch !== '') {
-        $sql .= " AND (first_name LIKE ? OR last_name LIKE ? OR email LIKE ? OR unit_number LIKE ?)";
+        $sql .= " AND (u.first_name LIKE ? OR u.last_name LIKE ? OR u.email LIKE ? OR u.unit_number LIKE ?)";
         $like = "%$qSearch%";
         array_push($params, $like, $like, $like, $like);
     }
     if ($ownersOnly) {
-        $sql .= ' AND is_owner = 1';
+        $sql .= ' AND u.is_owner = 1';
     }
     // Natural alphanumeric sort: numeric prefix first (so "101" < "101A"), then full string lex,
     // then name. Letter-prefixed units (CAST = 0) bubble to the top — acceptable since most
     // condos use number-prefixed units; document if it becomes an issue.
-    $sql .= ' ORDER BY CAST(unit_number AS UNSIGNED), unit_number, last_name, first_name';
+    $sql .= ' ORDER BY CAST(u.unit_number AS UNSIGNED), u.unit_number, u.last_name, u.first_name';
     $stmt = db()->prepare($sql);
     $stmt->execute($params);
     $residents = $stmt->fetchAll();
@@ -872,7 +877,12 @@ B2,Sam,Garcia,sam@example.com,,,,0</pre>
                     <?php endif; ?>
                 </td>
                 <td><?= e(str_replace('_',' ',$r['role'])) ?></td>
-                <td><?= $r['is_owner'] ? '<span class="badge badge--success">Owner</span>' : '<span class="badge">Renter</span>' ?></td>
+                <td>
+                    <?= $r['is_owner'] ? '<span class="badge badge--success">Owner</span>' : '<span class="badge">Renter</span>' ?>
+                    <?php if (!empty($r['employee_job_title'])): ?>
+                        <span class="badge" style="background: #efe7d1; color: #6b4a06; border: 1px solid #d9c97a; font-size: var(--fs-xs);" title="<?= e((string)$r['employee_job_title']) ?>">💼 <?= e(mb_strimwidth((string)$r['employee_job_title'], 0, 22, '…')) ?></span>
+                    <?php endif; ?>
+                </td>
                 <td><?= is_placeholder_email((string)$r['email']) ? '<em class="muted">—</em>' : e((string)$r['email']) ?></td>
                 <td><?= e($r['phone'] ?: '—') ?></td>
                 <?php if ($canManage): ?>

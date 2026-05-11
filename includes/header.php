@@ -280,6 +280,7 @@ if ($page_layout === 'app' && isset($association) && $association):
             <?= nav_link('/dashboard/concerns.php',    'concerns',       'Concerns',       'concerns',       $active) ?>
             <?php if (role_can_manage(viewing_role())): ?>
                 <?= nav_link('/dashboard/work-orders.php', 'concerns',       'Work orders',    'work-orders',    $active) ?>
+                <?= nav_link('/dashboard/employees.php',   'directory',      'Employees',      'employees',      $active) ?>
                 <?= nav_link('/dashboard/contacts.php',    'contacts',       'Contacts',       'contacts',       $active) ?>
             <?php endif; ?>
             <?= nav_link('/dashboard/media.php',       'media',          'Media',          'media',          $active) ?>

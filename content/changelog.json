@@ -1,5 +1,14 @@
 [
     {
+        "id": "cl-20260512-030000-emp",
+        "at": "2026-05-12T03:00:00-04:00",
+        "type": "feature",
+        "title": "Employees — track owner-employees, contractors, and volunteers",
+        "description": "New Employees page at /dashboard/employees.php for the board to track anyone the association pays or relies on. Independent of role and owner status — an owner can also be the maintenance person, a board member can be an unpaid volunteer, a contractor can be on retainer. Each record: job title, type (Employee / Contractor / Volunteer), pay type (Hourly / Salary / Flat / Unpaid), start/end dates, status, and notes. The directory's Owner / Renter column now shows a small 💼 'job title' chip next to the owner badge when the person also has an active employment record. The user's own profile page gets a 💼 Your employment card showing what the board has on file (read-only).",
+        "author": "Reboooot",
+        "link": "/dashboard/employees.php"
+    },
+    {
         "id": "cl-20260512-013000-evdtl",
         "at": "2026-05-12T01:30:00-04:00",
         "type": "feature",
