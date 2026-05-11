@@ -86,12 +86,80 @@ $stmt = db()->prepare($sql);
 $stmt->execute($params);
 $rows = $stmt->fetchAll();
 
+// Detail mode: ?id=N renders a single announcement with full body + print link.
+$detailId = (int)($_GET['id'] ?? 0);
+$detail = null;
+if ($detailId > 0) {
+    $dStmt = db()->prepare(
+        'SELECT a.*, CONCAT(IFNULL(u.first_name,""), " ", IFNULL(u.last_name,"")) AS author
+           FROM announcements a LEFT JOIN users u ON u.id = a.author_id
+          WHERE a.id = ? AND a.association_id = ?'
+    );
+    $dStmt->execute([$detailId, $assocId]);
+    $detail = $dStmt->fetch() ?: null;
+}
+
 $showNew = ($_GET['action'] ?? '') === 'new' && $canPost;
 $page_title = 'Announcements — ' . $association['name'];
 require __DIR__ . '/../includes/header.php';
 ?>
 
 <div class="container" style="padding: var(--sp-8) var(--sp-6) var(--sp-12); max-width: 1180px;">
+
+    <?php if ($detail): /* ---------- DETAIL VIEW ---------- */
+        $startTs = strtotime((string)$detail['published_at']);
+        $expTs   = !empty($detail['expires_at']) ? strtotime((string)$detail['expires_at']) : null;
+        $typeClass = $detail['type'] === 'emergency' ? 'badge--error'
+                   : ($detail['type'] === 'event' ? 'badge--info'
+                   : ($detail['type'] === 'maintenance' ? 'badge--warning' : 'badge--orange'));
+    ?>
+        <div class="row row--between" style="margin-bottom: var(--sp-4); flex-wrap: wrap; gap: var(--sp-3);">
+            <a class="muted" style="font-size: var(--fs-sm);" href="/dashboard/communications.php">← Back to announcements</a>
+            <div class="row" style="gap: var(--sp-2);">
+                <a class="btn btn--ghost" href="/dashboard/announcement-print.php?id=<?= (int)$detail['id'] ?>" target="_blank" rel="noopener">🖨 Print</a>
+                <?php if ($canPost): ?>
+                    <form method="post" style="display:inline;" onsubmit="return confirm('Delete this announcement?');">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="form" value="delete">
+                        <input type="hidden" name="id" value="<?= (int)$detail['id'] ?>">
+                        <button class="btn btn--ghost" type="submit" style="color: var(--color-error);">Delete</button>
+                    </form>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <article class="card card--padded" style="margin-bottom: var(--sp-6);">
+            <!-- Date-first header with calendar icon -->
+            <div class="row" style="gap: var(--sp-4); align-items: center; margin-bottom: var(--sp-4); padding-bottom: var(--sp-3); border-bottom: 1px solid var(--color-border);">
+                <div style="text-align:center; min-width: 70px; padding: 6px 10px; border: 2px solid var(--color-navy); border-radius: 8px; background: var(--color-surface);">
+                    <div style="font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-text-soft); font-weight: 700;"><?= e(date('M', $startTs)) ?></div>
+                    <div style="font-size: 26pt; line-height: 1; font-weight: 800; color: var(--color-navy);"><?= e(date('j', $startTs)) ?></div>
+                    <div style="font-size: var(--fs-xs); color: var(--color-text-soft);"><?= e(date('Y', $startTs)) ?></div>
+                </div>
+                <div style="flex: 1; min-width: 0;">
+                    <div class="row" style="gap: var(--sp-2); margin-bottom: var(--sp-1); flex-wrap: wrap;">
+                        <span class="badge <?= $typeClass ?>"><?= e($detail['type']) ?></span>
+                        <span class="badge"><?= e($detail['audience']) ?></span>
+                        <?php if ($expTs && $expTs < time()): ?>
+                            <span class="badge" style="background:#e8e8e8; color:#666;">⌛ expired</span>
+                        <?php elseif (time() < $startTs): ?>
+                            <span class="badge badge--info">⏳ scheduled</span>
+                        <?php endif; ?>
+                    </div>
+                    <h1 style="font-size: var(--fs-2xl); margin: 0;"><?= e((string)$detail['title']) ?></h1>
+                    <div class="muted" style="font-size: var(--fs-sm); margin-top: var(--sp-1);">
+                        <?= e(date('l, F j, Y · g:i A', $startTs)) ?>
+                        · by <?= e(trim((string)$detail['author']) ?: 'Unknown') ?>
+                        <?php if ($expTs): ?> · expires <?= e(date('M j, Y', $expTs)) ?><?php endif; ?>
+                    </div>
+                </div>
+            </div>
+
+            <div style="white-space: pre-wrap; line-height: 1.55; font-size: var(--fs-md);"><?= e((string)$detail['body']) ?></div>
+        </article>
+
+    <?php else: /* ---------- LISTING VIEW ---------- */ ?>
+
     <div class="row row--between" style="margin-bottom: var(--sp-6);">
         <div>
             <h1 style="font-size: var(--fs-3xl); margin: 0;">Announcements</h1>
@@ -202,7 +270,15 @@ require __DIR__ . '/../includes/header.php';
     <?php if (!$rows): ?>
         <div class="card card--padded center"><p class="muted">No announcements yet.</p></div>
     <?php else: ?>
-        <div class="stack-lg">
+        <style>
+            .ann-card { display:flex; gap: var(--sp-4); align-items:flex-start; padding: var(--sp-4); border: 1px solid var(--color-border); border-radius: var(--r-md); background: var(--color-surface-2); margin-bottom: var(--sp-3); text-decoration: none; color: inherit; transition: transform 120ms ease, box-shadow 120ms ease; }
+            .ann-card:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(15,31,61,0.08); }
+            .ann-date { flex: 0 0 64px; text-align:center; padding: 5px 8px; border: 2px solid var(--color-navy); border-radius: 6px; background: #fff; }
+            .ann-date .m { font-size: 9pt; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-text-soft); font-weight: 700; }
+            .ann-date .d { font-size: 22pt; line-height: 1; font-weight: 800; color: var(--color-navy); margin: 2px 0; }
+            .ann-date .y { font-size: 8pt; color: var(--color-text-soft); }
+            .ann-body { flex: 1 1 auto; min-width: 0; }
+        </style>
         <?php
         $nowTs = time();
         foreach ($rows as $a):
@@ -214,9 +290,14 @@ require __DIR__ . '/../includes/header.php';
             $isScheduled = $startTs > $nowTs;
             $isExpired   = $expTs !== null && $expTs < $nowTs;
         ?>
-        <article class="card card--padded" style="<?= $isExpired ? 'opacity: 0.55;' : ($isScheduled ? 'border-left: 3px solid var(--color-info);' : '') ?>">
-            <div class="row row--between" style="margin-bottom: var(--sp-3);">
-                <div class="row" style="gap: var(--sp-2); flex-wrap: wrap;">
+        <a class="ann-card" href="?id=<?= (int)$a['id'] ?>" style="<?= $isExpired ? 'opacity: 0.55;' : ($isScheduled ? 'border-left: 3px solid var(--color-info);' : '') ?>">
+            <div class="ann-date">
+                <div class="m"><?= e(date('M', $startTs)) ?></div>
+                <div class="d"><?= e(date('j', $startTs)) ?></div>
+                <div class="y"><?= e(date('Y', $startTs)) ?></div>
+            </div>
+            <div class="ann-body">
+                <div class="row" style="gap: var(--sp-2); margin-bottom: var(--sp-1); flex-wrap: wrap;">
                     <span class="badge <?= $typeClass ?>"><?= e($a['type']) ?></span>
                     <span class="badge"><?= e($a['audience']) ?></span>
                     <?php if ($isScheduled): ?>
@@ -226,23 +307,16 @@ require __DIR__ . '/../includes/header.php';
                     <?php elseif ($expTs !== null): ?>
                         <span class="muted" style="font-size: var(--fs-xs);" title="Expires <?= e(date('M j, Y g:i A', $expTs)) ?>">expires <?= e(date('M j', $expTs)) ?></span>
                     <?php endif; ?>
-                    <span class="muted" style="font-size: var(--fs-xs);"><?= e(date('M j, Y', $startTs)) ?> &middot; <?= e(trim((string)$a['author']) ?: 'Unknown') ?></span>
+                    <span class="muted" style="font-size: var(--fs-xs);"><?= e(date('g:i A', $startTs)) ?> &middot; <?= e(trim((string)$a['author']) ?: 'Unknown') ?></span>
                 </div>
-                <?php if ($canPost): ?>
-                    <form method="post" style="display:inline;" onsubmit="return confirm('Delete announcement?');">
-                        <?= csrf_field() ?>
-                        <input type="hidden" name="form" value="delete">
-                        <input type="hidden" name="id" value="<?= (int)$a['id'] ?>">
-                        <button class="btn btn--ghost" type="submit">Delete</button>
-                    </form>
-                <?php endif; ?>
+                <h2 style="font-size: var(--fs-lg); margin: 0 0 var(--sp-1);"><?= e($a['title']) ?></h2>
+                <p class="muted" style="margin: 0; font-size: var(--fs-sm);"><?= e(mb_strimwidth(strip_tags($a['body']), 0, 200, '…')) ?></p>
             </div>
-            <h2 style="font-size: var(--fs-xl); margin: 0 0 var(--sp-2);"><?= e($a['title']) ?></h2>
-            <p style="margin: 0; white-space: pre-wrap;"><?= e($a['body']) ?></p>
-        </article>
+        </a>
         <?php endforeach; ?>
-        </div>
     <?php endif; ?>
+
+    <?php endif; /* end listing branch */ ?>
 </div>
 
 <?php require __DIR__ . '/../includes/footer.php'; ?>

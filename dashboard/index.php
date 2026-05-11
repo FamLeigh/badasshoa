@@ -280,20 +280,25 @@ require __DIR__ . '/../includes/header.php';
             <?php if (!$announcements): ?>
                 <p class="muted">No announcements yet. <a href="/dashboard/communications.php?action=new">Post the first one</a>.</p>
             <?php else: ?>
-                <div class="stack-lg">
-                <?php foreach ($announcements as $a): ?>
-                    <div>
-                        <div class="row" style="gap: var(--sp-2); margin-bottom: var(--sp-1);">
-                            <span class="badge <?= $a['type'] === 'emergency' ? 'badge--error' : ($a['type'] === 'event' ? 'badge--info' : 'badge--orange') ?>">
-                                <?= e($a['type']) ?>
-                            </span>
-                            <span class="muted" style="font-size: var(--fs-xs);"><?= e(date('M j, Y', strtotime($a['published_at']))) ?> &middot; <?= e(trim($a['author']) ?: 'Unknown') ?></span>
+                <div class="dash-list">
+                <?php foreach ($announcements as $a):
+                    $aTs = strtotime((string)$a['published_at']);
+                    $typeBadge = $a['type'] === 'emergency' ? 'badge--error' : ($a['type'] === 'event' ? 'badge--info' : 'badge--orange');
+                ?>
+                    <a class="dash-row" href="/dashboard/communications.php?id=<?= (int)$a['id'] ?>">
+                        <div class="dash-date">
+                            <div class="m"><?= e(date('M', $aTs)) ?></div>
+                            <div class="d"><?= e(date('j', $aTs)) ?></div>
                         </div>
-                        <strong><?= e($a['title']) ?></strong>
-                        <p class="muted" style="margin: var(--sp-1) 0 0; font-size: var(--fs-sm);">
-                            <?= e(mb_strimwidth(strip_tags($a['body']), 0, 160, '…')) ?>
-                        </p>
-                    </div>
+                        <div class="dash-body">
+                            <div class="row" style="gap: var(--sp-2); margin-bottom: 2px; flex-wrap: wrap;">
+                                <span class="badge <?= $typeBadge ?>" style="font-size: var(--fs-xs);"><?= e($a['type']) ?></span>
+                                <span class="muted" style="font-size: var(--fs-xs);"><?= e(date('g:i A', $aTs)) ?> · <?= e(trim($a['author']) ?: 'Unknown') ?></span>
+                            </div>
+                            <strong><?= e($a['title']) ?></strong>
+                            <p class="muted" style="margin: 2px 0 0; font-size: var(--fs-sm);"><?= e(mb_strimwidth(strip_tags($a['body']), 0, 120, '…')) ?></p>
+                        </div>
+                    </a>
                 <?php endforeach; ?>
                 </div>
             <?php endif; ?>
@@ -302,12 +307,15 @@ require __DIR__ . '/../includes/header.php';
         <div class="card card--padded">
             <div class="card__head">
                 <h2 class="card__title">Upcoming events</h2>
-                <a href="/dashboard/events.php" class="muted" style="font-size: var(--fs-sm);">View all →</a>
+                <div class="row" style="gap: var(--sp-3);">
+                    <a href="/dashboard/events-print.php?upcoming=1" target="_blank" rel="noopener" class="muted" style="font-size: var(--fs-sm);" title="Print the upcoming events list">🖨 Print</a>
+                    <a href="/dashboard/events.php" class="muted" style="font-size: var(--fs-sm);">View all →</a>
+                </div>
             </div>
             <?php if (!$upcomingEvents): ?>
                 <p class="muted">No upcoming events. <a href="/dashboard/events.php?action=new">Add one</a>.</p>
             <?php else: ?>
-                <div class="stack-lg">
+                <div class="dash-list">
                 <?php foreach ($upcomingEvents as $ev):
                     $startTs = strtotime((string)$ev['starts_at']);
                     $endTs   = !empty($ev['ends_at']) ? strtotime((string)$ev['ends_at']) : null;
@@ -318,22 +326,29 @@ require __DIR__ . '/../includes/header.php';
                         default   => 'badge--info',
                     };
                 ?>
-                    <div>
-                        <div class="row" style="gap: var(--sp-2); margin-bottom: var(--sp-1); flex-wrap: wrap;">
-                            <span class="badge <?= $audClass ?>"><?= e((string)$ev['audience']) ?></span>
-                            <?php if (($ev['recurrence_type'] ?? 'none') !== 'none'): ?>
-                                <span class="badge" style="background: var(--color-surface); color: var(--color-text-soft); font-size: var(--fs-xs);">↻ <?= e((string)$ev['recurrence_type']) ?></span>
-                            <?php endif; ?>
-                            <span class="muted" style="font-size: var(--fs-xs);">
-                                <?= e(date('D, M j · g:i A', $startTs)) ?>
-                                <?php if ($endTs): ?> – <?= e(date($sameDay ? 'g:i A' : 'M j, g:i A', $endTs)) ?><?php endif; ?>
-                            </span>
+                    <a class="dash-row" href="/dashboard/event.php?id=<?= (int)$ev['id'] ?>">
+                        <div class="dash-date">
+                            <div class="m"><?= e(date('M', $startTs)) ?></div>
+                            <div class="d"><?= e(date('j', $startTs)) ?></div>
+                            <div class="dow"><?= e(date('D', $startTs)) ?></div>
                         </div>
-                        <strong><?= e((string)$ev['title']) ?></strong>
-                        <?php if (!empty($ev['location'])): ?>
-                            <p class="muted" style="margin: var(--sp-1) 0 0; font-size: var(--fs-sm);">📍 <?= e((string)$ev['location']) ?></p>
-                        <?php endif; ?>
-                    </div>
+                        <div class="dash-body">
+                            <div class="row" style="gap: var(--sp-2); margin-bottom: 2px; flex-wrap: wrap;">
+                                <span class="badge <?= $audClass ?>" style="font-size: var(--fs-xs);"><?= e((string)$ev['audience']) ?></span>
+                                <?php if (($ev['recurrence_type'] ?? 'none') !== 'none'): ?>
+                                    <span class="badge" style="background: var(--color-surface); color: var(--color-text-soft); font-size: var(--fs-xs);">↻ <?= e((string)$ev['recurrence_type']) ?></span>
+                                <?php endif; ?>
+                                <span class="muted" style="font-size: var(--fs-xs);">
+                                    <?= e(date('g:i A', $startTs)) ?>
+                                    <?php if ($endTs): ?> – <?= e(date($sameDay ? 'g:i A' : 'M j, g:i A', $endTs)) ?><?php endif; ?>
+                                </span>
+                            </div>
+                            <strong><?= e((string)$ev['title']) ?></strong>
+                            <?php if (!empty($ev['location'])): ?>
+                                <p class="muted" style="margin: 2px 0 0; font-size: var(--fs-sm);">📍 <?= e((string)$ev['location']) ?></p>
+                            <?php endif; ?>
+                        </div>
+                    </a>
                 <?php endforeach; ?>
                 </div>
             <?php endif; ?>
@@ -345,6 +360,24 @@ require __DIR__ . '/../includes/header.php';
 
 <style>
     @media (max-width: 800px) { .dash-split { grid-template-columns: 1fr !important; } }
+    /* Date-first clickable cards in dashboard columns */
+    .dash-list { display:flex; flex-direction: column; gap: var(--sp-3); }
+    .dash-row {
+        display:flex; gap: var(--sp-3); align-items: flex-start;
+        padding: var(--sp-3); border: 1px solid var(--color-border); border-radius: var(--r-md);
+        background: var(--color-surface-2);
+        text-decoration: none; color: inherit;
+        transition: transform 120ms ease, box-shadow 120ms ease;
+    }
+    .dash-row:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(15,31,61,0.08); }
+    .dash-date {
+        flex: 0 0 56px; text-align: center; padding: 4px 6px;
+        border: 2px solid var(--color-navy); border-radius: 6px; background: #fff;
+    }
+    .dash-date .m  { font-size: 9pt; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-text-soft); font-weight: 700; }
+    .dash-date .d  { font-size: 20pt; line-height: 1; font-weight: 800; color: var(--color-navy); margin: 1px 0; }
+    .dash-date .dow{ font-size: 8pt; color: var(--color-text-soft); }
+    .dash-body { flex: 1 1 auto; min-width: 0; }
 </style>
 
 <?php require __DIR__ . '/../includes/footer.php'; ?>

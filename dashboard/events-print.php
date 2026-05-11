@@ -1,8 +1,111 @@
 <?php
-// Print-friendly events list. Range = ?range=day|week|month (default month).
+// Print-friendly events list. Three modes:
+//   ?id=N                          — single event detail (or recurring series
+//                                    with its next 12 occurrences)
+//   ?range=day|week|month          — date-window list (default: month)
+//   ?upcoming=1                    — all upcoming events (next 60 days)
 // Honors the viewer's audience scope: tenants don't see board-only events.
 // Recurring events are expanded via expand_events() then filtered to the range.
 require __DIR__ . '/_bootstrap.php';
+
+$singleId = (int)($_GET['id'] ?? 0);
+$upcoming = isset($_GET['upcoming']);
+
+// ---------- SINGLE EVENT MODE ----------
+if ($singleId > 0) {
+    $stmt = db()->prepare('SELECT * FROM events WHERE id = ? AND association_id = ?');
+    $stmt->execute([$singleId, $assocId]);
+    $ev = $stmt->fetch();
+    if (!$ev) { http_response_code(404); echo 'Event not found.'; exit; }
+    if (!role_can_manage(viewing_role()) && $ev['audience'] === 'board') {
+        http_response_code(403); echo 'Forbidden'; exit;
+    }
+    $startTs = strtotime((string)$ev['starts_at']);
+    $endTs   = !empty($ev['ends_at']) ? strtotime((string)$ev['ends_at']) : null;
+    $sameDay = $endTs && date('Y-m-d', $startTs) === date('Y-m-d', $endTs);
+    $occurrences = [];
+    if (($ev['recurrence_type'] ?? 'none') !== 'none') {
+        $expanded = expand_events([$ev], false, 90);
+        $occurrences = array_slice($expanded, 0, 12);
+    }
+    ?><!doctype html>
+    <html lang="en"><head>
+    <meta charset="utf-8">
+    <title><?= e((string)$ev['title']) ?> — <?= e((string)$association['name']) ?></title>
+    <style>
+        @page { size: letter; margin: 0.5in; }
+        body { font-family: Inter, system-ui, sans-serif; color: #111; margin: 0; line-height: 1.5; }
+        .date-block { display:inline-block; text-align:center; padding: 6pt 12pt; border: 2px solid #0f1f3d; border-radius: 6pt; background: #f8f7f4; vertical-align: middle; margin-right: 14pt; }
+        .date-block .m { font-size: 9pt; text-transform: uppercase; letter-spacing: 0.08em; color: #555; font-weight: 700; }
+        .date-block .d { font-size: 30pt; line-height: 1; font-weight: 800; color: #0f1f3d; margin: 2pt 0; }
+        .date-block .dow { font-size: 8pt; color: #555; }
+        .head { display:flex; gap: 14pt; align-items: center; margin: 14pt 0 18pt; padding-bottom: 12pt; border-bottom: 2px solid #0f1f3d; }
+        h1 { font-size: 22pt; margin: 0 0 6pt; }
+        .pill { display:inline-block; padding: 2pt 8pt; border-radius: 999pt; color: #fff; font-size: 9pt; text-transform: uppercase; letter-spacing: 0.06em; margin-right: 5pt; }
+        .recur { display:inline-block; padding: 2pt 8pt; border-radius: 999pt; background: #f3edd9; color: #6b4a06; font-size: 9pt; }
+        .when { color: #555; font-size: 11pt; margin-top: 4pt; }
+        .desc { font-size: 12pt; white-space: pre-wrap; margin-bottom: 14pt; }
+        .occ h2 { font-size: 12pt; margin: 18pt 0 6pt; padding-bottom: 4pt; border-bottom: 1px solid #ccc; color: #0f1f3d; }
+        .occ ul { padding-left: 1.2em; font-size: 10pt; }
+        @media print { a { color: inherit; text-decoration: none; } }
+    </style>
+    </head><body style="padding: 0.5in;">
+
+    <?= print_header_html($association) ?>
+
+    <div class="head">
+        <div class="date-block">
+            <div class="m"><?= e(date('M', $startTs)) ?></div>
+            <div class="d"><?= e(date('j', $startTs)) ?></div>
+            <div class="dow"><?= e(date('D', $startTs)) ?></div>
+        </div>
+        <div style="flex:1;">
+            <div>
+                <span class="pill" style="background: <?= e($ev['audience']==='all' ? '#2f7a3d' : ($ev['audience']==='board' ? '#5d3a8a' : '#1f4f9c')) ?>;"><?= e((string)$ev['audience']) ?></span>
+                <?php if (($ev['recurrence_type'] ?? 'none') !== 'none'): ?>
+                    <span class="recur">↻ <?= e((string)$ev['recurrence_type']) ?></span>
+                <?php endif; ?>
+            </div>
+            <h1><?= e((string)$ev['title']) ?></h1>
+            <div class="when">
+                <?= e(date('l, F j, Y · g:i A', $startTs)) ?>
+                <?php if ($endTs): ?> – <?= e(date($sameDay ? 'g:i A' : 'M j, Y g:i A', $endTs)) ?><?php endif; ?>
+            </div>
+            <?php if (!empty($ev['location'])): ?>
+                <div class="when">📍 <?= e((string)$ev['location']) ?></div>
+            <?php endif; ?>
+        </div>
+    </div>
+
+    <?php if (!empty($ev['description'])): ?>
+        <div class="desc"><?= e((string)$ev['description']) ?></div>
+    <?php endif; ?>
+
+    <?php if ($occurrences): ?>
+        <div class="occ">
+            <h2>Upcoming occurrences</h2>
+            <ul>
+                <?php foreach ($occurrences as $occ): $oTs = strtotime((string)$occ['starts_at']); ?>
+                    <li><?= e(date('D, M j, Y · g:i A', $oTs)) ?></li>
+                <?php endforeach; ?>
+            </ul>
+        </div>
+    <?php endif; ?>
+
+    <?= print_footer_html('Printed ' . date('M j, Y')) ?>
+
+    <script>window.addEventListener('load', function(){ window.print(); });</script>
+    </body></html>
+    <?php
+    exit;
+}
+
+// ---------- UPCOMING (next 60 days) MODE ----------
+if ($upcoming) {
+    $rangeStart = strtotime(date('Y-m-d') . ' 00:00:00');
+    $rangeEnd   = $rangeStart + 60 * 86400;
+    $rangeTitle = 'Upcoming events';
+} else {
 
 $range = $_GET['range'] ?? 'month';
 if (!in_array($range, ['day', 'week', 'month'], true)) $range = 'month';
@@ -37,6 +140,7 @@ switch ($range) {
         $rangeTitle = 'Events for ' . date('F Y', $rangeStart);
         break;
 }
+} /* end else (range mode) */
 
 // Viewer-scope audience filter. Mirrors events.php logic so a tenant printing
 // from a view-as preview gets the same list they see on screen.
@@ -93,7 +197,7 @@ $audClass = [
 ?><!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8">
-<title>Events (<?= e($rangeLabels[$range]) ?>) — <?= e((string)$association['name']) ?></title>
+<title>Events (<?= e($upcoming ? 'upcoming' : ($rangeLabels[$range] ?? 'list')) ?>) — <?= e((string)$association['name']) ?></title>
 <style>
     @page { size: letter; margin: 0.6in; }
     body { font-family: Inter, system-ui, sans-serif; color: #111; margin: 0; line-height: 1.4; }
@@ -159,7 +263,7 @@ $audClass = [
     <?php endforeach; ?>
 <?php endif; ?>
 
-<?= print_footer_html('Printed ' . date('M j, Y') . ' · ' . $rangeLabels[$range]) ?>
+<?= print_footer_html('Printed ' . date('M j, Y') . ' · ' . ($upcoming ? 'upcoming' : ($rangeLabels[$range] ?? ''))) ?>
 
 <script>window.addEventListener('load', function(){ window.print(); });</script>
 </body></html>

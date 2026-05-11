@@ -295,42 +295,45 @@ function event_form_card(?array $editing, string $assocSlug, array $activeLocati
             default   => 'badge--info',
         };
     ?>
-    <article class="card card--padded">
-        <div class="row row--between" style="align-items:flex-start; margin-bottom: var(--sp-3);">
-            <div style="flex: 1; min-width: 0;">
-                <div class="row" style="gap: var(--sp-2); margin-bottom: var(--sp-2); flex-wrap: wrap;">
-                    <span class="badge <?= $audClass ?>"><?= e((string)$ev['audience']) ?></span>
-                    <?php if (($ev['recurrence_type'] ?? 'none') !== 'none'): ?>
-                        <span class="badge" style="background: var(--color-surface); color: var(--color-text-soft); font-size: var(--fs-xs);">
-                            ↻ <?= e((string)$ev['recurrence_type']) ?>
-                        </span>
-                    <?php endif; ?>
-                    <span class="muted" style="font-size: var(--fs-sm);">
-                        <?= e(date('D, M j · g:i A', $startTs)) ?>
-                        <?php if ($endTs): ?>
-                            – <?= e(date($sameDay ? 'g:i A' : 'M j, g:i A', $endTs)) ?>
-                        <?php endif; ?>
+    <article class="card card--padded ev-row" style="display:flex; gap: var(--sp-4); align-items: flex-start;">
+        <a href="/dashboard/event.php?id=<?= (int)$ev['id'] ?>" class="ev-date" style="flex: 0 0 72px; text-align:center; padding: 6px 10px; border: 2px solid var(--color-navy); border-radius: 8px; background: var(--color-surface); text-decoration: none; color: inherit;">
+            <div style="font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-text-soft); font-weight: 700;"><?= e(date('M', $startTs)) ?></div>
+            <div style="font-size: 22pt; line-height: 1; font-weight: 800; color: var(--color-navy); margin: 2px 0;"><?= e(date('j', $startTs)) ?></div>
+            <div style="font-size: var(--fs-xs); color: var(--color-text-soft);"><?= e(date('D', $startTs)) ?></div>
+        </a>
+        <div style="flex: 1; min-width: 0;">
+            <div class="row" style="gap: var(--sp-2); margin-bottom: var(--sp-2); flex-wrap: wrap;">
+                <span class="badge <?= $audClass ?>"><?= e((string)$ev['audience']) ?></span>
+                <?php if (($ev['recurrence_type'] ?? 'none') !== 'none'): ?>
+                    <span class="badge" style="background: var(--color-surface); color: var(--color-text-soft); font-size: var(--fs-xs);">
+                        ↻ <?= e((string)$ev['recurrence_type']) ?>
                     </span>
-                    <?php if (!empty($ev['location'])): ?>
-                        <span class="muted" style="font-size: var(--fs-sm);">&middot; <?= e((string)$ev['location']) ?></span>
+                <?php endif; ?>
+                <span class="muted" style="font-size: var(--fs-sm);">
+                    <?= e(date('g:i A', $startTs)) ?>
+                    <?php if ($endTs): ?>
+                        – <?= e(date($sameDay ? 'g:i A' : 'M j, g:i A', $endTs)) ?>
                     <?php endif; ?>
-                </div>
-                <h3 style="font-size: var(--fs-lg); margin: 0;"><?= e((string)$ev['title']) ?></h3>
+                </span>
+                <?php if (!empty($ev['location'])): ?>
+                    <span class="muted" style="font-size: var(--fs-sm);">&middot; <?= e((string)$ev['location']) ?></span>
+                <?php endif; ?>
             </div>
-            <?php if ($canManage): ?>
-            <div class="row" style="gap: var(--sp-2);">
-                <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="?action=edit&id=<?= (int)$ev['id'] ?>">Edit</a>
-                <form method="post" style="display:inline;" onsubmit="return confirm('Delete this event?');">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="form" value="delete">
-                    <input type="hidden" name="id" value="<?= (int)$ev['id'] ?>">
-                    <button class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs); color: var(--color-error);" type="submit">Delete</button>
-                </form>
-            </div>
+            <h3 style="font-size: var(--fs-lg); margin: 0;"><a href="/dashboard/event.php?id=<?= (int)$ev['id'] ?>" style="color: inherit; text-decoration: none;"><?= e((string)$ev['title']) ?></a></h3>
+            <?php if (!empty($ev['description'])): ?>
+                <p class="muted" style="margin: var(--sp-2) 0 0; font-size: var(--fs-sm); white-space: pre-wrap;"><?= e(mb_strimwidth((string)$ev['description'], 0, 200, '…')) ?></p>
             <?php endif; ?>
         </div>
-        <?php if (!empty($ev['description'])): ?>
-            <p style="margin: 0; white-space: pre-wrap; color: var(--color-text-soft);"><?= e((string)$ev['description']) ?></p>
+        <?php if ($canManage): ?>
+        <div class="row" style="gap: var(--sp-2); flex: 0 0 auto;">
+            <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="?action=edit&id=<?= (int)$ev['id'] ?>">Edit</a>
+            <form method="post" style="display:inline;" onsubmit="return confirm('Delete this event?');">
+                <?= csrf_field() ?>
+                <input type="hidden" name="form" value="delete">
+                <input type="hidden" name="id" value="<?= (int)$ev['id'] ?>">
+                <button class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs); color: var(--color-error);" type="submit">Delete</button>
+            </form>
+        </div>
         <?php endif; ?>
     </article>
     <?php endforeach; ?>

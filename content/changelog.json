@@ -1,5 +1,14 @@
 [
     {
+        "id": "cl-20260512-013000-evdtl",
+        "at": "2026-05-12T01:30:00-04:00",
+        "type": "feature",
+        "title": "Click any announcement or event to open the detail view, print it individually",
+        "description": "Every announcement and upcoming event on the dashboard (and on the Announcements / Events full listings) now leads with a colored Month / Day calendar tile and is clickable end-to-end. Clicking opens a detail page with the full title, audience, timestamps, body, and a 🖨 Print button. Single announcements print via /dashboard/announcement-print.php with the date tile + letterhead on top; single events print via /dashboard/events-print.php?id=N (recurring series also list their next 12 occurrences in both the screen view and the printout). The Upcoming events column on the dashboard gets its own 🖨 Print link in the header that prints the next 60 days of events.",
+        "author": "Reboooot",
+        "link": "/dashboard/"
+    },
+    {
         "id": "cl-20260512-001500-dash",
         "at": "2026-05-12T00:15:00-04:00",
         "type": "feature",
