@@ -134,7 +134,7 @@ require __DIR__ . '/../includes/header.php';
         $barColor = $storagePct < 75 ? 'var(--color-success)' : ($storagePct < 95 ? 'var(--color-warning)' : 'var(--color-error)');
         $over     = $storageUsed > $storageQuota;
     ?>
-    <div class="card card--padded" style="margin-bottom: var(--sp-4); display:flex; gap: var(--sp-4); align-items:center; flex-wrap: wrap; padding: var(--sp-3) var(--sp-4);">
+    <a href="/dashboard/storage.php" class="card card--padded" style="margin-bottom: var(--sp-4); display:flex; gap: var(--sp-4); align-items:center; flex-wrap: wrap; padding: var(--sp-3) var(--sp-4); text-decoration: none; color: inherit;" title="See where your storage is being used">
         <div style="font-size: 22px; line-height: 1;">💾</div>
         <div style="flex: 1; min-width: 200px;">
             <div class="row" style="justify-content: space-between; gap: var(--sp-3); align-items: baseline; flex-wrap: wrap;">
@@ -147,7 +147,7 @@ require __DIR__ . '/../includes/header.php';
                     <?php if ((int)($association['storage_paid_extra_gb'] ?? 0) > 0): ?>
                         Includes <?= (int)$association['storage_paid_extra_gb'] ?> GB paid add-on ·
                     <?php endif; ?>
-                    Need more? $5/mo per extra GB · <a href="mailto:success@badasshoa.com?subject=Storage%20upgrade%20for%20<?= urlencode((string)$association['name']) ?>">Contact us</a>
+                    Breakdown →
                 </span>
             </div>
             <div style="margin-top: 4px; height: 8px; background: var(--color-surface); border-radius: 999px; overflow: hidden;">
@@ -159,7 +159,7 @@ require __DIR__ . '/../includes/header.php';
                 <div class="muted" style="font-size: var(--fs-xs); color: var(--color-warning); margin-top: 4px;">Approaching your limit. New uploads will start failing soon.</div>
             <?php endif; ?>
         </div>
-    </div>
+    </a>
     <?php endif; ?>
 
     <div class="row row--between" style="margin-bottom: var(--sp-6); align-items: flex-start; gap: var(--sp-4); flex-wrap: wrap;">

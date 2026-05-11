@@ -66,6 +66,45 @@ function association_storage_used_bytes(int $assocId, bool $fresh = false): int
     return $cache[$assocId] = $total;
 }
 
+// Breakdown of an association's storage by subdir (documents, media,
+// avatars, branding, other). Returns an array like:
+//   [ 'documents' => ['bytes' => 12345, 'count' => 3, 'files' => [...]],
+//     'media'     => ['bytes' => ...,  'count' => ..., 'files' => [...]], ... ]
+// Each 'files' entry is ['rel' => relative path under the assoc dir,
+//                         'size' => int, 'mtime' => int].
+function association_storage_breakdown(int $assocId): array
+{
+    $base = storage_path('uploads/' . $assocId);
+    $cats = [
+        'documents' => ['label' => 'Documents',        'bytes' => 0, 'count' => 0, 'files' => []],
+        'media'     => ['label' => 'Photos & inline images', 'bytes' => 0, 'count' => 0, 'files' => []],
+        'avatars'   => ['label' => 'Member headshots', 'bytes' => 0, 'count' => 0, 'files' => []],
+        'branding'  => ['label' => 'Logo & branding',  'bytes' => 0, 'count' => 0, 'files' => []],
+        'other'     => ['label' => 'Other',            'bytes' => 0, 'count' => 0, 'files' => []],
+    ];
+    if (!is_dir($base)) return $cats;
+
+    $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($base, FilesystemIterator::SKIP_DOTS));
+    foreach ($it as $f) {
+        if (!$f->isFile()) continue;
+        $abs  = $f->getPathname();
+        $size = $f->getSize();
+        $rel  = ltrim(str_replace($base, '', $abs), '/');
+        // First path segment is the category.
+        $seg  = explode('/', $rel, 2)[0] ?? '';
+        $key  = array_key_exists($seg, $cats) ? $seg : 'other';
+        $cats[$key]['bytes'] += $size;
+        $cats[$key]['count']++;
+        $cats[$key]['files'][] = ['rel' => $rel, 'size' => $size, 'mtime' => $f->getMTime()];
+    }
+    // Sort each category's file list largest-first (capped to 50 to keep things sane).
+    foreach ($cats as &$c) {
+        usort($c['files'], fn($a, $b) => $b['size'] <=> $a['size']);
+        if (count($c['files']) > 50) $c['files'] = array_slice($c['files'], 0, 50);
+    }
+    return $cats;
+}
+
 function format_bytes(int $b): string
 {
     if ($b >= 1073741824) return number_format($b / 1073741824, 2) . ' GB';

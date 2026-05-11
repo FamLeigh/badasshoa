@@ -1,5 +1,14 @@
 [
     {
+        "id": "cl-20260512-053000-stor2",
+        "at": "2026-05-12T05:30:00-04:00",
+        "type": "feature",
+        "title": "Storage breakdown — see where your space is going (Drive-style)",
+        "description": "Click the 💾 Storage widget at the top of the dashboard to open a new breakdown page. Headline shows total used / quota with a Drive-style stacked bar split by category — Documents, Photos & inline images, Member headshots, Logo & branding, Other. Below that, each category gets its own card with the 50 largest files (name, size, upload date) and a Manage link to the page where you can delete them. Documents and branding files link directly to their viewer so you can preview before deciding. Makes cleaning up much easier than scrolling through the document or media list trying to find the big ones.",
+        "author": "Reboooot",
+        "link": "/dashboard/storage.php"
+    },
+    {
         "id": "cl-20260512-040000-stor",
         "at": "2026-05-12T04:00:00-04:00",
         "type": "feature",
