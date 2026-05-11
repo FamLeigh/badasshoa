@@ -17,6 +17,86 @@ $KINDS = [
     'other'   => 'Other',
 ];
 
+// --- CSV bulk import ---
+$importSummary = null;
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'import') {
+    csrf_check();
+    if (!isset($_FILES['csv']) || $_FILES['csv']['error'] !== UPLOAD_ERR_OK) {
+        $flashError = 'CSV upload failed.';
+    } elseif ($_FILES['csv']['size'] > 1 * 1024 * 1024) {
+        $flashError = 'Max CSV size is 1 MB.';
+    } else {
+        $fh = fopen($_FILES['csv']['tmp_name'], 'r');
+        if (!$fh) {
+            $flashError = 'Could not read CSV.';
+        } else {
+            // Cache unit_number → id for fast lookup
+            $unitMap = [];
+            $u = db()->prepare('SELECT id, unit_number FROM units WHERE association_id = ?');
+            $u->execute([$assocId]);
+            foreach ($u->fetchAll() as $row) $unitMap[strtolower((string)$row['unit_number'])] = (int)$row['id'];
+
+            $added = 0; $skipped = 0; $errors = []; $row = 0; $headerMap = null;
+            $allowedKinds = array_keys($KINDS);
+
+            while (($cols = fgetcsv($fh)) !== false) {
+                $row++;
+                if ($cols === [null] || (count($cols) === 1 && trim((string)$cols[0]) === '')) continue;
+
+                if ($headerMap === null) {
+                    $headerMap = [];
+                    foreach ($cols as $i => $name) {
+                        $key = strtolower(trim(str_replace([' ', '-'], '_', (string)$name)));
+                        $headerMap[$key] = $i;
+                    }
+                    if (!isset($headerMap['number'])) {
+                        $flashError = 'Missing required column: number. Required: number. Optional: kind (garage/surface/covered/tandem/other), unit_number, notes, is_active.';
+                        break;
+                    }
+                    continue;
+                }
+
+                $get  = fn($k) => isset($headerMap[$k], $cols[$headerMap[$k]]) ? trim((string)$cols[$headerMap[$k]]) : '';
+                $num    = $get('number');
+                $kind   = strtolower($get('kind')) ?: 'garage';
+                $unitNo = $get('unit_number');
+                $rNotes = $get('notes');
+                $activeRaw = strtolower($get('is_active'));
+                $isActive = in_array($activeRaw, ['','1','y','yes','active','true'], true) ? 1
+                          : (in_array($activeRaw, ['0','n','no','inactive','false'], true) ? 0 : 1);
+
+                if ($num === '') { $errors[] = "Row $row: missing number"; continue; }
+                if (!in_array($kind, $allowedKinds, true)) $kind = 'garage';
+
+                // Look up assigned unit by unit_number; leave NULL if no match (log a soft warning).
+                $assignedUid = null;
+                if ($unitNo !== '') {
+                    $key = strtolower($unitNo);
+                    if (isset($unitMap[$key])) {
+                        $assignedUid = $unitMap[$key];
+                    } else {
+                        $errors[] = "Row $row: unit \"$unitNo\" not found — spot created unassigned";
+                    }
+                }
+
+                // Skip if a spot with this (kind, number) already exists.
+                $check = db()->prepare('SELECT id FROM parking_spots WHERE association_id = ? AND kind = ? AND number = ?');
+                $check->execute([$assocId, $kind, $num]);
+                if ($check->fetchColumn()) { $skipped++; continue; }
+
+                db()->prepare(
+                    'INSERT INTO parking_spots (association_id, kind, number, assigned_unit_id, notes, is_active, sort_order)
+                     VALUES (?, ?, ?, ?, ?, ?, COALESCE((SELECT MAX(sort_order) FROM parking_spots AS x WHERE x.association_id = ?), 0) + 10)'
+                )->execute([$assocId, $kind, $num, $assignedUid, $rNotes ?: null, $isActive, $assocId]);
+                $added++;
+            }
+            fclose($fh);
+            $importSummary = ['added' => $added, 'skipped' => $skipped, 'errors' => $errors];
+            audit('parking_spots.imported', $importSummary);
+        }
+    }
+}
+
 // --- Add ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'add') {
     csrf_check();
@@ -115,7 +195,8 @@ $unitsAll->execute([$assocId]);
 $unitsList = $unitsAll->fetchAll();
 
 $preselectUnit = isset($_GET['unit_id']) ? (int)$_GET['unit_id'] : 0;
-$showAdd  = ($_GET['action'] ?? '') === 'new';
+$showAdd    = ($_GET['action'] ?? '') === 'new';
+$showImport = ($_GET['action'] ?? '') === 'import';
 $editSpot = null;
 if (($_GET['action'] ?? '') === 'edit') {
     $eid = (int)($_GET['id'] ?? 0);
@@ -140,12 +221,68 @@ require __DIR__ . '/../includes/header.php';
             <h1 style="font-size: var(--fs-3xl); margin: 0;">Parking</h1>
             <p class="muted">Garages, surface spots, covered, tandem — numbered and (optionally) assigned to a unit.</p>
         </div>
-        <?php if (!$showAdd && !$editSpot): ?>
-            <a class="btn btn--primary" href="?action=new">+ New spot</a>
+        <?php if (!$showAdd && !$editSpot && !$showImport): ?>
+            <div class="row" style="gap: var(--sp-2);">
+                <a class="btn btn--ghost" href="?action=import">⬆ Import CSV</a>
+                <a class="btn btn--primary" href="?action=new">+ New spot</a>
+            </div>
         <?php endif; ?>
     </div>
 
     <?php if ($flashError): ?><div class="flash flash--error"><?= e($flashError) ?></div><?php endif; ?>
+
+    <?php if ($importSummary): ?>
+        <div class="flash flash--success">
+            Imported <strong><?= (int)$importSummary['added'] ?></strong> new spot<?= $importSummary['added']===1?'':'s' ?>.
+            <?php if ((int)$importSummary['skipped'] > 0): ?>
+                Skipped <strong><?= (int)$importSummary['skipped'] ?></strong> row<?= $importSummary['skipped']===1?'':'s' ?> with kind+number combinations that already exist.
+            <?php endif; ?>
+            <?php if (!empty($importSummary['errors'])): ?>
+                <details style="margin-top: var(--sp-2);">
+                    <summary><?= count($importSummary['errors']) ?> row<?= count($importSummary['errors'])===1?'':'s' ?> with warnings</summary>
+                    <ul style="margin: var(--sp-2) 0 0; font-size: var(--fs-sm);">
+                        <?php foreach ($importSummary['errors'] as $err): ?><li><?= e($err) ?></li><?php endforeach; ?>
+                    </ul>
+                </details>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($showImport): ?>
+    <div class="card card--padded" style="margin-bottom: var(--sp-6);">
+        <div class="card__head">
+            <h3 class="card__title">Import parking spots from CSV</h3>
+            <a class="muted" style="font-size: var(--fs-sm);" href="/dashboard/parking.php">← Back</a>
+        </div>
+        <p class="muted" style="font-size: var(--fs-sm);">
+            Required column: <code>number</code>. Optional:
+            <code>kind</code> (<?= e(implode(' / ', array_keys($KINDS))) ?>; defaults to <code>garage</code>),
+            <code>unit_number</code> (matches the unit_number on a registered unit; leave blank for unassigned),
+            <code>notes</code>,
+            <code>is_active</code> (1/0 or yes/no; defaults to 1).
+            <strong>Existing <em>kind</em>+<em>number</em> combinations are skipped</strong> — re-running the same CSV is safe and won't overwrite hand-edits. To change a spot, edit it from the parking list. Header row required.
+        </p>
+        <pre style="background: var(--color-surface-2); padding: var(--sp-3); border-radius: var(--r-md); font-size: var(--fs-xs); overflow-x:auto;">kind,number,unit_number,notes,is_active
+garage,64,421,Roof access,1
+garage,12,101A,,1
+surface,P-7,101A,,1
+covered,A12,205,EV charging,1
+tandem,T-3,,Visitor / unassigned,1</pre>
+
+        <form method="post" enctype="multipart/form-data" class="form">
+            <?= csrf_field() ?>
+            <input type="hidden" name="form" value="import">
+            <div class="field">
+                <label class="field__label" for="csv">CSV file (max 1 MB)</label>
+                <input class="input" type="file" id="csv" name="csv" accept=".csv,text/csv" required>
+            </div>
+            <div class="row" style="justify-content: flex-end;">
+                <a class="btn btn--ghost" href="/dashboard/parking.php">Cancel</a>
+                <button class="btn btn--primary" type="submit">Import</button>
+            </div>
+        </form>
+    </div>
+    <?php endif; ?>
 
     <?php if ($showAdd || $editSpot):
         $isEdit = $editSpot !== null;
