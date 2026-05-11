@@ -215,6 +215,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'upload'
         $flashError = 'File upload failed.';
     } elseif ($_FILES['file']['size'] > 25 * 1024 * 1024) {
         $flashError = 'Max file size is 25 MB.';
+    } elseif (storage_over_quota_by($association, (int)$_FILES['file']['size'])) {
+        $used  = association_storage_used_bytes((int)$association['id']);
+        $quota = association_storage_quota_bytes($association);
+        $flashError = 'This upload would put you over your storage quota ('
+            . format_bytes($used) . ' of ' . format_bytes($quota)
+            . ' used). Delete something or contact us to add more space ($5/mo per extra GB).';
     } else {
         $allowed = [
             'pdf' => 'application/pdf',

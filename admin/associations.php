@@ -165,6 +165,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit_as
     $status    = $_POST['status'] ?? 'trial';
     $color     = trim((string)($_POST['primary_color'] ?? '#0f1f3d'));
     $publicLanding = isset($_POST['public_landing_enabled']) ? 1 : 0;
+    $paidGb    = max(0, (int)($_POST['storage_paid_extra_gb'] ?? 0));
 
     if (!in_array($plan, ['starter','growth','professional','enterprise'], true)) $plan = 'starter';
     if (!in_array($status, ['active','inactive','trial'], true))                   $status = 'trial';
@@ -189,14 +190,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit_as
             db()->prepare(
                 'UPDATE associations
                  SET name = ?, subdomain = ?, address = ?, city = ?, state_region = ?, postal_code = ?, country = ?,
-                     unit_count = ?, plan = ?, status = ?, primary_color = ?, public_landing_enabled = ?
+                     unit_count = ?, plan = ?, status = ?, primary_color = ?, public_landing_enabled = ?,
+                     storage_paid_extra_gb = ?
                  WHERE id = ?'
             )->execute([
                 $name, $subdomain,
                 $address ?: null, $city ?: null, $stateReg ?: null, $postal ?: null, $country,
-                $units, $plan, $status, $color, $publicLanding, $aid,
+                $units, $plan, $status, $color, $publicLanding, $paidGb, $aid,
             ]);
-            audit('association.edited', ['name' => $name, 'plan' => $plan, 'status' => $status, 'public_landing' => $publicLanding], $aid, 'association');
+            audit('association.edited', ['name' => $name, 'plan' => $plan, 'status' => $status, 'public_landing' => $publicLanding, 'paid_extra_gb' => $paidGb], $aid, 'association');
             flash('success', "Association \"$name\" updated.");
             redirect('/admin/associations.php');
         }
@@ -525,6 +527,26 @@ require __DIR__ . '/../includes/header.php';
                     </div>
                 </label>
             </div>
+
+            <fieldset style="border: 1px solid var(--color-border); border-radius: var(--r-md); padding: var(--sp-3) var(--sp-4); margin-bottom: var(--sp-4);">
+                <legend style="padding: 0 var(--sp-2); color: var(--color-text-soft); font-size: var(--fs-sm);">Storage</legend>
+                <?php
+                $storUsed  = association_storage_used_bytes((int)$editAssoc['id']);
+                $storQuota = association_storage_quota_bytes($editAssoc);
+                ?>
+                <div class="muted" style="font-size: var(--fs-sm); margin-bottom: var(--sp-3);">
+                    Currently using <strong><?= e(format_bytes($storUsed)) ?></strong> of <strong><?= e(format_bytes($storQuota)) ?></strong>
+                    (1 GB free + <?= (int)($editAssoc['storage_paid_extra_gb'] ?? 0) ?> GB paid add-on).
+                </div>
+                <div class="form-row form-row--2">
+                    <div class="field">
+                        <label class="field__label" for="ea-gb">Paid extra GB</label>
+                        <input class="input" type="number" id="ea-gb" name="storage_paid_extra_gb" min="0" step="1" value="<?= (int)($editAssoc['storage_paid_extra_gb'] ?? 0) ?>">
+                        <div class="field__hint">$5/mo per GB. Set after the customer pays — billing isn't automated yet.</div>
+                    </div>
+                    <div class="field"><!-- spacer --></div>
+                </div>
+            </fieldset>
 
             <div class="row" style="justify-content: flex-end;">
                 <a class="btn btn--ghost" href="/admin/associations.php">Cancel</a>

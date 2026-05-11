@@ -39,6 +39,11 @@ if ($_FILES['file']['size'] > 8 * 1024 * 1024) {
     echo json_encode(['ok' => false, 'error' => 'Max image size is 8 MB']);
     exit;
 }
+if (storage_over_quota_by($association, (int)$_FILES['file']['size'])) {
+    http_response_code(413);
+    echo json_encode(['ok' => false, 'error' => 'Storage quota exceeded — delete something or upgrade.']);
+    exit;
+}
 
 $allowed = [
     'png'  => 'image/png',

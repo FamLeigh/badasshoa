@@ -38,6 +38,53 @@ function ensure_dir(string $absPath): void
     }
 }
 
+// --- storage quota ------------------------------------------------------
+// Each association gets storage_quota_bytes (default 1 GiB) plus
+// storage_paid_extra_gb additional GiB (settable by super admin).
+// Usage = du-style scan of the association's uploads dir. Cached per-request
+// in a static so multiple checks during one render don't re-scan.
+function association_storage_quota_bytes(array $assoc): int
+{
+    $base  = (int)($assoc['storage_quota_bytes']    ?? 1073741824);
+    $extra = (int)($assoc['storage_paid_extra_gb']  ?? 0);
+    return $base + ($extra * 1073741824);
+}
+
+function association_storage_used_bytes(int $assocId, bool $fresh = false): int
+{
+    static $cache = [];
+    if (!$fresh && isset($cache[$assocId])) return $cache[$assocId];
+
+    $dir = storage_path('uploads/' . $assocId);
+    if (!is_dir($dir)) return $cache[$assocId] = 0;
+
+    $total = 0;
+    $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS));
+    foreach ($it as $f) {
+        if ($f->isFile()) $total += $f->getSize();
+    }
+    return $cache[$assocId] = $total;
+}
+
+function format_bytes(int $b): string
+{
+    if ($b >= 1073741824) return number_format($b / 1073741824, 2) . ' GB';
+    if ($b >= 1048576)    return number_format($b / 1048576, 1) . ' MB';
+    if ($b >= 1024)       return number_format($b / 1024, 1) . ' KB';
+    return $b . ' B';
+}
+
+// True when adding $addBytes would exceed the quota. Returns the over-quota
+// amount in bytes (positive number); 0 if it would fit. Used by upload
+// handlers to short-circuit before move_uploaded_file().
+function storage_over_quota_by(array $assoc, int $addBytes): int
+{
+    $used  = association_storage_used_bytes((int)$assoc['id']);
+    $quota = association_storage_quota_bytes($assoc);
+    $after = $used + $addBytes;
+    return $after > $quota ? ($after - $quota) : 0;
+}
+
 // --- document categories (per-association picklist) --------------------
 // Bootstraps a sensible default set of document categories for an association
 // the first time they hit the documents page. Idempotent — does nothing once

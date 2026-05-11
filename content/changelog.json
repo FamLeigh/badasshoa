@@ -1,5 +1,14 @@
 [
     {
+        "id": "cl-20260512-040000-stor",
+        "at": "2026-05-12T04:00:00-04:00",
+        "type": "feature",
+        "title": "Storage quota tracking — 1 GB free + $5/mo per extra GB",
+        "description": "Every association now gets 1 GB of file storage free. A 💾 Storage widget at the top of the dashboard (managers only) shows current usage as a colored progress bar that turns yellow at 75% and red at 95%. Documents, media, and inline-image uploads check the quota before saving and refuse with a friendly message when an upload would put you over — no silent disk fill. The widget includes a 'Need more? $5/mo per extra GB · Contact us' link that emails success@badasshoa.com. Super admin can grant paid GB to any association via /admin/associations.php (edit form → Storage section) until self-serve checkout exists.",
+        "author": "Reboooot",
+        "link": "/dashboard/"
+    },
+    {
         "id": "cl-20260512-030000-emp",
         "at": "2026-05-12T03:00:00-04:00",
         "type": "feature",

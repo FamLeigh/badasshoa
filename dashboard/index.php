@@ -111,6 +111,15 @@ $expandedUpcoming = expand_events($upStmt->fetchAll(), false, 60);
 $stats['events']  = count($expandedUpcoming);
 $upcomingEvents   = array_slice($expandedUpcoming, 0, 5);
 
+// Storage usage (shown at top for managers only — residents don't need this).
+$canManage = role_can_manage(viewing_role());
+$storageUsed = $storageQuota = 0; $storagePct = 0;
+if ($canManage) {
+    $storageUsed  = association_storage_used_bytes($assocId);
+    $storageQuota = association_storage_quota_bytes($association);
+    $storagePct   = $storageQuota > 0 ? min(100, ($storageUsed / $storageQuota) * 100) : 0;
+}
+
 $user = current_user();
 $hour = (int)date('G');
 $greet = $hour < 12 ? 'Good morning' : ($hour < 18 ? 'Good afternoon' : 'Good evening');
@@ -120,6 +129,38 @@ require __DIR__ . '/../includes/header.php';
 ?>
 
 <div class="container" style="padding-top: var(--sp-8); padding-bottom: var(--sp-12); max-width: 1280px;">
+
+    <?php if ($canManage):
+        $barColor = $storagePct < 75 ? 'var(--color-success)' : ($storagePct < 95 ? 'var(--color-warning)' : 'var(--color-error)');
+        $over     = $storageUsed > $storageQuota;
+    ?>
+    <div class="card card--padded" style="margin-bottom: var(--sp-4); display:flex; gap: var(--sp-4); align-items:center; flex-wrap: wrap; padding: var(--sp-3) var(--sp-4);">
+        <div style="font-size: 22px; line-height: 1;">💾</div>
+        <div style="flex: 1; min-width: 200px;">
+            <div class="row" style="justify-content: space-between; gap: var(--sp-3); align-items: baseline; flex-wrap: wrap;">
+                <strong style="font-size: var(--fs-sm);">
+                    Storage:
+                    <?= e(format_bytes($storageUsed)) ?> of <?= e(format_bytes($storageQuota)) ?>
+                    <span class="muted" style="font-weight: normal;">(<?= number_format($storagePct, 1) ?>%)</span>
+                </strong>
+                <span class="muted" style="font-size: var(--fs-xs);">
+                    <?php if ((int)($association['storage_paid_extra_gb'] ?? 0) > 0): ?>
+                        Includes <?= (int)$association['storage_paid_extra_gb'] ?> GB paid add-on ·
+                    <?php endif; ?>
+                    Need more? $5/mo per extra GB · <a href="mailto:success@badasshoa.com?subject=Storage%20upgrade%20for%20<?= urlencode((string)$association['name']) ?>">Contact us</a>
+                </span>
+            </div>
+            <div style="margin-top: 4px; height: 8px; background: var(--color-surface); border-radius: 999px; overflow: hidden;">
+                <div style="height: 100%; width: <?= number_format($storagePct, 2) ?>%; background: <?= $barColor ?>; transition: width 200ms ease;"></div>
+            </div>
+            <?php if ($over): ?>
+                <div class="muted" style="font-size: var(--fs-xs); color: var(--color-error); margin-top: 4px;">⚠ Over quota — new uploads will be blocked until you delete or upgrade.</div>
+            <?php elseif ($storagePct >= 90): ?>
+                <div class="muted" style="font-size: var(--fs-xs); color: var(--color-warning); margin-top: 4px;">Approaching your limit. New uploads will start failing soon.</div>
+            <?php endif; ?>
+        </div>
+    </div>
+    <?php endif; ?>
 
     <div class="row row--between" style="margin-bottom: var(--sp-6); align-items: flex-start; gap: var(--sp-4); flex-wrap: wrap;">
         <div>
