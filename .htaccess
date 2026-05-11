@@ -4,6 +4,9 @@
 DirectoryIndex index.php index.html
 Options -Indexes -MultiViews
 
+# Friendly 404 — funny "Violation Notice" page
+ErrorDocument 404 /404.php
+
 # --- Per-association public landing: /{slug}/ → landing.php?slug={slug} ----
 # Real files / directories take precedence (so /dashboard/, /admin/, /assets/,
 # /storage/, /login.php, /signup.php, /pricing.php, /changelog.php, etc. all

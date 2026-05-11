@@ -28,23 +28,43 @@ $CAT_LINKS = [
     'other'     => null,
 ];
 
-// Best-effort: map a file's relative path back to a clickable URL when we
-// can — uploaded documents are served via /dashboard/file.php?id=N, branded
-// logo via /branding.php. For the rest just show the filename.
-$docMap = [];
-$dStmt = db()->prepare("SELECT id, file_path FROM documents WHERE association_id = ? AND file_path IS NOT NULL");
+// Best-effort: map a file's relative path back to its document row so we can
+// link to the gatekeeper (/dashboard/file.php?type=document&id=N) and show
+// the friendly title instead of the UUID filename. Also map media rows for
+// the same reason. file_path in the DB starts with "uploads/{assocId}/…".
+$docMap = [];   // path → ['id' => N, 'title' => '…']
+$mediaMap = []; // path → ['id' => N, 'title' => '…']
+$dStmt = db()->prepare("SELECT id, file_path, title FROM documents WHERE association_id = ? AND file_path IS NOT NULL");
 $dStmt->execute([$assocId]);
 foreach ($dStmt->fetchAll() as $d) {
-    $docMap['uploads/' . $assocId . '/' . ($d['file_path'] ?? '')] = (int)$d['id'];
-    $docMap[$d['file_path']] = (int)$d['id'];
+    if (!empty($d['file_path'])) {
+        $docMap[$d['file_path']] = ['id' => (int)$d['id'], 'title' => (string)$d['title']];
+    }
+}
+$mStmt = db()->prepare("SELECT id, file_path, file_name, caption FROM media WHERE association_id = ? AND file_path IS NOT NULL");
+$mStmt->execute([$assocId]);
+foreach ($mStmt->fetchAll() as $m) {
+    $title = trim((string)($m['caption'] ?: $m['file_name'] ?: ''));
+    $mediaMap[$m['file_path']] = ['id' => (int)$m['id'], 'title' => $title];
 }
 
-function file_url_for(string $rel, int $assocId, array $docMap): ?string
+// Resolve a relative path (under uploads/{assocId}/) to a clickable URL +
+// friendly title. Returns [url|null, title].
+function file_resolve(string $rel, int $assocId, array $docMap, array $mediaMap): array
 {
-    $fullRel = 'uploads/' . $assocId . '/' . $rel;
-    if (isset($docMap[$fullRel])) return '/dashboard/file.php?id=' . $docMap[$fullRel];
-    if (str_starts_with($rel, 'branding/')) return '/branding.php?id=' . $assocId;
-    return null;
+    $full = 'uploads/' . $assocId . '/' . $rel;
+    if (isset($docMap[$full])) {
+        $row = $docMap[$full];
+        return ['/dashboard/file.php?type=document&id=' . $row['id'], $row['title'] ?: basename($rel)];
+    }
+    if (isset($mediaMap[$full])) {
+        $row = $mediaMap[$full];
+        return ['/dashboard/file.php?type=media&id=' . $row['id'], $row['title'] ?: basename($rel)];
+    }
+    if (str_starts_with($rel, 'branding/')) {
+        return ['/branding.php?id=' . $assocId, 'Association branding'];
+    }
+    return [null, basename($rel)];
 }
 
 $page_title = 'Storage — ' . $association['name'];
@@ -124,8 +144,7 @@ $paidGb = (int)($association['storage_paid_extra_gb'] ?? 0);
                 </thead>
                 <tbody>
                 <?php foreach ($c['files'] as $f):
-                    $name = basename($f['rel']);
-                    $url  = file_url_for($f['rel'], $assocId, $docMap);
+                    [$url, $name] = file_resolve($f['rel'], $assocId, $docMap, $mediaMap);
                 ?>
                     <tr>
                         <td>
@@ -134,7 +153,7 @@ $paidGb = (int)($association['storage_paid_extra_gb'] ?? 0);
                             <?php else: ?>
                                 <?= e($name) ?>
                             <?php endif; ?>
-                            <div class="muted" style="font-size: var(--fs-xs);"><?= e($f['rel']) ?></div>
+                            <div class="muted" style="font-size: var(--fs-xs);"><?= e(basename($f['rel'])) ?></div>
                         </td>
                         <td style="text-align:right; white-space:nowrap; font-variant-numeric: tabular-nums;"><?= e(format_bytes($f['size'])) ?></td>
                         <td class="muted" style="white-space:nowrap;"><?= e(date('M j, Y', $f['mtime'])) ?></td>

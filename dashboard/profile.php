@@ -281,7 +281,7 @@ require __DIR__ . '/../includes/header.php';
                     <td><?= e(date('M j, Y', strtotime((string)$d['created_at']))) ?></td>
                     <td style="text-align:right; white-space: nowrap;">
                         <?php if (!empty($d['file_path'])): ?>
-                            <a class="btn btn--ghost" href="/dashboard/file.php?id=<?= (int)$d['id'] ?>" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);">Download</a>
+                            <a class="btn btn--ghost" href="/dashboard/file.php?type=document&id=<?= (int)$d['id'] ?>" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);">Download</a>
                         <?php else: ?>
                             <a class="btn btn--ghost" href="/dashboard/document.php?id=<?= (int)$d['id'] ?>" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);">Open</a>
                         <?php endif; ?>

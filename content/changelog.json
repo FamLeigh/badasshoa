@@ -1,5 +1,14 @@
 [
     {
+        "id": "cl-20260512-063000-fix",
+        "at": "2026-05-12T06:30:00-04:00",
+        "type": "fix",
+        "title": "Storage breakdown shows real names + a funny 404 page",
+        "description": "The storage breakdown page now lists each file by its title (e.g. '2026 Bylaws.pdf' instead of the UUID filename) for documents and media, with the raw filename underneath. Clicking a document used to return 'Bad request' because the URL was missing the type parameter — fixed in both the storage page and the My documents card on profile (now correctly /dashboard/file.php?type=document&id=N). Also added a friendly 404 page — when a URL doesn't exist, you get a tiny HOA Violation Notice card with a randomized joke instead of Apache's default page.",
+        "author": "Reboooot",
+        "link": "/dashboard/storage.php"
+    },
+    {
         "id": "cl-20260512-060000-comm",
         "at": "2026-05-12T06:00:00-04:00",
         "type": "improvement",
