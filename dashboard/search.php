@@ -535,7 +535,11 @@ $approvingSug     = null;
 if (($_GET['action'] ?? '') === 'approve' && $canManage) {
     $sid = (int)($_GET['id'] ?? 0);
     $stmt = db()->prepare(
-        'SELECT s.*, TRIM(CONCAT(IFNULL(u.first_name,""), " ", IFNULL(u.last_name,""))) AS suggester_name, u.email AS suggester_email
+        'SELECT s.*,
+                TRIM(CONCAT(IFNULL(u.first_name,""), " ", IFNULL(u.last_name,""))) AS suggester_name,
+                u.email       AS suggester_email,
+                u.avatar_path AS suggester_avatar,
+                u.id          AS suggester_id
            FROM rule_suggestions s LEFT JOIN users u ON u.id = s.suggester_user_id
           WHERE s.id = ? AND s.association_id = ? AND s.status = "pending"'
     );
@@ -556,7 +560,10 @@ $suggestionRows = [];
 if ($showSuggestQueue) {
     $statusFilter = $_GET['status'] ?? 'pending';
     if (!in_array($statusFilter, ['pending','approved','rejected','all'], true)) $statusFilter = 'pending';
-    $sugSql = 'SELECT s.*, TRIM(CONCAT(IFNULL(u.first_name,""), " ", IFNULL(u.last_name,""))) AS suggester_name, u.email AS suggester_email
+    $sugSql = 'SELECT s.*,
+                      TRIM(CONCAT(IFNULL(u.first_name,""), " ", IFNULL(u.last_name,""))) AS suggester_name,
+                      u.email       AS suggester_email,
+                      u.avatar_path AS suggester_avatar
                  FROM rule_suggestions s LEFT JOIN users u ON u.id = s.suggester_user_id
                 WHERE s.association_id = ?';
     $sugParams = [$assocId];
@@ -951,14 +958,28 @@ function rule_form_card(?array $editing, array $categories): void {
                             <span class="badge <?= $statusBadge ?>"><?= e((string)$sug['status']) ?></span>
                             <span class="badge" style="background: var(--color-surface); color: var(--color-text-soft); font-size: var(--fs-xs);"><?= e((string)$sug['source']) ?></span>
                             <?php if (!empty($sug['category'])): ?>
-                                <span class="muted" style="font-size: var(--fs-xs);"><?= e((string)$sug['category']) ?></span>
+                                <span class="badge" style="background: var(--color-warning-bg); color: var(--color-warning); border: 1px solid rgba(182,130,42,0.25); font-size: var(--fs-xs);"><?= e((string)$sug['category']) ?></span>
                             <?php endif; ?>
-                            <span class="muted" style="font-size: var(--fs-xs);">
-                                · suggested <?= e(date('M j, Y', strtotime((string)$sug['suggested_at']))) ?>
-                                by <?= e(trim((string)$sug['suggester_name']) ?: (string)($sug['suggester_email'] ?? '—')) ?>
+                            <span class="muted" style="font-size: var(--fs-xs); align-self: center;">
+                                <?= e(date('M j, Y', strtotime((string)$sug['suggested_at']))) ?>
                             </span>
                         </div>
                         <h4 style="margin: 0 0 var(--sp-2); font-size: var(--fs-lg);"><?= e((string)$sug['title']) ?></h4>
+
+                        <!-- Suggester identity — promoted from buried muted text to its own row -->
+                        <div class="row" style="gap: var(--sp-2); align-items: center; margin-bottom: var(--sp-3); padding: 6px 10px; background: var(--color-surface); border-radius: var(--r-sm); width: fit-content;">
+                            <?php if (!empty($sug['suggester_avatar']) && !empty($sug['suggester_user_id'])): ?>
+                                <img src="/user-avatar.php?id=<?= (int)$sug['suggester_user_id'] ?>" alt="" style="width: 28px; height: 28px; border-radius: 50%; object-fit: cover; flex: 0 0 28px;">
+                            <?php else: ?>
+                                <span class="side-nav__avatar" style="width: 28px; height: 28px; flex: 0 0 28px; background: var(--color-text-soft);"><?= e(strtoupper(mb_substr((string)($sug['suggester_name'] ?: $sug['suggester_email'] ?: '?'), 0, 1))) ?></span>
+                            <?php endif; ?>
+                            <div style="line-height: 1.2;">
+                                <strong style="font-size: var(--fs-sm);">Suggested by <?= e(trim((string)$sug['suggester_name']) ?: (string)($sug['suggester_email'] ?? '— unknown —')) ?></strong>
+                                <?php if (!empty($sug['suggester_email']) && trim((string)$sug['suggester_name']) !== ''): ?>
+                                    <div class="muted" style="font-size: var(--fs-xs);"><?= e((string)$sug['suggester_email']) ?></div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
                         <div class="muted" style="font-size: var(--fs-sm); white-space: pre-wrap; max-height: 200px; overflow-y: auto;"><?= e(trim(strip_tags(str_replace(['&nbsp;', "\xc2\xa0"], ' ', (string)$sug['body'])))) ?></div>
                         <?php if ($sug['status'] !== 'pending'): ?>
                             <div class="muted" style="font-size: var(--fs-xs); margin-top: var(--sp-2); padding-top: var(--sp-2); border-top: 1px solid var(--color-border);">
@@ -998,9 +1019,26 @@ function rule_form_card(?array $editing, array $categories): void {
             <h3 class="card__title">Approve suggestion</h3>
             <a class="muted" style="font-size: var(--fs-sm);" href="?action=suggestions">← Back to queue</a>
         </div>
-        <p class="muted" style="font-size: var(--fs-sm); margin-bottom: var(--sp-4);">
+        <p class="muted" style="font-size: var(--fs-sm); margin-bottom: var(--sp-3);">
             Edit any field before adopting. On submit, this becomes a real rule with the approval date set as the effective date, and the suggester gets an email.
         </p>
+
+        <!-- Suggester identity — shown prominently so the board always knows who submitted -->
+        <div class="row" style="gap: var(--sp-3); align-items: center; margin-bottom: var(--sp-4); padding: var(--sp-2) var(--sp-3); background: var(--color-surface); border-radius: var(--r-sm); width: fit-content;">
+            <?php if (!empty($approvingSug['suggester_avatar']) && !empty($approvingSug['suggester_id'])): ?>
+                <img src="/user-avatar.php?id=<?= (int)$approvingSug['suggester_id'] ?>" alt="" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover; flex: 0 0 36px;">
+            <?php else: ?>
+                <span class="side-nav__avatar" style="width: 36px; height: 36px; flex: 0 0 36px; background: var(--color-text-soft);"><?= e(strtoupper(mb_substr((string)($approvingSug['suggester_name'] ?: $approvingSug['suggester_email'] ?: '?'), 0, 1))) ?></span>
+            <?php endif; ?>
+            <div style="line-height: 1.2;">
+                <strong>Suggested by <?= e(trim((string)$approvingSug['suggester_name']) ?: (string)($approvingSug['suggester_email'] ?? '— unknown —')) ?></strong>
+                <div class="muted" style="font-size: var(--fs-xs);">
+                    <?= !empty($approvingSug['suggester_email']) ? e((string)$approvingSug['suggester_email']) . ' · ' : '' ?>
+                    submitted <?= e(date('M j, Y', strtotime((string)$approvingSug['suggested_at']))) ?>
+                </div>
+            </div>
+        </div>
+
         <form method="post" class="form">
             <?= csrf_field() ?>
             <input type="hidden" name="form" value="suggest_approve">
