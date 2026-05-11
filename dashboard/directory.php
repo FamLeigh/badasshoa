@@ -48,10 +48,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'import'
                 $first      = $get('first_name');
                 $last       = $get('last_name');
                 $email      = $get('email');
-                $email2     = $get('email2');
+                // Accept either `email2` or `alt_email` for the secondary email column.
+                $email2     = $get('email2') !== '' ? $get('email2') : $get('alt_email');
                 $phone      = $get('phone');
-                $phone2     = $get('phone2');
+                // Same alias support for phone2 / alt_phone.
+                $phone2     = $get('phone2') !== '' ? $get('phone2') : $get('alt_phone');
                 if ($email2 !== '' && !filter_var($email2, FILTER_VALIDATE_EMAIL)) $email2 = '';
+
+                // Mailing address handling. The CSV can supply either
+                //   mailing_address + mailing_city + mailing_state_region + mailing_postal_code
+                // (the granular schema fields) or a combined `city_state_zip` string
+                // like "Daytona Beach, FL 32118" which we'll parse into pieces.
+                $mAddr = $get('mailing_address');
+                $mCity = $get('mailing_city');
+                $mState = $get('mailing_state_region');
+                $mPostal = $get('mailing_postal_code');
+                $mCountry = strtoupper($get('mailing_country'));
+                $csz = $get('city_state_zip');
+                if ($csz !== '' && ($mCity === '' || $mState === '' || $mPostal === '')) {
+                    // Match "City, ST ZIP" with optional ZIP+4 like 32124-3784.
+                    if (preg_match('/^(.+?),\s*([A-Za-z]{2})\s+([\w\-]+)$/u', $csz, $m)) {
+                        if ($mCity === '')   $mCity   = trim($m[1]);
+                        if ($mState === '')  $mState  = strtoupper($m[2]);
+                        if ($mPostal === '') $mPostal = trim($m[3]);
+                    } else {
+                        // International / non-standard — stash whole thing in city.
+                        if ($mCity === '') $mCity = $csz;
+                    }
+                }
+                if ($mCountry !== '' && !preg_match('/^[A-Z]{2}$/', $mCountry)) $mCountry = '';
+
                 $isOwnerRaw = strtolower($get('is_owner'));
                 $isOwner    = in_array($isOwnerRaw, ['1','y','yes','owner','true'], true) ? 1
                             : (in_array($isOwnerRaw, ['0','n','no','renter','false'], true) ? 0 : 1);
@@ -84,9 +110,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'import'
                 $hash     = password_hash($tempPass, PASSWORD_BCRYPT, ['cost' => 12]);
                 $role     = $isOwner ? 'resident' : 'renter';
                 db()->prepare(
-                    'INSERT INTO users (association_id, first_name, last_name, email, email2, phone, phone2, password_hash, role, unit_number, is_owner, status)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "pending")'
-                )->execute([$assocId, $first, $last, $finalEmail, $email2 ?: null, $phone ?: null, $phone2 ?: null, $hash, $role, $unit ?: null, $isOwner]);
+                    'INSERT INTO users (association_id, first_name, last_name, email, email2, phone, phone2,
+                                        mailing_address, mailing_city, mailing_state_region, mailing_postal_code, mailing_country,
+                                        password_hash, role, unit_number, is_owner, status)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "pending")'
+                )->execute([
+                    $assocId, $first, $last, $finalEmail, $email2 ?: null, $phone ?: null, $phone2 ?: null,
+                    $mAddr ?: null, $mCity ?: null, $mState ?: null, $mPostal ?: null, $mCountry ?: null,
+                    $hash, $role, $unit ?: null, $isOwner,
+                ]);
                 $newId = (int)db()->lastInsertId();
 
                 // Only send the welcome email when we have a real address.
