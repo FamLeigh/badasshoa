@@ -78,7 +78,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'save_un
     $garage  = trim((string)($_POST['garage_number'] ?? ''));
     $parking = trim((string)($_POST['parking_spot'] ?? ''));
     $notes   = trim((string)($_POST['notes'] ?? ''));
-    if (!in_array($type, ['condo','townhouse','single_family','apartment','other'], true)) $type = 'condo';
+    if (!in_array($type, ['condo','townhouse','single_family','apartment','business','main_office','other'], true)) $type = 'condo';
 
     if ($num === '') {
         $flashError = 'Unit number is required.';
@@ -274,7 +274,7 @@ require __DIR__ . '/../includes/header.php';
                 <div class="field">
                     <label class="field__label" for="eu-type">Type</label>
                     <select class="select" id="eu-type" name="type">
-                        <?php foreach (['condo'=>'Condo','townhouse'=>'Townhouse','single_family'=>'Single family','apartment'=>'Apartment','other'=>'Other'] as $v=>$lbl): ?>
+                        <?php foreach (['condo'=>'Condo','townhouse'=>'Townhouse','single_family'=>'Single family','apartment'=>'Apartment','business'=>'Business','main_office'=>'Main office','other'=>'Other'] as $v=>$lbl): ?>
                             <option value="<?= e($v) ?>" <?= $unit['type']===$v?'selected':'' ?>><?= e($lbl) ?></option>
                         <?php endforeach; ?>
                     </select>

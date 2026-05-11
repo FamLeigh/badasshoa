@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'add') {
     $garage  = trim((string)($_POST['garage_number'] ?? ''));
     $parking = trim((string)($_POST['parking_spot'] ?? ''));
     $notes   = trim((string)($_POST['notes'] ?? ''));
-    if (!in_array($type, ['condo','townhouse','single_family','apartment','other'], true)) $type = 'condo';
+    if (!in_array($type, ['condo','townhouse','single_family','apartment','business','main_office','other'], true)) $type = 'condo';
 
     if ($num === '') {
         $flashError = 'Unit number is required.';
@@ -55,7 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'import'
             $flashError = 'Could not read CSV.';
         } else {
             $added = 0; $updated = 0; $skipped = 0; $errors = []; $row = 0; $headerMap = null;
-            $allowedTypes = ['condo','townhouse','single_family','apartment','other'];
+            $allowedTypes = ['condo','townhouse','single_family','apartment','business','main_office','other'];
 
             while (($cols = fgetcsv($fh)) !== false) {
                 $row++;
@@ -200,7 +200,7 @@ require __DIR__ . '/../includes/header.php';
             <a class="muted" style="font-size: var(--fs-sm);" href="/dashboard/units.php">← Back</a>
         </div>
         <p class="muted" style="font-size: var(--fs-sm);">
-            Required column: <code>unit_number</code>. Optional: <code>type</code> (condo / townhouse / single_family / apartment / other),
+            Required column: <code>unit_number</code>. Optional: <code>type</code> (condo / townhouse / single_family / apartment / business / main_office / other),
             <code>bedrooms</code>, <code>baths</code> (e.g. 2.5), <code>square_footage</code>, <code>ownership_percent</code>
             (e.g. 0.4521), <code>annual_hoa_assessment</code>, <code>annual_garage_assessment</code>,
             <code>garage_number</code>, <code>parking_spot</code>, <code>notes</code>.
@@ -242,7 +242,7 @@ require __DIR__ . '/../includes/header.php';
                 <div class="field">
                     <label class="field__label" for="u-type">Type</label>
                     <select class="select" id="u-type" name="type">
-                        <?php foreach (['condo'=>'Condo','townhouse'=>'Townhouse','single_family'=>'Single family','apartment'=>'Apartment','other'=>'Other'] as $v=>$lbl): ?>
+                        <?php foreach (['condo'=>'Condo','townhouse'=>'Townhouse','single_family'=>'Single family','apartment'=>'Apartment','business'=>'Business','main_office'=>'Main office','other'=>'Other'] as $v=>$lbl): ?>
                             <option value="<?= e($v) ?>"><?= e($lbl) ?></option>
                         <?php endforeach; ?>
                     </select>
