@@ -3,19 +3,13 @@ require __DIR__ . '/_bootstrap.php';
 
 // Quick stats (tenant-scoped).
 $stats = [];
-// Registered units = distinct unit numbers with at least one non-inactive member
-$unitsStmt = db()->prepare(
-    "SELECT COUNT(DISTINCT unit_number) FROM users
-     WHERE association_id = ?
-       AND status <> 'inactive'
-       AND unit_number IS NOT NULL
-       AND unit_number <> ''"
-);
+// Registered units come from the units table (the structured source).
+$unitsStmt = db()->prepare('SELECT COUNT(*) FROM units WHERE association_id = ?');
 $unitsStmt->execute([$assocId]);
 $stats['units'] = (int)$unitsStmt->fetchColumn();
 
-// All active members (everyone signed up — owners, renters, board, PM)
-$memberCount = db()->prepare("SELECT COUNT(*) FROM users WHERE association_id = ? AND status = 'active'");
+// Members = everyone on file (active + pending — many imports come in as 'pending')
+$memberCount = db()->prepare("SELECT COUNT(*) FROM users WHERE association_id = ? AND status <> 'inactive'");
 $memberCount->execute([$assocId]);
 $stats['members'] = (int)$memberCount->fetchColumn();
 
@@ -50,6 +44,30 @@ $comms = db()->prepare('SELECT COUNT(*) FROM committees WHERE association_id = ?
 $comms->execute([$assocId]);
 $stats['committees'] = (int)$comms->fetchColumn();
 
+// Upcoming events (today and forward)
+$evStmt = db()->prepare(
+    'SELECT COUNT(*) FROM events
+      WHERE association_id = ? AND starts_at >= NOW()'
+);
+$evStmt->execute([$assocId]);
+$stats['events'] = (int)$evStmt->fetchColumn();
+
+// Open concerns (anything not closed/resolved)
+$conStmt = db()->prepare(
+    "SELECT COUNT(*) FROM concerns
+      WHERE association_id = ? AND status NOT IN ('closed','resolved')"
+);
+$conStmt->execute([$assocId]);
+$stats['concerns_open'] = (int)$conStmt->fetchColumn();
+
+$conTotalStmt = db()->prepare('SELECT COUNT(*) FROM concerns WHERE association_id = ?');
+$conTotalStmt->execute([$assocId]);
+$stats['concerns'] = (int)$conTotalStmt->fetchColumn();
+
+$faqStmt = db()->prepare('SELECT COUNT(*) FROM faqs WHERE association_id = ?');
+$faqStmt->execute([$assocId]);
+$stats['faqs'] = (int)$faqStmt->fetchColumn();
+
 // Latest 5 announcements.
 $annStmt = db()->prepare(
     'SELECT a.id, a.title, a.body, a.type, a.published_at,
@@ -60,6 +78,26 @@ $annStmt = db()->prepare(
 );
 $annStmt->execute([$assocId]);
 $announcements = $annStmt->fetchAll();
+
+// Upcoming events (next ~60 days, expanded for recurring). Honors viewer
+// audience scope so view-as preview matches what tenants would see.
+$allowedAudiences = ['all', 'members'];
+if (role_can_manage(viewing_role())) {
+    $allowedAudiences[] = 'board';
+}
+$evPh = implode(',', array_fill(0, count($allowedAudiences), '?'));
+$upStmt = db()->prepare(
+    "SELECT * FROM events
+      WHERE association_id = ?
+        AND audience IN ($evPh)
+        AND ((recurrence_type = 'none' AND starts_at >= NOW())
+             OR (recurrence_type <> 'none'
+                 AND (recurrence_until IS NULL OR recurrence_until >= CURDATE())))
+      LIMIT 100"
+);
+$upStmt->execute(array_merge([$assocId], $allowedAudiences));
+$upcomingEvents = expand_events($upStmt->fetchAll(), false, 60);
+if (count($upcomingEvents) > 5) $upcomingEvents = array_slice($upcomingEvents, 0, 5);
 
 $user = current_user();
 $hour = (int)date('G');
@@ -88,7 +126,7 @@ require __DIR__ . '/../includes/header.php';
             <div class="stat__label">Members</div>
             <div class="stat__value"><?= (int)$stats['members'] ?></div>
         </a>
-        <a class="stat" href="/dashboard/directory.php">
+        <a class="stat" href="/dashboard/units.php">
             <div class="stat__label">Units</div>
             <div class="stat__value"><?= (int)$stats['units'] ?></div>
         </a>
@@ -117,35 +155,103 @@ require __DIR__ . '/../includes/header.php';
             <div class="stat__label">Committees</div>
             <div class="stat__value"><?= (int)$stats['committees'] ?></div>
         </a>
+        <a class="stat" href="/dashboard/events.php">
+            <div class="stat__label">Events</div>
+            <div class="stat__value"><?= (int)$stats['events'] ?></div>
+            <?php if ($stats['events'] > 0): ?>
+                <div class="muted" style="font-size: var(--fs-xs); margin-top: 2px;">upcoming</div>
+            <?php endif; ?>
+        </a>
+        <a class="stat" href="/dashboard/concerns.php" style="position: relative;">
+            <div class="stat__label">Concerns</div>
+            <div class="stat__value"><?= (int)$stats['concerns'] ?></div>
+            <?php if ($stats['concerns_open'] > 0): ?>
+                <div style="margin-top: 4px;">
+                    <span class="badge badge--orange" style="font-size: var(--fs-xs);"><?= (int)$stats['concerns_open'] ?> open</span>
+                </div>
+            <?php endif; ?>
+        </a>
+        <a class="stat" href="/dashboard/faq.php">
+            <div class="stat__label">FAQs</div>
+            <div class="stat__value"><?= (int)$stats['faqs'] ?></div>
+        </a>
     </div>
 
-    <div class="card card--padded">
-        <div class="card__head">
-            <h2 class="card__title">Recent announcements</h2>
-            <a href="/dashboard/communications.php" class="muted" style="font-size: var(--fs-sm);">View all →</a>
-        </div>
-        <?php if (!$announcements): ?>
-            <p class="muted">No announcements yet. <a href="/dashboard/communications.php?action=new">Post the first one</a>.</p>
-        <?php else: ?>
-            <div class="stack-lg">
-            <?php foreach ($announcements as $a): ?>
-                <div>
-                    <div class="row" style="gap: var(--sp-2); margin-bottom: var(--sp-1);">
-                        <span class="badge <?= $a['type'] === 'emergency' ? 'badge--error' : ($a['type'] === 'event' ? 'badge--info' : 'badge--orange') ?>">
-                            <?= e($a['type']) ?>
-                        </span>
-                        <span class="muted" style="font-size: var(--fs-xs);"><?= e(date('M j, Y', strtotime($a['published_at']))) ?> &middot; <?= e(trim($a['author']) ?: 'Unknown') ?></span>
-                    </div>
-                    <strong><?= e($a['title']) ?></strong>
-                    <p class="muted" style="margin: var(--sp-1) 0 0; font-size: var(--fs-sm);">
-                        <?= e(mb_strimwidth(strip_tags($a['body']), 0, 160, '…')) ?>
-                    </p>
-                </div>
-            <?php endforeach; ?>
+    <div class="dash-split" style="display:grid; grid-template-columns: 1fr 1fr; gap: var(--sp-5); align-items: start;">
+
+        <div class="card card--padded">
+            <div class="card__head">
+                <h2 class="card__title">Recent announcements</h2>
+                <a href="/dashboard/communications.php" class="muted" style="font-size: var(--fs-sm);">View all →</a>
             </div>
-        <?php endif; ?>
+            <?php if (!$announcements): ?>
+                <p class="muted">No announcements yet. <a href="/dashboard/communications.php?action=new">Post the first one</a>.</p>
+            <?php else: ?>
+                <div class="stack-lg">
+                <?php foreach ($announcements as $a): ?>
+                    <div>
+                        <div class="row" style="gap: var(--sp-2); margin-bottom: var(--sp-1);">
+                            <span class="badge <?= $a['type'] === 'emergency' ? 'badge--error' : ($a['type'] === 'event' ? 'badge--info' : 'badge--orange') ?>">
+                                <?= e($a['type']) ?>
+                            </span>
+                            <span class="muted" style="font-size: var(--fs-xs);"><?= e(date('M j, Y', strtotime($a['published_at']))) ?> &middot; <?= e(trim($a['author']) ?: 'Unknown') ?></span>
+                        </div>
+                        <strong><?= e($a['title']) ?></strong>
+                        <p class="muted" style="margin: var(--sp-1) 0 0; font-size: var(--fs-sm);">
+                            <?= e(mb_strimwidth(strip_tags($a['body']), 0, 160, '…')) ?>
+                        </p>
+                    </div>
+                <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+        </div>
+
+        <div class="card card--padded">
+            <div class="card__head">
+                <h2 class="card__title">Upcoming events</h2>
+                <a href="/dashboard/events.php" class="muted" style="font-size: var(--fs-sm);">View all →</a>
+            </div>
+            <?php if (!$upcomingEvents): ?>
+                <p class="muted">No upcoming events. <a href="/dashboard/events.php?action=new">Add one</a>.</p>
+            <?php else: ?>
+                <div class="stack-lg">
+                <?php foreach ($upcomingEvents as $ev):
+                    $startTs = strtotime((string)$ev['starts_at']);
+                    $endTs   = !empty($ev['ends_at']) ? strtotime((string)$ev['ends_at']) : null;
+                    $sameDay = $endTs && date('Y-m-d', $startTs) === date('Y-m-d', $endTs);
+                    $audClass = match ($ev['audience']) {
+                        'all'     => 'badge--success',
+                        'board'   => 'badge--navy',
+                        default   => 'badge--info',
+                    };
+                ?>
+                    <div>
+                        <div class="row" style="gap: var(--sp-2); margin-bottom: var(--sp-1); flex-wrap: wrap;">
+                            <span class="badge <?= $audClass ?>"><?= e((string)$ev['audience']) ?></span>
+                            <?php if (($ev['recurrence_type'] ?? 'none') !== 'none'): ?>
+                                <span class="badge" style="background: var(--color-surface); color: var(--color-text-soft); font-size: var(--fs-xs);">↻ <?= e((string)$ev['recurrence_type']) ?></span>
+                            <?php endif; ?>
+                            <span class="muted" style="font-size: var(--fs-xs);">
+                                <?= e(date('D, M j · g:i A', $startTs)) ?>
+                                <?php if ($endTs): ?> – <?= e(date($sameDay ? 'g:i A' : 'M j, g:i A', $endTs)) ?><?php endif; ?>
+                            </span>
+                        </div>
+                        <strong><?= e((string)$ev['title']) ?></strong>
+                        <?php if (!empty($ev['location'])): ?>
+                            <p class="muted" style="margin: var(--sp-1) 0 0; font-size: var(--fs-sm);">📍 <?= e((string)$ev['location']) ?></p>
+                        <?php endif; ?>
+                    </div>
+                <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+        </div>
+
     </div>
 
 </div>
+
+<style>
+    @media (max-width: 800px) { .dash-split { grid-template-columns: 1fr !important; } }
+</style>
 
 <?php require __DIR__ . '/../includes/footer.php'; ?>

@@ -270,6 +270,10 @@ function event_form_card(?array $editing, string $assocSlug, array $activeLocati
         <?php if ($audienceFilter): ?>
             <a class="muted" href="?<?= $showPast ? 'past=1' : '' ?>" style="font-size: var(--fs-xs); margin-left: var(--sp-2);">clear</a>
         <?php endif; ?>
+        <span class="muted" style="font-size: var(--fs-xs); align-self:center; margin-left: var(--sp-3);">Print:</span>
+        <a class="badge" href="/dashboard/events-print.php?range=day"   target="_blank" rel="noopener" style="text-decoration:none;">Today</a>
+        <a class="badge" href="/dashboard/events-print.php?range=week"  target="_blank" rel="noopener" style="text-decoration:none;">This week</a>
+        <a class="badge" href="/dashboard/events-print.php?range=month" target="_blank" rel="noopener" style="text-decoration:none;">This month</a>
     </div>
 
     <?php if (!$rows): ?>

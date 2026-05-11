@@ -1,5 +1,14 @@
 [
     {
+        "id": "cl-20260511-140000-ev01",
+        "at": "2026-05-11T14:00:00-04:00",
+        "type": "feature",
+        "title": "Dashboard refresh + printable event lists",
+        "description": "Dashboard now opens onto a two-column layout — Recent announcements on the left, Upcoming events on the right — so the board can scan both at a glance. The stat tiles got a working Units link (to /dashboard/units.php), an accurate member count that includes pending residents, and three new tiles: Events (with upcoming count), Concerns (with open-count badge), and FAQs. The Events page also got Print buttons for Today / This week / This month — clean print-ready lists grouped by day, audience-scoped, with the association's letterhead and copyright footer.",
+        "author": "Reboooot",
+        "link": "/dashboard/"
+    },
+    {
         "id": "cl-20260511-120000-ddd5",
         "at": "2026-05-11T12:00:00-04:00",
         "type": "feature",
