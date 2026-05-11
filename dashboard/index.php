@@ -24,6 +24,14 @@ $ruleCount = db()->prepare('SELECT COUNT(*) FROM rules WHERE association_id = ?'
 $ruleCount->execute([$assocId]);
 $stats['rules'] = (int)$ruleCount->fetchColumn();
 
+// Pending rule changes = member-submitted suggestions awaiting board action
+// + rules the board flagged for review. Surfaced as a badge on the Rules tile.
+$pendingSug = db()->prepare("SELECT COUNT(*) FROM rule_suggestions WHERE association_id = ? AND status = 'pending'");
+$pendingSug->execute([$assocId]);
+$flaggedRules = db()->prepare('SELECT COUNT(*) FROM rules WHERE association_id = ? AND review_flag = 1');
+$flaggedRules->execute([$assocId]);
+$stats['rule_changes_pending'] = (int)$pendingSug->fetchColumn() + (int)$flaggedRules->fetchColumn();
+
 // Photos = media rows with an image MIME type
 $photoCount = db()->prepare("SELECT COUNT(*) FROM media WHERE association_id = ? AND file_type LIKE 'image/%'");
 $photoCount->execute([$assocId]);
@@ -84,9 +92,14 @@ require __DIR__ . '/../includes/header.php';
             <div class="stat__label">Units</div>
             <div class="stat__value"><?= (int)$stats['units'] ?></div>
         </a>
-        <a class="stat" href="/dashboard/search.php">
+        <a class="stat" href="/dashboard/search.php" style="position: relative;">
             <div class="stat__label">Rules</div>
             <div class="stat__value"><?= (int)$stats['rules'] ?></div>
+            <?php if ($stats['rule_changes_pending'] > 0): ?>
+                <div style="margin-top: 4px;">
+                    <span class="badge badge--orange" style="font-size: var(--fs-xs);">🚩 <?= (int)$stats['rule_changes_pending'] ?> pending</span>
+                </div>
+            <?php endif; ?>
         </a>
         <a class="stat" href="/dashboard/documents.php">
             <div class="stat__label">Documents</div>
