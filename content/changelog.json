@@ -1,5 +1,50 @@
 [
     {
+        "id": "cl-20260511-120000-ddd5",
+        "at": "2026-05-11T12:00:00-04:00",
+        "type": "feature",
+        "title": "Rules: flag for board review",
+        "description": "Managers can now flag any rule for board review with an optional note (\"conflicts with bylaw 5.2\", \"language needs updating\", etc.). Flagged rules carry a red \"Needs review\" badge in the listing and a banner on the rule's detail page. One click to clear the flag once handled.",
+        "author": "Reboooot",
+        "link": "/dashboard/search.php"
+    },
+    {
+        "id": "cl-20260511-115500-ddd4",
+        "at": "2026-05-11T11:55:00-04:00",
+        "type": "feature",
+        "title": "Compose documents inline + print any rule or document",
+        "description": "Documents page now has a Compose button alongside Upload — write the document directly in a rich-text editor (headings, bold/italic, lists, blockquotes, inline images) instead of uploading a Word or PDF file. Every composed document and every rule now has a Print button that opens a clean print-friendly view and triggers the browser's print dialog, so save-as-PDF and paper copies work cleanly. Print-all-rules-in-number-order is also available from the Rules header.",
+        "author": "Reboooot",
+        "link": "/dashboard/documents.php"
+    },
+    {
+        "id": "cl-20260511-115000-ddd3",
+        "at": "2026-05-11T11:50:00-04:00",
+        "type": "design",
+        "title": "Rules: number-first layout + category as a pill + open one rule at a time",
+        "description": "Each rule in the listing now leads with its rule number in bold navy, followed by the source pill (bylaw / board rule / policy) and the category as its own warm-yellow pill. The default sort is by rule number (the way the board references them). Click Open on any row to view that one rule on its own page. Rule suggestion + rule category rename are now available to managers too (previously only members could suggest, and categories could only be added or deleted).",
+        "author": "Reboooot",
+        "link": "/dashboard/search.php"
+    },
+    {
+        "id": "cl-20260511-114500-ddd2",
+        "at": "2026-05-11T11:45:00-04:00",
+        "type": "feature",
+        "title": "Units: annual HOA and garage assessment amounts",
+        "description": "Each unit now tracks an annual HOA assessment and an annual garage assessment (separate, since not every unit has a garage). Visible on the unit detail page header and editable on the unit form. CSV import accepts two new optional columns (annual_hoa_assessment, annual_garage_assessment).",
+        "author": "Reboooot",
+        "link": "/dashboard/units.php"
+    },
+    {
+        "id": "cl-20260511-114000-ddd1",
+        "at": "2026-05-11T11:40:00-04:00",
+        "type": "design",
+        "title": "Copyright footer on every page",
+        "description": "Every page now carries \"© 2026 Savvy Brain LLC and Kevin B. Leigh. Powered by BadassHOA.\" Marketing site keeps the existing fat footer; dashboard and admin layouts get a tight single-line stripe.",
+        "author": "Reboooot",
+        "link": "/"
+    },
+    {
         "id": "cl-20260510-170000-ccc1",
         "at": "2026-05-10T17:00:00-04:00",
         "type": "feature",
