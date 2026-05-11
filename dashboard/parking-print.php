@@ -36,27 +36,34 @@ $threeCol = ($_GET['cols'] ?? '') === '3';
 <meta charset="utf-8">
 <title>Parking — <?= e((string)$association['name']) ?></title>
 <style>
-    @page { size: letter; margin: 0.6in; }
-    body { font-family: Inter, system-ui, sans-serif; color: #111; margin: 0; line-height: 1.4; }
-    h1 { font-size: 22pt; margin: 0 0 0.25em; }
-    .meta { color: #555; font-size: 10pt; margin-bottom: 1em; }
+    @page { size: letter; margin: 0.35in; }
+    body { font-family: Inter, system-ui, sans-serif; color: #111; margin: 0; padding: 0; line-height: 1.3; }
+    h1 { font-size: 18pt; margin: 0 0 0.2em; }
+    .meta { color: #555; font-size: 9pt; margin-bottom: 0.6em; }
     table { border-collapse: collapse; width: 100%; font-size: 10pt; }
-    th, td { text-align: left; padding: 6pt 8pt; border-bottom: 1px solid #ddd; vertical-align: top; }
+    th, td { text-align: left; padding: 4pt 6pt; border-bottom: 1px solid #ddd; vertical-align: top; }
     th { background: #f3edd9; color: #5d4a00; font-size: 9pt; text-transform: uppercase; letter-spacing: 0.06em; }
-    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8pt; }
-    .grid-3 .cell {
-        border: 1px solid #ddd; border-radius: 4pt; padding: 6pt 8pt;
-        font-size: 10pt; break-inside: avoid; page-break-inside: avoid;
+    /* Compact 3-column layout — flows down each column, then to next column.
+       Tight padding and small font so a full lot fits in well under a page. */
+    .grid-3 {
+        column-count: 3;
+        column-gap: 6pt;
     }
-    .grid-3 .num { font-size: 13pt; font-weight: 800; color: #0f1f3d; }
-    .grid-3 .kind { font-size: 8pt; color: #6b4a06; text-transform: uppercase; letter-spacing: 0.06em; }
-    .grid-3 .who  { font-size: 9pt; color: #4a5060; margin-top: 2pt; }
+    .grid-3 .cell {
+        border: 1px solid #ddd; border-radius: 3pt; padding: 3pt 5pt;
+        font-size: 8.5pt; line-height: 1.25;
+        break-inside: avoid; page-break-inside: avoid;
+        margin-bottom: 4pt;
+        display: flex; align-items: baseline; gap: 5pt;
+    }
+    .grid-3 .num  { font-size: 11pt; font-weight: 800; color: #0f1f3d; flex: 0 0 auto; min-width: 22pt; }
+    .grid-3 .kind { font-size: 6.5pt; color: #6b4a06; text-transform: uppercase; letter-spacing: 0.06em; flex: 0 0 auto; }
+    .grid-3 .who  { font-size: 8pt; color: #4a5060; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; }
     @media print {
-        @page { margin: 0.5in; }
         a { color: inherit; text-decoration: none; }
     }
 </style>
-</head><body style="padding: 0.5in;">
+</head><body style="padding: 0.35in;">
 
 <?= print_header_html($association) ?>
 
@@ -71,8 +78,8 @@ $threeCol = ($_GET['cols'] ?? '') === '3';
         $unitLabel = !empty($s['unit_number']) ? ('Unit ' . $s['unit_number']) : '— unassigned —';
     ?>
         <div class="cell">
-            <div class="kind"><?= e((string)$KINDS[$s['kind']]) ?></div>
             <div class="num"><?= e((string)$s['number']) ?></div>
+            <div class="kind"><?= e((string)$KINDS[$s['kind']]) ?></div>
             <div class="who">
                 <?= e($unitLabel) ?>
                 <?php if (!empty($s['primary_owner_name'])): ?>

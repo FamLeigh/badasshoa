@@ -1,5 +1,14 @@
 [
     {
+        "id": "cl-20260511-223000-park",
+        "at": "2026-05-11T22:30:00-04:00",
+        "type": "improvement",
+        "title": "Compact 3-column parking print is now actually compact",
+        "description": "The 3-column parking print used to render each spot as a 3-line card (kind on top, big number, then unit + owner). For 80+ spots that filled multiple pages. Reworked to a one-line-per-spot layout — number first in bold, then a small kind tag, then the unit + owner inline. Tighter page margins (0.35in) and smaller type let a full Bellair lot fit on one or two pages.",
+        "author": "Reboooot",
+        "link": "/dashboard/parking-print.php?cols=3"
+    },
+    {
         "id": "cl-20260511-220000-print",
         "at": "2026-05-11T22:00:00-04:00",
         "type": "improvement",
