@@ -1,5 +1,14 @@
 [
     {
+        "id": "cl-20260512-060000-comm",
+        "at": "2026-05-12T06:00:00-04:00",
+        "type": "improvement",
+        "title": "Committees: collapsed descriptions + Make chair / Step down on existing members",
+        "description": "Long committee descriptions now collapse to about three lines on the listing with a 'Show more ▾' / 'Show less ▴' toggle, so multiple committees fit on the screen at once. Short descriptions render in full with no button (auto-detected). Per-member rows in the manage table now have ⭐ Make chair (promotes them and demotes the current chair) and Step down (demotes the current chair to a regular member) buttons next to Remove, so admins can rearrange the roster without removing and re-adding people.",
+        "author": "Reboooot",
+        "link": "/dashboard/committees.php"
+    },
+    {
         "id": "cl-20260512-053000-stor2",
         "at": "2026-05-12T05:30:00-04:00",
         "type": "feature",

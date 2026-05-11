@@ -308,7 +308,9 @@ require __DIR__ . '/../includes/header.php';
                     <span class="muted"><?= count($cMembers) ?> member<?= count($cMembers)===1?'':'s' ?></span>
                 </div>
                 <?php if ($c['description']): ?>
-                    <div class="muted" style="font-size: var(--fs-sm); margin: var(--sp-3) 0 0; max-width: 60ch; line-height: var(--lh-loose);"><?= (string)$c['description'] /* HTML from Quill — board-trusted */ ?></div>
+                    <div class="committee-desc muted" data-desc style="font-size: var(--fs-sm); margin: var(--sp-3) 0 0; max-width: 60ch; line-height: var(--lh-loose); position: relative;">
+                        <?= (string)$c['description'] /* HTML from Quill — board-trusted */ ?>
+                    </div>
                 <?php endif; ?>
             </div>
             <?php $isOnCommittee = in_array((int)$user['id'], $memberIds, true); ?>
@@ -367,13 +369,32 @@ require __DIR__ . '/../includes/header.php';
                         <?php endif; ?>
                     </td>
                     <?php if ($canManage): ?>
-                    <td style="text-align:right;">
+                    <td style="text-align:right; white-space: nowrap;">
+                        <?php if ($m['role'] !== 'chair'): ?>
+                            <form method="post" style="display:inline;" onsubmit="return confirm('Make <?= e(trim($m['first_name'].' '.$m['last_name']) ?: $m['email']) ?> the chair? The current chair (if any) will be demoted to a regular member.');">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="form" value="add_member">
+                                <input type="hidden" name="committee_id" value="<?= $cid ?>">
+                                <input type="hidden" name="user_id" value="<?= (int)$m['id'] ?>">
+                                <input type="hidden" name="role" value="chair">
+                                <button class="btn btn--ghost" type="submit" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" title="Promote to chair (demotes the current chair)">⭐ Make chair</button>
+                            </form>
+                        <?php else: ?>
+                            <form method="post" style="display:inline;" onsubmit="return confirm('Step down as chair? They\'ll stay on the committee as a regular member.');">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="form" value="add_member">
+                                <input type="hidden" name="committee_id" value="<?= $cid ?>">
+                                <input type="hidden" name="user_id" value="<?= (int)$m['id'] ?>">
+                                <input type="hidden" name="role" value="member">
+                                <button class="btn btn--ghost" type="submit" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" title="Demote chair to regular member">Step down</button>
+                            </form>
+                        <?php endif; ?>
                         <form method="post" style="display:inline;" onsubmit="return confirm('Remove from committee?');">
                             <?= csrf_field() ?>
                             <input type="hidden" name="form" value="remove_member">
                             <input type="hidden" name="committee_id" value="<?= $cid ?>">
                             <input type="hidden" name="user_id" value="<?= (int)$m['id'] ?>">
-                            <button class="btn btn--ghost" type="submit">Remove</button>
+                            <button class="btn btn--ghost" type="submit" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs); color: var(--color-error);">Remove</button>
                         </form>
                     </td>
                     <?php endif; ?>
@@ -419,5 +440,45 @@ require __DIR__ . '/../includes/header.php';
     <?php endif; ?>
 
 </div>
+
+<style>
+    /* Collapsed committee description — clamps to ~3 lines with a fade-out so
+       multiple committees fit on screen. .is-expanded removes the clamp. */
+    .committee-desc.is-collapsed {
+        max-height: 4.6em;
+        overflow: hidden;
+        -webkit-mask-image: linear-gradient(180deg, #000 60%, transparent 100%);
+                mask-image: linear-gradient(180deg, #000 60%, transparent 100%);
+    }
+    .committee-desc-toggle {
+        background: none; border: 0; padding: 0; margin-top: 4px;
+        color: var(--color-link, #1f4f9c); font-size: var(--fs-sm); cursor: pointer;
+        text-decoration: underline; font-weight: 500;
+    }
+    .committee-desc-toggle:hover { color: var(--color-orange, #f05a28); }
+</style>
+<script>
+    // Only show the "Show more" button when the description's natural height
+    // is actually clipped. Avoids dangling toggles on short blurbs.
+    (function () {
+        document.querySelectorAll('[data-desc]').forEach(function (el) {
+            // Measure before adding the clamp class
+            var fullHeight = el.scrollHeight;
+            var lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 22;
+            var threshold  = lineHeight * 3.2;
+            if (fullHeight <= threshold) return;          // already short enough
+            el.classList.add('is-collapsed');
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'committee-desc-toggle';
+            btn.textContent = 'Show more ▾';
+            btn.addEventListener('click', function () {
+                var expanded = el.classList.toggle('is-collapsed') === false;
+                btn.textContent = expanded ? 'Show less ▴' : 'Show more ▾';
+            });
+            el.parentNode.insertBefore(btn, el.nextSibling);
+        });
+    })();
+</script>
 
 <?php require __DIR__ . '/../includes/footer.php'; ?>
