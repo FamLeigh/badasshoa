@@ -31,7 +31,7 @@ if ($includeBoard) {
         "SELECT first_name, last_name, role, board_office, email, phone, unit_number
            FROM users
           WHERE association_id = ?
-            AND status = 'active'
+            AND status <> 'inactive'
             AND role IN ('board_admin','board_member','property_manager')
           ORDER BY FIELD(board_office,
                          'president','vice_president','secretary','treasurer',

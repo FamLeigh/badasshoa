@@ -76,7 +76,7 @@ $boardStmt = db()->prepare(
     "SELECT id, first_name, last_name, role, board_office, unit_number, avatar_path, bio
      FROM users
      WHERE association_id = ?
-       AND status = 'active'
+       AND status <> 'inactive'
        AND show_on_public_landing = 1
        AND role IN ('board_admin','board_member','property_manager')
      ORDER BY FIELD(board_office,

@@ -1,5 +1,23 @@
 [
     {
+        "id": "cl-20260511-203000-fix1",
+        "at": "2026-05-11T20:30:00-04:00",
+        "type": "fix",
+        "title": "Board landing + directory now include pending members",
+        "description": "Imported residents come in with status=pending until they sign in for the first time, but the 'Meet your board' landing section and the dashboard Board card were both filtering for status=active only — so a board member like Scott Bender (imported, marked as Director, set to show on the public landing) was being hidden. Fixed: both views now include everyone except status=inactive. Same fix applied to the Print contacts + board view.",
+        "author": "Reboooot",
+        "link": "/"
+    },
+    {
+        "id": "cl-20260511-200000-an01",
+        "at": "2026-05-11T20:00:00-04:00",
+        "type": "feature",
+        "title": "Announcements: schedule + auto-expiry, deactivate moved to edit form",
+        "description": "When you post an announcement you can now set a Start posting at time (defaults to now — schedule something for next Monday morning if you want) and pick how long it stays up: 1 day / 1 week / 2 weeks / 1 month / 3 months / pick a specific date / never expires. Members only see live announcements. The Announcements page header has a 'Show all' toggle so managers can review scheduled + expired posts; live posts also show a small 'expires Mar 14' hint, and the card visibly dims once expired. Directory's Deactivate button moved out of the listing rows and is now next to Save on the member edit form — fewer click targets per row and harder to misclick on the wrong row.",
+        "author": "Reboooot",
+        "link": "/dashboard/communications.php"
+    },
+    {
         "id": "cl-20260511-180000-wo01",
         "at": "2026-05-11T18:00:00-04:00",
         "type": "feature",

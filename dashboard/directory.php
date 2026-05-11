@@ -340,7 +340,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit') 
                 }
 
                 if (!$flashError) {
-                    audit('user.edited', ['email' => $email, 'role' => $role, 'status' => $status], $id, 'user');
+                    audit('user.edited', [
+                        'email' => $email, 'role' => $role, 'status' => $status,
+                        'board_office' => $office ?: null,
+                    ], $id, 'user');
                     flash('success', 'Member updated.');
                     redirect('/dashboard/directory.php');
                 }
@@ -354,7 +357,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit') 
 // role tier as the previous secondary sort, then by name.
 $boardStmt = db()->prepare(
     "SELECT * FROM users
-     WHERE association_id = ? AND role IN ('board_admin','board_member','property_manager') AND status='active'
+     WHERE association_id = ? AND role IN ('board_admin','board_member','property_manager') AND status <> 'inactive'
      ORDER BY FIELD(board_office,
                     'president','vice_president','secretary','treasurer',
                     'secretary_treasurer','director') = 0,
@@ -631,9 +634,19 @@ require __DIR__ . '/../includes/header.php';
                 </div>
             </div>
 
-            <div class="row" style="justify-content: flex-end;">
+            <div class="row" style="justify-content: space-between; gap: var(--sp-2); flex-wrap: wrap;">
                 <a class="btn btn--ghost" href="/dashboard/directory.php">Cancel</a>
-                <button class="btn btn--primary" type="submit">Save changes</button>
+                <div class="row" style="gap: var(--sp-2);">
+                    <?php if ((int)$editUser['id'] !== (int)$user['id']): /* never let admin deactivate self */ ?>
+                        <button class="btn btn--ghost" type="submit" name="form" value="deactivate"
+                                onclick="return confirm('Deactivate <?= e(trim((string)$editUser['first_name'] . ' ' . (string)$editUser['last_name']) ?: (string)$editUser['email']) ?>? They\'ll be hidden from the directory and unable to sign in until you reactivate them.');"
+                                style="color: var(--color-error);"
+                                title="Mark this member inactive">
+                            Deactivate
+                        </button>
+                    <?php endif; ?>
+                    <button class="btn btn--primary" type="submit">Save changes</button>
+                </div>
             </div>
         </form>
     </div>
@@ -844,14 +857,6 @@ B2,Sam,Garcia,sam@example.com,,,,0</pre>
                 <?php if ($canManage): ?>
                 <td style="text-align:right; white-space: nowrap;">
                     <a class="btn btn--ghost" href="?action=edit&id=<?= (int)$r['id'] ?>">Edit</a>
-                    <?php if ((int)$r['id'] !== (int)$user['id']): ?>
-                    <form method="post" style="display:inline;" onsubmit="return confirm('Deactivate this user?');">
-                        <?= csrf_field() ?>
-                        <input type="hidden" name="form" value="deactivate">
-                        <input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
-                        <button class="btn btn--ghost" type="submit">Deactivate</button>
-                    </form>
-                    <?php endif; ?>
                 </td>
                 <?php endif; ?>
             </tr>
