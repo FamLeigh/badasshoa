@@ -44,9 +44,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit') 
     }
 }
 
-// --- Self-join a committee (any signed-in member) ---
+// --- Self-join a committee (owners + board only — renters are not eligible) ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'join') {
     csrf_check();
+    if (viewing_role() === 'renter') { http_response_code(403); die('Renters can\'t join committees — committee membership is for unit owners.'); }
     $cid = (int)($_POST['id'] ?? 0);
     $check = db()->prepare('SELECT 1 FROM committees WHERE id = ? AND association_id = ?');
     $check->execute([$cid, $assocId]);
@@ -313,10 +314,20 @@ require __DIR__ . '/../includes/header.php';
                     </div>
                 <?php endif; ?>
             </div>
-            <?php $isOnCommittee = in_array((int)$user['id'], $memberIds, true); ?>
+            <?php
+            $isOnCommittee = in_array((int)$user['id'], $memberIds, true);
+            $canJoin = viewing_role() !== 'renter';  // renters can't join — owner-only
+            ?>
             <div class="row" style="gap: var(--sp-2); flex-wrap: wrap;">
                 <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="/dashboard/committee-flyer.php?id=<?= $cid ?>" target="_blank" rel="noopener" title="Print or save as PDF a one-page flyer to promote this committee">🖨 Flyer</a>
-                <?php if (!$isOnCommittee): ?>
+                <?php if ($isOnCommittee): ?>
+                    <form method="post" style="margin:0;" onsubmit="return confirm('Leave this committee?');">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="form" value="leave">
+                        <input type="hidden" name="id" value="<?= $cid ?>">
+                        <button class="btn btn--ghost" type="submit" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" title="You're a member — click to leave">✓ Joined</button>
+                    </form>
+                <?php elseif ($canJoin): ?>
                     <form method="post" style="margin:0;">
                         <?= csrf_field() ?>
                         <input type="hidden" name="form" value="join">
@@ -324,12 +335,7 @@ require __DIR__ . '/../includes/header.php';
                         <button class="btn btn--primary" type="submit" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);">Join</button>
                     </form>
                 <?php else: ?>
-                    <form method="post" style="margin:0;" onsubmit="return confirm('Leave this committee?');">
-                        <?= csrf_field() ?>
-                        <input type="hidden" name="form" value="leave">
-                        <input type="hidden" name="id" value="<?= $cid ?>">
-                        <button class="btn btn--ghost" type="submit" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" title="You're a member — click to leave">✓ Joined</button>
-                    </form>
+                    <span class="muted" style="font-size: var(--fs-xs); align-self: center;" title="Committee membership is for unit owners">— renter —</span>
                 <?php endif; ?>
                 <?php if ($canManage): ?>
                     <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="?action=edit&id=<?= $cid ?>">Edit</a>

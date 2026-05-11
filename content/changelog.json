@@ -1,5 +1,14 @@
 [
     {
+        "id": "cl-20260512-130000-renters",
+        "at": "2026-05-12T13:00:00-04:00",
+        "type": "improvement",
+        "title": "Renters: no ARC submissions, no committee joins",
+        "description": "Two owner-only privileges are now properly enforced. Renters can still view what their building is up to but can't file Architectural Review requests (an exterior change is the owner's call, not the tenant's) and can't self-join committees (membership is for unit owners). The 'New request' / 'Join' buttons hide for renters; the empty state shows a friendly note pointing them at the unit owner. Owners and board members are unaffected.",
+        "author": "Reboooot",
+        "link": "/dashboard/arc.php"
+    },
+    {
         "id": "cl-20260512-120000-arcwo",
         "at": "2026-05-12T12:00:00-04:00",
         "type": "feature",

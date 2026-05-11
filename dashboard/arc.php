@@ -13,6 +13,10 @@ require __DIR__ . '/_bootstrap.php';
 
 $user      = current_user();
 $canManage = role_can_manage(viewing_role());
+// Renters can't file ARC requests — exterior changes are an owner-only
+// prerogative. They can still view ARCs they personally submitted (none,
+// in practice). Managers obviously can do everything.
+$canSubmit = $canManage || viewing_role() !== 'renter';
 $flashError = null;
 
 $CATEGORIES = [
@@ -41,6 +45,7 @@ $STATUS = [
 // ---------- Submit a new request ----------
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'submit') {
     csrf_check();
+    if (!$canSubmit) { http_response_code(403); die('Renters can\'t file ARC requests — please ask the unit owner to submit.'); }
     $title    = trim((string)($_POST['title'] ?? ''));
     $cat      = $_POST['category'] ?? 'other';
     $body     = trim((string)($_POST['description'] ?? ''));
@@ -281,7 +286,7 @@ if (!$detail && ($_GET['action'] ?? '') !== 'new') {
     }
 }
 
-$showSubmit = ($_GET['action'] ?? '') === 'new';
+$showSubmit = ($_GET['action'] ?? '') === 'new' && $canSubmit;
 
 $page_title = 'Architectural Review — ' . $association['name'];
 require __DIR__ . '/../includes/header.php';
@@ -535,7 +540,9 @@ require __DIR__ . '/../includes/header.php';
                 <h1 style="font-size: var(--fs-3xl); margin: 0;">Architectural Review</h1>
                 <p class="muted">Owner requests for exterior changes — paint, dishes, decks, windows, landscaping.</p>
             </div>
-            <a class="btn btn--primary" href="?action=new">+ New request</a>
+            <?php if ($canSubmit): ?>
+                <a class="btn btn--primary" href="?action=new">+ New request</a>
+            <?php endif; ?>
         </div>
 
         <?php if ($canManage && $pendingCount > 0 && $statusFilter !== 'open'): ?>
@@ -558,7 +565,11 @@ require __DIR__ . '/../includes/header.php';
         <?php if (!$listing): ?>
             <div class="card card--padded center" style="padding: var(--sp-12) var(--sp-6);">
                 <p class="muted">No <?= e($statusFilter === 'all' ? '' : $statusFilter . ' ') ?>requests.</p>
-                <p style="margin-top: var(--sp-4);"><a class="btn btn--primary" href="?action=new">+ Submit one</a></p>
+                <?php if ($canSubmit): ?>
+                    <p style="margin-top: var(--sp-4);"><a class="btn btn--primary" href="?action=new">+ Submit one</a></p>
+                <?php else: ?>
+                    <p class="muted" style="margin-top: var(--sp-4); font-size: var(--fs-sm);">Renters can&rsquo;t file Architectural Review requests — please ask the unit owner.</p>
+                <?php endif; ?>
             </div>
         <?php else: ?>
         <div class="stack-md">
