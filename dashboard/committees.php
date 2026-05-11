@@ -44,6 +44,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit') 
     }
 }
 
+// --- Self-join a committee (any signed-in member) ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'join') {
+    csrf_check();
+    $cid = (int)($_POST['id'] ?? 0);
+    $check = db()->prepare('SELECT 1 FROM committees WHERE id = ? AND association_id = ?');
+    $check->execute([$cid, $assocId]);
+    if (!$check->fetchColumn()) { http_response_code(404); die('Committee not found'); }
+    // Skip if already on the committee (UNIQUE on committee_id+user_id would
+    // throw, but a friendly no-op is nicer).
+    $exists = db()->prepare('SELECT 1 FROM committee_members WHERE committee_id = ? AND user_id = ?');
+    $exists->execute([$cid, (int)$user['id']]);
+    if ($exists->fetchColumn()) {
+        flash('info', "You're already on that committee.");
+    } else {
+        db()->prepare('INSERT INTO committee_members (committee_id, user_id, role) VALUES (?, ?, "member")')
+            ->execute([$cid, (int)$user['id']]);
+        audit('committee.joined', [], $cid, 'committee');
+        flash('success', 'Welcome — you joined the committee.');
+    }
+    redirect('/dashboard/committees.php#c' . $cid);
+}
+
+// --- Self-leave a committee ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'leave') {
+    csrf_check();
+    $cid = (int)($_POST['id'] ?? 0);
+    db()->prepare('DELETE FROM committee_members WHERE committee_id = ? AND user_id = ?')
+        ->execute([$cid, (int)$user['id']]);
+    audit('committee.left', [], $cid, 'committee');
+    flash('success', 'You left the committee.');
+    redirect('/dashboard/committees.php#c' . $cid);
+}
+
 // --- Add member ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'add_member') {
     csrf_check();
@@ -278,8 +311,25 @@ require __DIR__ . '/../includes/header.php';
                     <div class="muted" style="font-size: var(--fs-sm); margin: var(--sp-3) 0 0; max-width: 60ch; line-height: var(--lh-loose);"><?= (string)$c['description'] /* HTML from Quill — board-trusted */ ?></div>
                 <?php endif; ?>
             </div>
-            <?php if ($canManage): ?>
-                <div class="row" style="gap: var(--sp-2);">
+            <?php $isOnCommittee = in_array((int)$user['id'], $memberIds, true); ?>
+            <div class="row" style="gap: var(--sp-2); flex-wrap: wrap;">
+                <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="/dashboard/committee-flyer.php?id=<?= $cid ?>" target="_blank" rel="noopener" title="Print or save as PDF a one-page flyer to promote this committee">🖨 Flyer</a>
+                <?php if (!$isOnCommittee): ?>
+                    <form method="post" style="margin:0;">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="form" value="join">
+                        <input type="hidden" name="id" value="<?= $cid ?>">
+                        <button class="btn btn--primary" type="submit" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);">Join</button>
+                    </form>
+                <?php else: ?>
+                    <form method="post" style="margin:0;" onsubmit="return confirm('Leave this committee?');">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="form" value="leave">
+                        <input type="hidden" name="id" value="<?= $cid ?>">
+                        <button class="btn btn--ghost" type="submit" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" title="You're a member — click to leave">✓ Joined</button>
+                    </form>
+                <?php endif; ?>
+                <?php if ($canManage): ?>
                     <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="?action=edit&id=<?= $cid ?>">Edit</a>
                     <form method="post" style="margin:0;" onsubmit="return confirm('Delete this committee? Members will be removed.');">
                         <?= csrf_field() ?>
@@ -287,8 +337,8 @@ require __DIR__ . '/../includes/header.php';
                         <input type="hidden" name="id" value="<?= $cid ?>">
                         <button class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs); color: var(--color-error);" type="submit">Delete</button>
                     </form>
-                </div>
-            <?php endif; ?>
+                <?php endif; ?>
+            </div>
         </div>
 
         <?php if ($cMembers): ?>
