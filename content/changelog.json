@@ -1,5 +1,14 @@
 [
     {
+        "id": "cl-20260512-070000-tahead",
+        "at": "2026-05-12T07:00:00-04:00",
+        "type": "improvement",
+        "title": "Employees: type-ahead member picker",
+        "description": "Replaced the giant member dropdown on the employees form with a type-ahead search box. Start typing a name or a unit number and the matches filter live (up to 10 results). Arrow keys + Enter to pick, click to pick, Escape to dismiss. Form refuses to submit unless an actual member is selected (no more 'I typed the name but the dropdown didn't match'). Also flipped all 189 imported pending Bellair residents to active so they show up properly in counts and visibility checks.",
+        "author": "Reboooot",
+        "link": "/dashboard/employees.php?action=new"
+    },
+    {
         "id": "cl-20260512-063000-fix",
         "at": "2026-05-12T06:30:00-04:00",
         "type": "fix",

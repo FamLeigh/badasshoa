@@ -184,18 +184,39 @@ require __DIR__ . '/../includes/header.php';
             <?php if ($editEmp): ?><input type="hidden" name="id" value="<?= (int)$vals['id'] ?>"><?php endif; ?>
 
             <div class="form-row form-row--2">
-                <div class="field">
-                    <label class="field__label" for="em-user">Member</label>
-                    <select class="select" id="em-user" name="user_id" required>
-                        <option value="">— pick a member —</option>
-                        <?php foreach ($members as $m):
-                            $nm = trim($m['first_name'] . ' ' . $m['last_name']);
-                            if ($nm === '') continue;
-                        ?>
-                            <option value="<?= (int)$m['id'] ?>" <?= (int)$vals['user_id'] === (int)$m['id'] ? 'selected' : '' ?>><?= e($nm) ?><?= !empty($m['unit_number']) ? ' · ' . e((string)$m['unit_number']) : '' ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                    <div class="field__hint">An owner can be picked here too — owner status stays where it is.</div>
+                <div class="field" style="position: relative;">
+                    <label class="field__label" for="em-user-search">Member</label>
+                    <?php
+                    // Build typeahead source: id, full name, unit. JSON-encoded into a
+                    // data attribute so the script has a single source of truth.
+                    $tahead = [];
+                    foreach ($members as $m) {
+                        $nm = trim($m['first_name'] . ' ' . $m['last_name']);
+                        if ($nm === '') continue;
+                        $tahead[] = [
+                            'id'   => (int)$m['id'],
+                            'name' => $nm,
+                            'unit' => (string)($m['unit_number'] ?? ''),
+                        ];
+                    }
+                    $selectedLabel = '';
+                    if ((int)$vals['user_id'] > 0) {
+                        foreach ($tahead as $t) {
+                            if ($t['id'] === (int)$vals['user_id']) {
+                                $selectedLabel = $t['name'] . ($t['unit'] !== '' ? ' · Unit ' . $t['unit'] : '');
+                                break;
+                            }
+                        }
+                    }
+                    ?>
+                    <input class="input" type="text" id="em-user-search" autocomplete="off"
+                           placeholder="Type a name or unit number…"
+                           value="<?= e($selectedLabel) ?>"
+                           data-typeahead='<?= e(json_encode($tahead, JSON_HEX_APOS | JSON_HEX_QUOT)) ?>'
+                           aria-autocomplete="list" aria-controls="em-user-results">
+                    <input type="hidden" id="em-user" name="user_id" value="<?= (int)$vals['user_id'] ?>" required>
+                    <div id="em-user-results" class="typeahead-list" role="listbox" hidden></div>
+                    <div class="field__hint">Start typing to filter. An owner can be picked too — owner status stays where it is.</div>
                 </div>
                 <div class="field">
                     <label class="field__label" for="em-title">Job title</label>
@@ -364,5 +385,100 @@ require __DIR__ . '/../includes/header.php';
     <?php endif; ?>
 
 </div>
+
+<style>
+    .typeahead-list {
+        position: absolute; top: 100%; left: 0; right: 0; z-index: 50;
+        max-height: 280px; overflow-y: auto;
+        background: #fff; border: 1px solid var(--color-border); border-radius: var(--r-md);
+        box-shadow: 0 8px 24px rgba(15,31,61,0.12);
+        margin-top: 2px;
+    }
+    .typeahead-list[hidden] { display: none; }
+    .typeahead-item {
+        padding: 8px 12px; cursor: pointer; font-size: var(--fs-sm);
+        display:flex; justify-content: space-between; align-items: baseline; gap: var(--sp-3);
+    }
+    .typeahead-item:hover, .typeahead-item.is-active { background: var(--color-surface); }
+    .typeahead-item .unit { color: var(--color-text-soft); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
+    .typeahead-empty { padding: 8px 12px; color: var(--color-text-soft); font-size: var(--fs-sm); font-style: italic; }
+</style>
+<script>
+    (function () {
+        var search = document.getElementById('em-user-search');
+        if (!search) return;
+        var hidden = document.getElementById('em-user');
+        var list   = document.getElementById('em-user-results');
+        var data   = JSON.parse(search.getAttribute('data-typeahead') || '[]');
+        var active = -1;
+        var matches = [];
+
+        function norm(s) { return (s || '').toLowerCase(); }
+        function fmtLabel(m) { return m.name + (m.unit ? ' · Unit ' + m.unit : ''); }
+
+        function render(q) {
+            q = norm(q.trim());
+            // Show top 10 matches. Empty query → first 10 alphabetically.
+            matches = !q ? data.slice(0, 10) :
+                data.filter(function (m) {
+                    return norm(m.name).indexOf(q) !== -1 || norm(m.unit).indexOf(q) !== -1;
+                }).slice(0, 10);
+            list.innerHTML = '';
+            if (!matches.length) {
+                list.innerHTML = '<div class="typeahead-empty">No members match.</div>';
+                list.hidden = false; return;
+            }
+            matches.forEach(function (m, i) {
+                var row = document.createElement('div');
+                row.className = 'typeahead-item' + (i === active ? ' is-active' : '');
+                row.setAttribute('role', 'option');
+                row.dataset.id = m.id;
+                row.innerHTML = '<span>' + escapeHtml(m.name) + '</span>' +
+                    (m.unit ? '<span class="unit">Unit ' + escapeHtml(m.unit) + '</span>' : '');
+                row.addEventListener('mousedown', function (ev) { ev.preventDefault(); pick(m); });
+                list.appendChild(row);
+            });
+            list.hidden = false;
+        }
+        function escapeHtml(s) {
+            return String(s).replace(/[&<>"']/g, function (c) {
+                return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c];
+            });
+        }
+        function pick(m) {
+            search.value = fmtLabel(m);
+            hidden.value = m.id;
+            list.hidden  = true;
+            active = -1;
+        }
+
+        search.addEventListener('focus', function () { render(search.value); });
+        search.addEventListener('input', function () {
+            hidden.value = ''; // clear selection when typing
+            active = -1;
+            render(search.value);
+        });
+        search.addEventListener('keydown', function (ev) {
+            if (list.hidden) return;
+            if (ev.key === 'ArrowDown') { ev.preventDefault(); active = Math.min(matches.length - 1, active + 1); render(search.value); }
+            else if (ev.key === 'ArrowUp') { ev.preventDefault(); active = Math.max(0, active - 1); render(search.value); }
+            else if (ev.key === 'Enter' && active >= 0) { ev.preventDefault(); pick(matches[active]); }
+            else if (ev.key === 'Escape') { list.hidden = true; }
+        });
+        document.addEventListener('click', function (ev) {
+            if (ev.target !== search && !list.contains(ev.target)) list.hidden = true;
+        });
+
+        // Guard the submit: if there's text but no selected id, refuse.
+        var form = search.closest('form');
+        if (form) form.addEventListener('submit', function (ev) {
+            if (!hidden.value) {
+                ev.preventDefault();
+                search.focus();
+                alert('Pick a member from the list (type to filter, then click or press Enter).');
+            }
+        });
+    })();
+</script>
 
 <?php require __DIR__ . '/../includes/footer.php'; ?>
