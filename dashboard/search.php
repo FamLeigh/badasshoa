@@ -499,24 +499,46 @@ if ($q !== '') {
     }
 }
 
-// AJAX response (live search)
+// AJAX response (live search). Renders the same shape as the non-AJAX search
+// branch below so the live results have Open / Edit / Delete buttons too.
 if ($ajax) {
     if (empty($results)) {
         echo '<div class="card card--padded muted center">No matches for &ldquo;' . e($q) . '&rdquo;.</div>';
         exit;
     }
+    $csrf = e(csrf_token());
     foreach ($results as $r) {
-        $excerpt = mb_strimwidth(strip_tags($r['body']), 0, 240, '…');
+        $rid     = (int)$r['id'];
+        $body    = trim(strip_tags(str_replace(['&nbsp;', "\xc2\xa0"], ' ', (string)$r['body'])));
+        $excerpt = mb_strimwidth($body, 0, 320, '…');
         $highlighted = preg_replace('/(' . preg_quote($q, '/') . ')/i', '<mark>$1</mark>', e($excerpt));
-        echo '<div class="search-result">
-                <div class="row" style="gap: var(--sp-2); margin-bottom: var(--sp-2);">
-                    <span class="badge badge--' . ($r['source'] === 'bylaw' ? 'navy' : ($r['source'] === 'policy' ? 'info' : 'orange')) . '">' . e(str_replace('_',' ',$r['source'])) . '</span>
-                    ' . ($r['rule_number'] ? '<span class="muted" style="font-size: var(--fs-xs);">#' . e($r['rule_number']) . '</span>' : '') . '
-                    ' . ($r['category'] ? '<span class="muted" style="font-size: var(--fs-xs);">&middot; ' . e($r['category']) . '</span>' : '') . '
-                </div>
-                <strong>' . e($r['title']) . '</strong>
-                <p class="muted" style="margin: var(--sp-2) 0 0; font-size: var(--fs-sm);">' . $highlighted . '</p>
-              </div>';
+        $sourceBadge = $r['source'] === 'bylaw' ? 'navy' : ($r['source'] === 'policy' ? 'info' : 'orange');
+
+        echo '<div class="search-result">'
+           . '<div class="row row--between" style="margin-bottom: var(--sp-2); align-items: baseline;">'
+           .   '<div class="row" style="gap: var(--sp-2); align-items: baseline;">'
+           .     ($r['rule_number'] ? '<strong style="font-size: var(--fs-md); color: var(--color-navy);">#' . e((string)$r['rule_number']) . '</strong>' : '')
+           .     '<span class="badge badge--' . $sourceBadge . '">' . e(str_replace('_',' ',(string)$r['source'])) . '</span>'
+           .     ($r['category'] ? '<span class="badge" style="background: var(--color-warning-bg); color: var(--color-warning); border: 1px solid rgba(182,130,42,0.25);">' . e((string)$r['category']) . '</span>' : '')
+           .     ($r['effective_date'] ? '<span class="muted" style="font-size: var(--fs-xs);">&middot; in effect ' . e(date('M j, Y', strtotime((string)$r['effective_date']))) . '</span>' : '')
+           .     (!empty($r['review_flag']) ? '<span class="badge badge--error" style="font-size: var(--fs-xs);" title="' . e((string)($r['review_note'] ?? 'Flagged for board review')) . '">🚩 Needs review</span>' : '')
+           .   '</div>'
+           .   '<div class="row" style="gap: var(--sp-2);">'
+           .     '<a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="/dashboard/rule.php?id=' . $rid . '">Open</a>'
+           .     ($canManage
+                 ? '<a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="?action=edit&id=' . $rid . '">Edit</a>'
+                 . '<form method="post" style="display:inline;" onsubmit="return confirm(\'Delete this rule?\');">'
+                 .   '<input type="hidden" name="_csrf" value="' . $csrf . '">'
+                 .   '<input type="hidden" name="form" value="delete">'
+                 .   '<input type="hidden" name="id" value="' . $rid . '">'
+                 .   '<button class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs); color: var(--color-error);" type="submit">Delete</button>'
+                 . '</form>'
+                 : '')
+           .   '</div>'
+           . '</div>'
+           . '<strong>' . e((string)$r['title']) . '</strong>'
+           . '<p class="muted rule-body-clamp" style="margin: var(--sp-2) 0 0; font-size: var(--fs-sm); white-space: pre-wrap;">' . $highlighted . '</p>'
+           . '</div>';
     }
     exit;
 }
