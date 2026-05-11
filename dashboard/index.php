@@ -44,6 +44,16 @@ $comms = db()->prepare('SELECT COUNT(*) FROM committees WHERE association_id = ?
 $comms->execute([$assocId]);
 $stats['committees'] = (int)$comms->fetchColumn();
 
+// Board members + property managers (anyone who runs the association)
+$boardCount = db()->prepare(
+    "SELECT COUNT(*) FROM users
+      WHERE association_id = ?
+        AND status <> 'inactive'
+        AND role IN ('board_admin','board_member','property_manager')"
+);
+$boardCount->execute([$assocId]);
+$stats['board'] = (int)$boardCount->fetchColumn();
+
 // Upcoming events count is computed AFTER the upcoming-events expansion below
 // (a single recurring series seeded back in March still produces future
 // occurrences — a naive `starts_at >= NOW()` count misses those). $stats['events']
@@ -111,82 +121,152 @@ require __DIR__ . '/../includes/header.php';
 
 <div class="container" style="padding-top: var(--sp-8); padding-bottom: var(--sp-12); max-width: 1280px;">
 
-    <div class="row row--between" style="margin-bottom: var(--sp-6);">
+    <div class="row row--between" style="margin-bottom: var(--sp-6); align-items: flex-start; gap: var(--sp-4); flex-wrap: wrap;">
         <div>
             <span class="badge badge--orange"><?= e($association['name']) ?></span>
             <h1 style="font-size: var(--fs-3xl); margin: var(--sp-3) 0 var(--sp-1);"><span data-greet><?= e($greet) ?></span>, <?= e($user['first_name'] ?: 'there') ?>.</h1>
-            <script>
-                // Server clock runs in UTC (see CLAUDE.md). The PHP-rendered
-                // greeting is therefore wrong for anyone not on UTC — fix in
-                // place with the user's local hour. data-greet attribute makes
-                // it easy to find.
-                (function () {
-                    var el = document.querySelector('[data-greet]'); if (!el) return;
-                    var h = new Date().getHours();
-                    el.textContent = h < 12 ? 'Good morning' : (h < 18 ? 'Good afternoon' : 'Good evening');
-                })();
-            </script>
-            <p class="muted">Here&rsquo;s what&rsquo;s happening at <?= e($association['name']) ?> today.</p>
+            <p class="muted" style="margin: 0;">Here&rsquo;s what&rsquo;s happening at <?= e($association['name']) ?> today.</p>
         </div>
-        <div class="row">
-            <a class="btn btn--ghost" href="/dashboard/communications.php?action=new">Post announcement</a>
-            <a class="btn btn--primary" href="/dashboard/documents.php?action=new">Upload document</a>
+        <div style="text-align: right;">
+            <div data-now-time style="font-size: var(--fs-2xl); font-weight: 700; color: var(--color-navy); line-height: 1.1; font-variant-numeric: tabular-nums;">—</div>
+            <div data-now-date class="muted" style="font-size: var(--fs-sm); margin-top: 2px;">—</div>
+            <div class="row" style="gap: var(--sp-2); margin-top: var(--sp-3); justify-content: flex-end;">
+                <a class="btn btn--ghost"   href="/dashboard/communications.php?action=new">Post announcement</a>
+                <a class="btn btn--primary" href="/dashboard/documents.php?action=new">Upload document</a>
+            </div>
         </div>
     </div>
+    <script>
+        // Greeting + live clock — both derived from the browser's local time
+        // because the server is UTC-pinned (CLAUDE.md). Time refreshes every
+        // 30s so the user sees a live clock while sitting on the dashboard.
+        (function () {
+            var gEl = document.querySelector('[data-greet]');
+            var tEl = document.querySelector('[data-now-time]');
+            var dEl = document.querySelector('[data-now-date]');
+            function tick() {
+                var d = new Date();
+                if (gEl) {
+                    var h = d.getHours();
+                    gEl.textContent = h < 12 ? 'Good morning' : (h < 18 ? 'Good afternoon' : 'Good evening');
+                }
+                if (tEl) tEl.textContent = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+                if (dEl) dEl.textContent = d.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+            }
+            tick();
+            setInterval(tick, 30000);
+        })();
+    </script>
 
-    <div class="dashboard-stats" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--sp-3); margin-bottom: var(--sp-8);">
+    <style>
+        /* 4-up tile grid that collapses gracefully on narrow viewports. */
+        .dashboard-stats { display:grid; grid-template-columns: repeat(4, 1fr); gap: var(--sp-3); margin-bottom: var(--sp-8); }
+        @media (max-width: 900px) { .dashboard-stats { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 500px) { .dashboard-stats { grid-template-columns: 1fr; } }
+        /* Tile internals — icon left, label + value right. Hover gets a subtle lift. */
+        .stat { position: relative; display:flex; align-items:center; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); transition: transform 120ms ease, box-shadow 120ms ease; }
+        .stat:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(15,31,61,0.10); }
+        .stat__icon { font-size: 28px; line-height: 1; flex: 0 0 36px; }
+        .stat__body { display:flex; flex-direction: column; min-width: 0; }
+        .stat__label { font-size: var(--fs-xs); color: var(--color-text-soft); text-transform: uppercase; letter-spacing: 0.06em; }
+        .stat__value { font-size: var(--fs-xl); font-weight: 800; color: var(--color-navy); line-height: 1.1; font-variant-numeric: tabular-nums; }
+        .stat__hint  { font-size: var(--fs-xs); color: var(--color-text-soft); margin-top: 2px; }
+        .stat--alert { border-left: 3px solid var(--color-orange); }
+    </style>
+    <div class="dashboard-stats">
         <a class="stat" href="/dashboard/directory.php">
-            <div class="stat__label">Members</div>
-            <div class="stat__value"><?= (int)$stats['members'] ?></div>
+            <div class="stat__icon">👥</div>
+            <div class="stat__body">
+                <div class="stat__label">Members</div>
+                <div class="stat__value"><?= (int)$stats['members'] ?></div>
+            </div>
         </a>
         <a class="stat" href="/dashboard/units.php">
-            <div class="stat__label">Units</div>
-            <div class="stat__value"><?= (int)$stats['units'] ?></div>
+            <div class="stat__icon">🏠</div>
+            <div class="stat__body">
+                <div class="stat__label">Units</div>
+                <div class="stat__value"><?= (int)$stats['units'] ?></div>
+            </div>
         </a>
-        <a class="stat" href="/dashboard/search.php" style="position: relative;">
-            <div class="stat__label">Rules</div>
-            <div class="stat__value"><?= (int)$stats['rules'] ?></div>
-            <?php if ($stats['rule_changes_pending'] > 0): ?>
-                <div style="margin-top: 4px;">
-                    <span class="badge badge--orange" style="font-size: var(--fs-xs);">🚩 <?= (int)$stats['rule_changes_pending'] ?> pending</span>
-                </div>
-            <?php endif; ?>
+        <a class="stat" href="/dashboard/directory.php#board" title="Board members + property manager">
+            <div class="stat__icon">🎩</div>
+            <div class="stat__body">
+                <div class="stat__label">Board &amp; mgmt</div>
+                <div class="stat__value"><?= (int)$stats['board'] ?></div>
+                <div class="stat__hint">incl. PM</div>
+            </div>
+        </a>
+        <a class="stat" href="/dashboard/search.php">
+            <div class="stat__icon">📜</div>
+            <div class="stat__body">
+                <div class="stat__label">Rules</div>
+                <div class="stat__value"><?= (int)$stats['rules'] ?></div>
+            </div>
+        </a>
+        <a class="stat<?= $stats['rule_changes_pending'] > 0 ? ' stat--alert' : '' ?>" href="/dashboard/search.php?action=suggestions" title="Pending rule suggestions + flagged-for-review">
+            <div class="stat__icon">🚩</div>
+            <div class="stat__body">
+                <div class="stat__label">Pending rules</div>
+                <div class="stat__value"><?= (int)$stats['rule_changes_pending'] ?></div>
+                <?php if ($stats['rule_changes_pending'] > 0): ?>
+                    <div class="stat__hint">awaiting review</div>
+                <?php endif; ?>
+            </div>
         </a>
         <a class="stat" href="/dashboard/documents.php">
-            <div class="stat__label">Documents</div>
-            <div class="stat__value"><?= (int)$stats['documents'] ?></div>
+            <div class="stat__icon">📄</div>
+            <div class="stat__body">
+                <div class="stat__label">Documents</div>
+                <div class="stat__value"><?= (int)$stats['documents'] ?></div>
+            </div>
         </a>
         <a class="stat" href="/dashboard/media.php">
-            <div class="stat__label">Photos</div>
-            <div class="stat__value"><?= (int)$stats['photos'] ?></div>
+            <div class="stat__icon">📷</div>
+            <div class="stat__body">
+                <div class="stat__label">Photos</div>
+                <div class="stat__value"><?= (int)$stats['photos'] ?></div>
+            </div>
         </a>
         <a class="stat" href="/dashboard/communications.php">
-            <div class="stat__label">Posts</div>
-            <div class="stat__value"><?= (int)$stats['announcements'] ?></div>
+            <div class="stat__icon">📣</div>
+            <div class="stat__body">
+                <div class="stat__label">Announcements</div>
+                <div class="stat__value"><?= (int)$stats['announcements'] ?></div>
+            </div>
         </a>
         <a class="stat" href="/dashboard/committees.php">
-            <div class="stat__label">Committees</div>
-            <div class="stat__value"><?= (int)$stats['committees'] ?></div>
+            <div class="stat__icon">🤝</div>
+            <div class="stat__body">
+                <div class="stat__label">Committees</div>
+                <div class="stat__value"><?= (int)$stats['committees'] ?></div>
+            </div>
         </a>
         <a class="stat" href="/dashboard/events.php">
-            <div class="stat__label">Events</div>
-            <div class="stat__value"><?= (int)$stats['events'] ?></div>
-            <?php if ($stats['events'] > 0): ?>
-                <div class="muted" style="font-size: var(--fs-xs); margin-top: 2px;">upcoming</div>
-            <?php endif; ?>
+            <div class="stat__icon">📅</div>
+            <div class="stat__body">
+                <div class="stat__label">Events</div>
+                <div class="stat__value"><?= (int)$stats['events'] ?></div>
+                <?php if ($stats['events'] > 0): ?>
+                    <div class="stat__hint">upcoming</div>
+                <?php endif; ?>
+            </div>
         </a>
-        <a class="stat" href="/dashboard/concerns.php" style="position: relative;">
-            <div class="stat__label">Concerns</div>
-            <div class="stat__value"><?= (int)$stats['concerns'] ?></div>
-            <?php if ($stats['concerns_open'] > 0): ?>
-                <div style="margin-top: 4px;">
-                    <span class="badge badge--orange" style="font-size: var(--fs-xs);"><?= (int)$stats['concerns_open'] ?> open</span>
-                </div>
-            <?php endif; ?>
+        <a class="stat<?= $stats['concerns_open'] > 0 ? ' stat--alert' : '' ?>" href="/dashboard/concerns.php">
+            <div class="stat__icon">💬</div>
+            <div class="stat__body">
+                <div class="stat__label">Concerns</div>
+                <div class="stat__value"><?= (int)$stats['concerns'] ?></div>
+                <?php if ($stats['concerns_open'] > 0): ?>
+                    <div class="stat__hint"><?= (int)$stats['concerns_open'] ?> open</div>
+                <?php endif; ?>
+            </div>
         </a>
         <a class="stat" href="/dashboard/faq.php">
-            <div class="stat__label">FAQs</div>
-            <div class="stat__value"><?= (int)$stats['faqs'] ?></div>
+            <div class="stat__icon">❓</div>
+            <div class="stat__body">
+                <div class="stat__label">FAQs</div>
+                <div class="stat__value"><?= (int)$stats['faqs'] ?></div>
+            </div>
         </a>
     </div>
 

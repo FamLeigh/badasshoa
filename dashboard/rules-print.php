@@ -4,13 +4,34 @@
 // on load.
 require __DIR__ . '/_bootstrap.php';
 
-$stmt = db()->prepare(
-    'SELECT * FROM rules
-      WHERE association_id = ?
-      ORDER BY CAST(rule_number AS UNSIGNED), rule_number, title'
-);
-$stmt->execute([$assocId]);
+// Optional filters — match the search.php query params so a "Print these
+// results" link from the search bar honors the current filter.
+$q      = trim((string)($_GET['q'] ?? ''));
+$source = $_GET['source'] ?? '';
+$validSource = in_array($source, ['bylaw','board_rule','policy'], true);
+
+if ($q !== '') {
+    $sql = 'SELECT * FROM rules
+             WHERE association_id = ?
+               AND MATCH(title, body) AGAINST (? IN NATURAL LANGUAGE MODE)';
+    $params = [$assocId, $q];
+    if ($validSource) { $sql .= ' AND source = ?'; $params[] = $source; }
+    $sql .= ' ORDER BY CAST(rule_number AS UNSIGNED), rule_number, title';
+} else {
+    $sql = 'SELECT * FROM rules WHERE association_id = ?';
+    $params = [$assocId];
+    if ($validSource) { $sql .= ' AND source = ?'; $params[] = $source; }
+    $sql .= ' ORDER BY CAST(rule_number AS UNSIGNED), rule_number, title';
+}
+$stmt = db()->prepare($sql);
+$stmt->execute($params);
 $rules = $stmt->fetchAll();
+
+// Build a human-readable filter line for the cover-meta strip.
+$filterBits = [];
+if ($q !== '')      $filterBits[] = 'matching "' . $q . '"';
+if ($validSource)   $filterBits[] = ucfirst(str_replace('_', ' ', $source)) . 's only';
+$filterLabel = $filterBits ? ' · ' . implode(' · ', $filterBits) : '';
 ?><!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8">
@@ -47,7 +68,7 @@ $rules = $stmt->fetchAll();
 
 <h1 class="cover">Rules &amp; Bylaws</h1>
 <div class="cover-meta">
-    <?= count($rules) ?> rule<?= count($rules)===1?'':'s' ?> · Printed <?= e(date('M j, Y')) ?>
+    <?= count($rules) ?> rule<?= count($rules)===1?'':'s' ?><?= e($filterLabel) ?> · Printed <?= e(date('M j, Y')) ?>
 </div>
 
 <?php if (!$rules): ?>

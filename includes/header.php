@@ -289,6 +289,16 @@ if ($page_layout === 'app' && isset($association) && $association):
                 <?= nav_link('/dashboard/activity.php',    'activity',       'Activity',       'activity',       $active) ?>
             <?php endif; ?>
             <?= nav_link('/dashboard/settings.php',    'settings',       'Settings',       'settings',       $active) ?>
+            <?php if (!empty($association['subdomain'])): ?>
+                <a class="side-nav__link" href="/<?= e((string)$association['subdomain']) ?>/" target="_blank" rel="noopener" title="Open the public community landing in a new tab">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="2" y1="12" x2="22" y2="12"/>
+                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                    </svg>
+                    <span class="side-nav__label">Public site ↗</span>
+                </a>
+            <?php endif; ?>
         <?php else: /* admin */ ?>
             <?= nav_link('/admin/',                    'overview',       'Overview',       'overview',       $active) ?>
             <?= nav_link('/admin/associations.php',    'associations',   'Associations',   'associations',   $active) ?>

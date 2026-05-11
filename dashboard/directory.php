@@ -801,7 +801,7 @@ B2,Sam,Garcia,sam@example.com,,,,0</pre>
     </div>
     <?php endif; ?>
 
-    <h2 style="font-size: var(--fs-xl); margin-top: var(--sp-2);">Board</h2>
+    <h2 id="board" style="font-size: var(--fs-xl); margin-top: var(--sp-2); scroll-margin-top: 80px;">Board</h2>
     <?php if (!$board): ?>
         <p class="muted">No board members on file yet.</p>
     <?php else: ?>

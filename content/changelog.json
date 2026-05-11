@@ -1,5 +1,14 @@
 [
     {
+        "id": "cl-20260512-001500-dash",
+        "at": "2026-05-12T00:15:00-04:00",
+        "type": "feature",
+        "title": "Dashboard refresh + suggestion edit button + filter-aware rule print",
+        "description": "Dashboard tiles are now a 4-across grid with a colored icon, label, and big tabular-numeral count on each card — twelve tiles in total. Pending rule suggestions moved off the Rules tile into its own dedicated 🚩 tile that gets an orange left-edge when anything is awaiting review. New Board & mgmt tile shows the headcount and jumps straight to the Board section of the directory. Concerns tile gets the same orange edge when something's open. Above the tiles the page now shows a live local clock and date that ticks every 30s — same JS also drives the morning/afternoon/evening greeting from your browser's clock so 3:30 PM EDT reads correctly. Sidebar also gets a 🌐 Public site link that opens /<your-slug>/ in a new tab. Rule suggestions queue gets a dedicated ✏️ Edit button alongside Approve/Reject so cleaning up wording no longer requires going through the Approve form. The Print button on Rules is now context-aware: if you've searched or filtered by source, it becomes 'Print results' and prints only what's on screen. Suggestions queue also gets its own Print button.",
+        "author": "Reboooot",
+        "link": "/dashboard/"
+    },
+    {
         "id": "cl-20260511-223000-park",
         "at": "2026-05-11T22:30:00-04:00",
         "type": "improvement",

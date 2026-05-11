@@ -145,7 +145,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'suggest
         )->execute([$title, $body, $source, $cat ?: null, $sid, $assocId]);
         audit('rule_suggestion.edited', ['title' => $title], $sid, 'rule_suggestion');
         flash('success', "Suggestion updated. Still pending — approve or reject when ready.");
-        redirect('/dashboard/search.php?action=approve&id=' . $sid);
+        redirect('/dashboard/search.php?action=suggestions');
     }
 }
 
@@ -589,6 +589,21 @@ $showForm = $showAdd || $showEdit;
 $showSuggest      = ($_GET['action'] ?? '') === 'suggest';
 $showSuggestQueue = ($_GET['action'] ?? '') === 'suggestions' && $canManage;
 $approvingSug     = null;
+$editingSug       = null;
+if (($_GET['action'] ?? '') === 'edit_suggestion' && $canManage) {
+    $sid = (int)($_GET['id'] ?? 0);
+    $stmt = db()->prepare(
+        'SELECT s.*,
+                TRIM(CONCAT(IFNULL(u.first_name,""), " ", IFNULL(u.last_name,""))) AS suggester_name,
+                u.email       AS suggester_email,
+                u.avatar_path AS suggester_avatar,
+                u.id          AS suggester_id
+           FROM rule_suggestions s LEFT JOIN users u ON u.id = s.suggester_user_id
+          WHERE s.id = ? AND s.association_id = ? AND s.status = "pending"'
+    );
+    $stmt->execute([$sid, $assocId]);
+    $editingSug = $stmt->fetch() ?: null;
+}
 if (($_GET['action'] ?? '') === 'approve' && $canManage) {
     $sid = (int)($_GET['id'] ?? 0);
     $stmt = db()->prepare(
@@ -741,12 +756,22 @@ function rule_form_card(?array $editing, array $categories): void {
             // (categories, import, suggest, suggestions, approve, edit, new). Lets them
             // get back to the default listing in one click instead of having to find
             // the small "← Back" link inside each card.
-            $onSubView = $showCats || $showImp || $showAdd || $showEdit || $showSuggest || $showSuggestQueue || $approvingSug !== null;
+            $onSubView = $showCats || $showImp || $showAdd || $showEdit || $showSuggest || $showSuggestQueue || $approvingSug !== null || $editingSug !== null;
             ?>
             <?php if ($onSubView): ?>
                 <a class="btn btn--primary" href="/dashboard/search.php">← Show all rules</a>
             <?php endif; ?>
-            <a class="btn btn--ghost" href="/dashboard/rules-print.php" target="_blank" rel="noopener" title="Open a print-friendly listing of every rule in number order">🖨 Print all</a>
+            <?php
+            // When a filter is active (search query or source picked), the
+            // Print button passes the filter through so users can print
+            // exactly what they're looking at. Otherwise it prints everything.
+            $hasFilter = ($q !== '') || in_array($source, ['bylaw','board_rule','policy'], true);
+            $printQs   = [];
+            if ($q !== '') $printQs['q'] = $q;
+            if (in_array($source, ['bylaw','board_rule','policy'], true)) $printQs['source'] = $source;
+            $printHref = '/dashboard/rules-print.php' . ($printQs ? '?' . http_build_query($printQs) : '');
+            ?>
+            <a class="btn btn--ghost" href="<?= e($printHref) ?>" target="_blank" rel="noopener" title="<?= $hasFilter ? 'Print only the rules matching your current filter' : 'Print every rule in number order' ?>">🖨 <?= $hasFilter ? 'Print results' : 'Print all' ?></a>
             <a class="btn <?= $canManage ? 'btn--ghost' : ($onSubView ? 'btn--ghost' : 'btn--primary') ?>" href="?action=suggest">+ Suggest a rule</a>
             <?php if ($canManage): ?>
                 <a class="btn btn--ghost" href="?action=suggestions">
@@ -988,7 +1013,10 @@ function rule_form_card(?array $editing, array $categories): void {
     <div class="card card--padded" style="margin-bottom: var(--sp-6);">
         <div class="card__head">
             <h3 class="card__title">Rule suggestions from members</h3>
-            <a class="muted" style="font-size: var(--fs-sm);" href="/dashboard/search.php">← Back to rules</a>
+            <div class="row" style="gap: var(--sp-2);">
+                <a class="btn btn--ghost" href="/dashboard/suggestions-print.php?status=<?= e($statusFilter) ?>" target="_blank" rel="noopener" title="Print these suggestions">🖨 Print</a>
+                <a class="muted" style="font-size: var(--fs-sm); align-self: center;" href="/dashboard/search.php">← Back to rules</a>
+            </div>
         </div>
 
         <div class="row" style="gap: var(--sp-2); margin-bottom: var(--sp-4); flex-wrap: wrap;">
@@ -1051,8 +1079,9 @@ function rule_form_card(?array $editing, array $categories): void {
                         <?php endif; ?>
                     </div>
                     <?php if ($sug['status'] === 'pending'): ?>
-                        <div class="row" style="gap: var(--sp-2);">
-                            <a class="btn btn--primary" href="?action=approve&id=<?= (int)$sug['id'] ?>" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);">Approve</a>
+                        <div class="row" style="gap: var(--sp-2); flex-wrap: wrap;">
+                            <a class="btn btn--ghost"   href="?action=edit_suggestion&id=<?= (int)$sug['id'] ?>" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" title="Edit the wording without approving or rejecting">✏️ Edit</a>
+                            <a class="btn btn--primary" href="?action=approve&id=<?= (int)$sug['id'] ?>"         style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);">Approve</a>
                             <form method="post" style="display:inline;" onsubmit="var n = prompt('Optional note to the suggester:'); if (n === null) return false; this.querySelector('[name=decision_note]').value = n; return true;">
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="form" value="suggest_reject">
@@ -1067,6 +1096,72 @@ function rule_form_card(?array $editing, array $categories): void {
         <?php endforeach; ?>
         </div>
         <?php endif; ?>
+    </div>
+    <?php endif; ?>
+
+    <?php if ($editingSug): ?>
+    <div class="card card--padded" style="margin-bottom: var(--sp-6);">
+        <div class="card__head">
+            <h3 class="card__title">Edit suggestion</h3>
+            <a class="muted" style="font-size: var(--fs-sm);" href="?action=suggestions">← Back to queue</a>
+        </div>
+        <p class="muted" style="font-size: var(--fs-sm); margin-bottom: var(--sp-3);">
+            Clean up the wording before deciding. The suggestion stays pending — use Approve from the queue when ready.
+        </p>
+
+        <!-- Suggester identity -->
+        <div class="row" style="gap: var(--sp-3); align-items: center; margin-bottom: var(--sp-4); padding: var(--sp-2) var(--sp-3); background: var(--color-surface); border-radius: var(--r-sm); width: fit-content;">
+            <?php if (!empty($editingSug['suggester_avatar']) && !empty($editingSug['suggester_id'])): ?>
+                <img src="/user-avatar.php?id=<?= (int)$editingSug['suggester_id'] ?>" alt="" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover; flex: 0 0 36px;">
+            <?php else: ?>
+                <span class="side-nav__avatar" style="width: 36px; height: 36px; flex: 0 0 36px; background: var(--color-text-soft);"><?= e(strtoupper(mb_substr((string)($editingSug['suggester_name'] ?: $editingSug['suggester_email'] ?: '?'), 0, 1))) ?></span>
+            <?php endif; ?>
+            <div style="line-height: 1.2;">
+                <strong>Suggested by <?= e(trim((string)$editingSug['suggester_name']) ?: (string)($editingSug['suggester_email'] ?? '') ?: '— suggester removed —') ?></strong>
+                <div class="muted" style="font-size: var(--fs-xs);">
+                    <?= !empty($editingSug['suggester_email']) ? e((string)$editingSug['suggester_email']) . ' · ' : '' ?>
+                    submitted <?= e(date('M j, Y', strtotime((string)$editingSug['suggested_at']))) ?>
+                </div>
+            </div>
+        </div>
+
+        <form method="post" class="form">
+            <?= csrf_field() ?>
+            <input type="hidden" name="form" value="suggest_edit">
+            <input type="hidden" name="id" value="<?= (int)$editingSug['id'] ?>">
+
+            <div class="form-row form-row--2">
+                <div class="field">
+                    <label class="field__label" for="es-title">Title</label>
+                    <input class="input" id="es-title" name="title" required value="<?= e((string)$editingSug['title']) ?>">
+                </div>
+                <div class="field">
+                    <label class="field__label" for="es-source">Source</label>
+                    <select class="select" id="es-source" name="source">
+                        <?php foreach (['bylaw'=>'Bylaw','board_rule'=>'Board rule','policy'=>'Policy'] as $v=>$lbl): ?>
+                            <option value="<?= e($v) ?>" <?= $editingSug['source']===$v?'selected':'' ?>><?= e($lbl) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </div>
+            <div class="field">
+                <label class="field__label" for="es-cat">Category</label>
+                <select class="select" id="es-cat" name="category">
+                    <option value="">— None —</option>
+                    <?php foreach ($categories as $c): ?>
+                        <option value="<?= e((string)$c['name']) ?>" <?= $editingSug['category']===$c['name']?'selected':'' ?>><?= e((string)$c['name']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="field">
+                <label class="field__label" for="es-body">Body</label>
+                <textarea class="textarea" id="es-body" name="body" rows="6" required><?= e((string)$editingSug['body']) ?></textarea>
+            </div>
+            <div class="row" style="justify-content: space-between; gap: var(--sp-2); flex-wrap: wrap;">
+                <a class="btn btn--ghost" href="?action=suggestions">Cancel</a>
+                <button class="btn btn--primary" type="submit">Save changes</button>
+            </div>
+        </form>
     </div>
     <?php endif; ?>
 
