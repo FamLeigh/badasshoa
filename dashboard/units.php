@@ -139,16 +139,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'delete'
     redirect('/dashboard/units.php');
 }
 
-// Listing — units with occupant counts.
-$rows = db()->prepare(
-    'SELECT u.*,
-            (SELECT COUNT(*) FROM unit_occupants WHERE unit_id = u.id) AS occupant_count,
-            (SELECT GROUP_CONCAT(DISTINCT role ORDER BY role) FROM unit_occupants WHERE unit_id = u.id) AS roles
-       FROM units u
-      WHERE u.association_id = ?
-      ORDER BY CAST(u.unit_number AS UNSIGNED), u.unit_number'
-);
-$rows->execute([$assocId]);
+// Listing — units with occupant counts, optionally filtered by a search term
+// that matches either unit_number or any occupant's name/email.
+$qSearch = trim((string)($_GET['q'] ?? ''));
+
+$sql = 'SELECT u.*,
+               (SELECT COUNT(*) FROM unit_occupants WHERE unit_id = u.id) AS occupant_count,
+               (SELECT GROUP_CONCAT(DISTINCT role ORDER BY role) FROM unit_occupants WHERE unit_id = u.id) AS roles
+          FROM units u
+         WHERE u.association_id = ?';
+$params = [$assocId];
+if ($qSearch !== '') {
+    $like = "%$qSearch%";
+    $sql .= ' AND (
+        u.unit_number LIKE ?
+        OR u.garage_number LIKE ?
+        OR u.parking_spot LIKE ?
+        OR EXISTS (
+            SELECT 1 FROM unit_occupants uo
+              JOIN users mu ON mu.id = uo.user_id
+             WHERE uo.unit_id = u.id
+               AND (mu.first_name LIKE ?
+                    OR mu.last_name LIKE ?
+                    OR mu.email LIKE ?
+                    OR CONCAT(mu.first_name, " ", mu.last_name) LIKE ?)
+        )
+    )';
+    array_push($params, $like, $like, $like, $like, $like, $like, $like);
+}
+$sql .= ' ORDER BY CAST(u.unit_number AS UNSIGNED), u.unit_number';
+
+$rows = db()->prepare($sql);
+$rows->execute($params);
 $units = $rows->fetchAll();
 
 $showAdd    = ($_GET['action'] ?? '') === 'new';
@@ -299,10 +321,24 @@ require __DIR__ . '/../includes/header.php';
     </div>
     <?php endif; ?>
 
-    <?php if (!$units): ?>
+    <form method="get" class="row" style="margin-bottom: var(--sp-4); gap: var(--sp-2); flex-wrap: wrap;">
+        <input class="input" type="search" name="q" placeholder="Search unit #, owner name, garage/parking…" value="<?= e($qSearch) ?>" style="max-width: 360px; flex: 1;">
+        <button class="btn btn--ghost" type="submit">Search</button>
+        <?php if ($qSearch !== ''): ?>
+            <a class="btn btn--ghost" href="/dashboard/units.php">Clear</a>
+            <span class="muted" style="align-self:center; font-size: var(--fs-sm);"><?= count($units) ?> match<?= count($units)===1?'':'es' ?></span>
+        <?php endif; ?>
+    </form>
+
+    <?php if (!$units && $qSearch === ''): ?>
         <div class="card card--padded center" style="padding: var(--sp-12) var(--sp-6);">
             <p class="muted">No units registered yet.</p>
             <p style="margin-top: var(--sp-4);"><a class="btn btn--primary" href="?action=new">Register the first unit</a></p>
+        </div>
+    <?php elseif (!$units): ?>
+        <div class="card card--padded center" style="padding: var(--sp-6);">
+            <p class="muted">No units match &ldquo;<?= e($qSearch) ?>&rdquo;.</p>
+            <p style="margin-top: var(--sp-3);"><a class="btn btn--ghost" href="/dashboard/units.php">Clear search</a></p>
         </div>
     <?php else: ?>
     <div style="overflow-x:auto;">
