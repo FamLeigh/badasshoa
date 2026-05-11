@@ -19,8 +19,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'add') {
     $pct     = $_POST['ownership_percent'] !== '' ? (float)$_POST['ownership_percent'] : null;
     $hoaA    = $_POST['annual_hoa_assessment']    !== '' ? (float)$_POST['annual_hoa_assessment']    : null;
     $garA    = $_POST['annual_garage_assessment'] !== '' ? (float)$_POST['annual_garage_assessment'] : null;
-    $garage  = trim((string)($_POST['garage_number'] ?? ''));
-    $parking = trim((string)($_POST['parking_spot'] ?? ''));
     $notes   = trim((string)($_POST['notes'] ?? ''));
     if (!in_array($type, ['condo','townhouse','single_family','apartment','business','main_office','other'], true)) $type = 'condo';
 
@@ -29,9 +27,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'add') {
     } else {
         try {
             db()->prepare(
-                'INSERT INTO units (association_id, unit_number, type, bedrooms, baths, square_footage, ownership_percent, annual_hoa_assessment, annual_garage_assessment, garage_number, parking_spot, notes)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-            )->execute([$assocId, $num, $type, $beds, $baths, $sqft, $pct, $hoaA, $garA, $garage ?: null, $parking ?: null, $notes ?: null]);
+                'INSERT INTO units (association_id, unit_number, type, bedrooms, baths, square_footage, ownership_percent, annual_hoa_assessment, annual_garage_assessment, notes)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            )->execute([$assocId, $num, $type, $beds, $baths, $sqft, $pct, $hoaA, $garA, $notes ?: null]);
             $newId = (int)db()->lastInsertId();
             audit('unit.added', ['unit_number' => $num], $newId, 'unit');
             flash('success', "Unit \"$num\" registered.");
@@ -83,8 +81,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'import'
                 $pct     = $get('ownership_percent');
                 $hoaA    = $get('annual_hoa_assessment');
                 $garA    = $get('annual_garage_assessment');
-                $garage  = $get('garage_number');
-                $parking = $get('parking_spot');
                 $rNotes  = $get('notes');
 
                 if ($num === '') { $errors[] = "Row $row: missing unit_number"; continue; }
@@ -103,8 +99,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'import'
                     $pct   !== '' ? (float)$pct : null,
                     $hoaA  !== '' ? (float)$hoaA : null,
                     $garA  !== '' ? (float)$garA : null,
-                    $garage  ?: null,
-                    $parking ?: null,
                     $rNotes  ?: null,
                 ];
 
@@ -115,9 +109,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'import'
                 } else {
                     db()->prepare(
                         'INSERT INTO units (association_id, unit_number, type, bedrooms, baths, square_footage,
-                                            ownership_percent, annual_hoa_assessment, annual_garage_assessment,
-                                            garage_number, parking_spot, notes)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                                            ownership_percent, annual_hoa_assessment, annual_garage_assessment, notes)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
                     )->execute(array_merge([$assocId, $num], $params));
                     $added++;
                 }
@@ -143,18 +136,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'delete'
 // that matches either unit_number or any occupant's name/email.
 $qSearch = trim((string)($_GET['q'] ?? ''));
 
-$sql = 'SELECT u.*,
+// Listing query — pulls everything needed for the column layout:
+//   Unit | Primary owner | Occupants | Parking | Own.% | Monthly fee
+// Plus a flag for rental status (any tenant occupant → rented).
+$sql = "SELECT u.*,
                (SELECT COUNT(*) FROM unit_occupants WHERE unit_id = u.id) AS occupant_count,
-               (SELECT GROUP_CONCAT(DISTINCT role ORDER BY role) FROM unit_occupants WHERE unit_id = u.id) AS roles
+               (SELECT TRIM(CONCAT(IFNULL(usr.first_name,''), ' ', IFNULL(usr.last_name,'')))
+                  FROM unit_occupants uo JOIN users usr ON usr.id = uo.user_id
+                 WHERE uo.unit_id = u.id AND uo.is_primary = 1
+                 LIMIT 1) AS primary_owner_name,
+               (SELECT GROUP_CONCAT(CONCAT(ps.kind, ':', ps.number) SEPARATOR ', ')
+                  FROM parking_spots ps
+                 WHERE ps.assigned_unit_id = u.id
+                 ORDER BY FIELD(ps.kind,'garage','surface','covered','tandem','other'),
+                          CAST(ps.number AS UNSIGNED), ps.number) AS parking_list,
+               EXISTS (SELECT 1 FROM unit_occupants uo
+                        WHERE uo.unit_id = u.id AND uo.role = 'tenant') AS is_rented
           FROM units u
-         WHERE u.association_id = ?';
+         WHERE u.association_id = ?";
 $params = [$assocId];
 if ($qSearch !== '') {
     $like = "%$qSearch%";
     $sql .= ' AND (
         u.unit_number LIKE ?
-        OR u.garage_number LIKE ?
-        OR u.parking_spot LIKE ?
+        OR EXISTS (
+            SELECT 1 FROM parking_spots ps
+             WHERE ps.assigned_unit_id = u.id
+               AND (ps.number LIKE ? OR CONCAT(ps.kind, " ", ps.number) LIKE ?)
+        )
         OR EXISTS (
             SELECT 1 FROM unit_occupants uo
               JOIN users mu ON mu.id = uo.user_id
@@ -224,13 +233,13 @@ require __DIR__ . '/../includes/header.php';
         <p class="muted" style="font-size: var(--fs-sm);">
             Required column: <code>unit_number</code>. Optional: <code>type</code> (condo / townhouse / single_family / apartment / business / main_office / other),
             <code>bedrooms</code>, <code>baths</code> (e.g. 2.5), <code>square_footage</code>, <code>ownership_percent</code>
-            (e.g. 0.4521), <code>annual_hoa_assessment</code>, <code>annual_garage_assessment</code>,
-            <code>garage_number</code>, <code>parking_spot</code>, <code>notes</code>.
+            (e.g. 0.4521), <code>annual_hoa_assessment</code>, <code>annual_garage_assessment</code>, <code>notes</code>.
+            Garage and parking-spot assignments live on the <a href="/dashboard/parking.php">Parking page</a> — assign them there instead of here.
             <strong>Existing unit numbers are skipped</strong> — only new ones get inserted, so re-running the same CSV is safe and won't overwrite hand-edits. To change a unit, edit it from <a href="/dashboard/units.php">the units list</a>. Header row required.
         </p>
-        <pre style="background: var(--color-surface-2); padding: var(--sp-3); border-radius: var(--r-md); font-size: var(--fs-xs); overflow-x:auto;">unit_number,type,bedrooms,baths,square_footage,ownership_percent,annual_hoa_assessment,annual_garage_assessment,garage_number,parking_spot,notes
-101A,condo,2,2.0,1100,0.4521,4800.00,600.00,12,P-7,Corner unit
-421,condo,3,2.5,1450,0.6800,5400.00,720.00,64,,Roof access</pre>
+        <pre style="background: var(--color-surface-2); padding: var(--sp-3); border-radius: var(--r-md); font-size: var(--fs-xs); overflow-x:auto;">unit_number,type,bedrooms,baths,square_footage,ownership_percent,annual_hoa_assessment,annual_garage_assessment,notes
+101A,condo,2,2.0,1100,0.4521,4800.00,600.00,Corner unit
+421,condo,3,2.5,1450,0.6800,5400.00,720.00,Roof access</pre>
 
         <form method="post" enctype="multipart/form-data" class="form">
             <?= csrf_field() ?>
@@ -290,17 +299,6 @@ require __DIR__ . '/../includes/header.php';
             </div>
             <div class="form-row form-row--2">
                 <div class="field">
-                    <label class="field__label" for="u-garage">Garage #</label>
-                    <input class="input" id="u-garage" name="garage_number" maxlength="20" placeholder="64">
-                    <div class="field__hint">If different from the unit number — common in mid-rise condos.</div>
-                </div>
-                <div class="field">
-                    <label class="field__label" for="u-parking">Parking spot</label>
-                    <input class="input" id="u-parking" name="parking_spot" maxlength="20" placeholder="P-7">
-                </div>
-            </div>
-            <div class="form-row form-row--2">
-                <div class="field">
                     <label class="field__label" for="u-hoa">Annual HOA assessment ($)</label>
                     <input class="input" type="number" step="0.01" min="0" id="u-hoa" name="annual_hoa_assessment" placeholder="4800.00">
                 </div>
@@ -345,40 +343,65 @@ require __DIR__ . '/../includes/header.php';
     <table class="table">
         <thead>
             <tr>
-                <th>Unit</th><th>Type</th><th>Bd / Ba / Sqft</th><th>Garage / Parking</th>
-                <th title="Monthly = (annual HOA + annual garage) / 12, derived from the annual assessments on each unit">Monthly fee</th>
+                <th>Unit</th>
+                <th>Primary owner</th>
+                <th>Occupants</th>
+                <th>Parking</th>
                 <th>Own. %</th>
-                <th>Occupants</th><th style="text-align:right;">Actions</th>
+                <th title="Monthly = (annual HOA + annual garage) / 12">Monthly fee</th>
+                <th style="text-align:right;">Actions</th>
             </tr>
         </thead>
         <tbody>
         <?php foreach ($units as $u):
-            // Monthly fee = (annual HOA + annual garage) / 12. We store annual on the
-            // unit (since boards budget annually) and derive monthly for display.
             $annualHoa = $u['annual_hoa_assessment']    !== null ? (float)$u['annual_hoa_assessment']    : null;
             $annualGar = $u['annual_garage_assessment'] !== null ? (float)$u['annual_garage_assessment'] : null;
             $monthlyTotal = ($annualHoa ?? 0) / 12 + ($annualGar ?? 0) / 12;
             $hasAssessment = $annualHoa !== null || $annualGar !== null;
+            $isRented = (int)$u['is_rented'] === 1;
+            // Format parking_list (kind:number,kind:number) for compact display
+            $parkingDisplay = '';
+            if (!empty($u['parking_list'])) {
+                $bits = explode(', ', (string)$u['parking_list']);
+                $fmt = [];
+                foreach ($bits as $b) {
+                    [$k, $n] = array_pad(explode(':', $b, 2), 2, '');
+                    $abbr = strtoupper(mb_substr($k, 0, 1)); // G/S/C/T/O
+                    $fmt[] = $abbr . ':' . $n;
+                }
+                $parkingDisplay = implode(' · ', $fmt);
+            }
         ?>
             <tr>
-                <td><a href="/dashboard/unit.php?id=<?= (int)$u['id'] ?>"><strong><?= e((string)$u['unit_number']) ?></strong></a></td>
-                <td><?= e(str_replace('_',' ',(string)$u['type'])) ?></td>
                 <td>
-                    <?= $u['bedrooms'] !== null ? (int)$u['bedrooms'] : '—' ?> /
-                    <?= $u['baths'] !== null ? rtrim(rtrim(number_format((float)$u['baths'], 1, '.', ''), '0'), '.') : '—' ?> /
-                    <?= $u['square_footage'] !== null ? number_format((int)$u['square_footage']) : '—' ?>
+                    <a href="/dashboard/unit.php?id=<?= (int)$u['id'] ?>"><strong><?= e((string)$u['unit_number']) ?></strong></a>
+                    <?php if ($isRented): ?>
+                        <span class="badge badge--warning" style="font-size: var(--fs-xs); margin-left: 4px;" title="At least one occupant is a tenant">Rented</span>
+                    <?php endif; ?>
                 </td>
                 <td>
-                    <?php if (!empty($u['garage_number'])): ?>
-                        <span title="Garage">G:<?= e((string)$u['garage_number']) ?></span>
-                    <?php endif; ?>
-                    <?php if (!empty($u['parking_spot'])): ?>
-                        <span title="Parking" style="margin-left: 6px;">P:<?= e((string)$u['parking_spot']) ?></span>
-                    <?php endif; ?>
-                    <?php if (empty($u['garage_number']) && empty($u['parking_spot'])): ?>
+                    <?php if (!empty($u['primary_owner_name'])): ?>
+                        <strong><?= e((string)$u['primary_owner_name']) ?></strong>
+                    <?php else: ?>
                         <span class="muted">—</span>
                     <?php endif; ?>
                 </td>
+                <td>
+                    <?php if ((int)$u['occupant_count'] === 0): ?>
+                        <span class="muted">—</span>
+                    <?php else: ?>
+                        <strong><?= (int)$u['occupant_count'] ?></strong>
+                        <span class="muted" style="font-size: var(--fs-xs);"><?= e(str_replace(',', ' · ', str_replace('_',' ',(string)$u['roles']))) ?></span>
+                    <?php endif; ?>
+                </td>
+                <td>
+                    <?php if ($parkingDisplay !== ''): ?>
+                        <span style="font-size: var(--fs-sm);"><?= e($parkingDisplay) ?></span>
+                    <?php else: ?>
+                        <span class="muted">—</span>
+                    <?php endif; ?>
+                </td>
+                <td><?= $u['ownership_percent'] !== null ? rtrim(rtrim(number_format((float)$u['ownership_percent'], 4, '.', ''), '0'), '.') . '%' : '—' ?></td>
                 <td>
                     <?php if ($hasAssessment): ?>
                         <strong>$<?= number_format($monthlyTotal, 2) ?>/mo</strong>
@@ -387,15 +410,6 @@ require __DIR__ . '/../includes/header.php';
                         <?php endif; ?>
                     <?php else: ?>
                         <span class="muted">—</span>
-                    <?php endif; ?>
-                </td>
-                <td><?= $u['ownership_percent'] !== null ? rtrim(rtrim(number_format((float)$u['ownership_percent'], 4, '.', ''), '0'), '.') . '%' : '—' ?></td>
-                <td>
-                    <?php if ((int)$u['occupant_count'] === 0): ?>
-                        <span class="muted">—</span>
-                    <?php else: ?>
-                        <strong><?= (int)$u['occupant_count'] ?></strong>
-                        <span class="muted" style="font-size: var(--fs-xs);"><?= e(str_replace(',', ' · ', str_replace('_',' ',(string)$u['roles']))) ?></span>
                     <?php endif; ?>
                 </td>
                 <td style="text-align:right; white-space: nowrap;">

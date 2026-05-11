@@ -75,8 +75,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'save_un
     $pct     = $_POST['ownership_percent'] !== '' ? (float)$_POST['ownership_percent'] : null;
     $hoaA    = $_POST['annual_hoa_assessment']    !== '' ? (float)$_POST['annual_hoa_assessment']    : null;
     $garA    = $_POST['annual_garage_assessment'] !== '' ? (float)$_POST['annual_garage_assessment'] : null;
-    $garage  = trim((string)($_POST['garage_number'] ?? ''));
-    $parking = trim((string)($_POST['parking_spot'] ?? ''));
     $notes   = trim((string)($_POST['notes'] ?? ''));
     if (!in_array($type, ['condo','townhouse','single_family','apartment','business','main_office','other'], true)) $type = 'condo';
 
@@ -87,10 +85,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'save_un
             db()->prepare(
                 'UPDATE units
                     SET unit_number = ?, type = ?, bedrooms = ?, baths = ?, square_footage = ?, ownership_percent = ?,
-                        annual_hoa_assessment = ?, annual_garage_assessment = ?,
-                        garage_number = ?, parking_spot = ?, notes = ?
+                        annual_hoa_assessment = ?, annual_garage_assessment = ?, notes = ?
                   WHERE id = ? AND association_id = ?'
-            )->execute([$num, $type, $beds, $baths, $sqft, $pct, $hoaA, $garA, $garage ?: null, $parking ?: null, $notes ?: null, $unitId, $assocId]);
+            )->execute([$num, $type, $beds, $baths, $sqft, $pct, $hoaA, $garA, $notes ?: null, $unitId, $assocId]);
             audit('unit.edited', ['unit_number' => $num], $unitId, 'unit');
             flash('success', 'Unit specs updated.');
             redirect('/dashboard/unit.php?id=' . $unitId);
@@ -211,8 +208,9 @@ $candStmt = db()->prepare(
 $candStmt->execute([$assocId, $unitId]);
 $candidates = $candStmt->fetchAll();
 
-$showEditUnit  = ($_GET['action'] ?? '') === 'edit_unit';
-$editOccupant  = null;
+$showEditUnit     = ($_GET['action'] ?? '') === 'edit_unit';
+$showAddOccupant  = ($_GET['action'] ?? '') === 'add_occupant';
+$editOccupant     = null;
 if (($_GET['action'] ?? '') === 'edit_occupant') {
     $oid = (int)($_GET['oid'] ?? 0);
     $stmt = db()->prepare('SELECT o.*, u.first_name, u.last_name, u.email FROM unit_occupants o JOIN users u ON u.id = o.user_id WHERE o.id = ? AND o.unit_id = ?');
@@ -239,8 +237,6 @@ require __DIR__ . '/../includes/header.php';
                 <?php endif; ?>
                 <?php if ($unit['square_footage']): ?> · <?= number_format((int)$unit['square_footage']) ?> sqft<?php endif; ?>
                 <?php if ($unit['ownership_percent'] !== null): ?> · <?= rtrim(rtrim(number_format((float)$unit['ownership_percent'], 4, '.', ''), '0'), '.') ?>% ownership<?php endif; ?>
-                <?php if (!empty($unit['garage_number'])): ?> · garage <?= e((string)$unit['garage_number']) ?><?php endif; ?>
-                <?php if (!empty($unit['parking_spot'])): ?> · parking <?= e((string)$unit['parking_spot']) ?><?php endif; ?>
             </p>
             <?php
             $aHoa = $unit['annual_hoa_assessment']    !== null ? (float)$unit['annual_hoa_assessment']    : null;
@@ -299,12 +295,6 @@ require __DIR__ . '/../includes/header.php';
                     <input class="input" type="number" min="0" max="50000" id="eu-sf" name="square_footage" value="<?= e((string)($unit['square_footage'] ?? '')) ?>"></div>
                 <div class="field"><label class="field__label" for="eu-pct">Ownership %</label>
                     <input class="input" type="number" step="0.0001" min="0" max="100" id="eu-pct" name="ownership_percent" value="<?= e((string)($unit['ownership_percent'] ?? '')) ?>"></div>
-            </div>
-            <div class="form-row form-row--2">
-                <div class="field"><label class="field__label" for="eu-garage">Garage #</label>
-                    <input class="input" id="eu-garage" name="garage_number" maxlength="20" value="<?= e((string)($unit['garage_number'] ?? '')) ?>" placeholder="64"></div>
-                <div class="field"><label class="field__label" for="eu-parking">Parking spot</label>
-                    <input class="input" id="eu-parking" name="parking_spot" maxlength="20" value="<?= e((string)($unit['parking_spot'] ?? '')) ?>" placeholder="P-7"></div>
             </div>
             <div class="form-row form-row--2">
                 <div class="field"><label class="field__label" for="eu-hoa">Annual HOA assessment ($)</label>
@@ -407,10 +397,20 @@ require __DIR__ . '/../includes/header.php';
     </div>
     <?php endif; ?>
 
-    <!-- Add-occupant form (only if not editing one) -->
-    <?php if (!$editOccupant): ?>
+    <!-- Add-occupant button (collapsed by default) -->
+    <?php if (!$editOccupant && !$showAddOccupant): ?>
+        <p style="margin-bottom: var(--sp-6);">
+            <a class="btn btn--ghost" href="?id=<?= (int)$unitId ?>&action=add_occupant">+ Add occupant</a>
+        </p>
+    <?php endif; ?>
+
+    <!-- Add-occupant form (only when explicitly requested) -->
+    <?php if (!$editOccupant && $showAddOccupant): ?>
     <div class="card card--padded" style="margin-bottom: var(--sp-8);">
-        <h3 class="card__title">+ Add occupant</h3>
+        <div class="card__head">
+            <h3 class="card__title">Add occupant</h3>
+            <a class="muted" style="font-size: var(--fs-sm);" href="?id=<?= (int)$unitId ?>">← Cancel</a>
+        </div>
         <?php if (!$candidates): ?>
             <p class="muted" style="font-size: var(--fs-sm);">Every active member is already linked to this unit. Invite a new user via <a href="/dashboard/directory.php?action=invite">Directory → Invite</a>.</p>
         <?php else: ?>
