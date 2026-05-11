@@ -180,6 +180,16 @@ $occStmt = db()->prepare(
 $occStmt->execute([$unitId]);
 $occupants = $occStmt->fetchAll();
 
+// --- Load parking spots assigned to this unit ---
+$psStmt = db()->prepare(
+    "SELECT * FROM parking_spots
+      WHERE association_id = ? AND assigned_unit_id = ?
+      ORDER BY FIELD(kind,'garage','surface','covered','tandem','other'),
+               CAST(number AS UNSIGNED), number"
+);
+$psStmt->execute([$assocId, $unitId]);
+$unitSpots = $psStmt->fetchAll();
+
 // --- Load per-unit documents (manager sees all) ---
 $docStmt = db()->prepare(
     'SELECT d.*, CONCAT(IFNULL(u.first_name,""), " ", IFNULL(u.last_name,"")) AS uploader
@@ -448,6 +458,31 @@ require __DIR__ . '/../includes/header.php';
         </form>
         <?php endif; ?>
     </div>
+    <?php endif; ?>
+
+    <!-- Parking spots assigned to this unit -->
+    <h2 style="font-size: var(--fs-xl); margin-top: var(--sp-6);">Parking <span class="muted" style="font-size: var(--fs-sm); font-weight: 400;">— garages and parking spots assigned to this unit</span></h2>
+    <?php if (!$unitSpots): ?>
+        <p class="muted" style="margin-bottom: var(--sp-4);">No spots assigned. <a href="/dashboard/parking.php?action=new&unit_id=<?= (int)$unitId ?>">Assign one →</a></p>
+    <?php else: ?>
+    <div style="overflow-x:auto; margin-bottom: var(--sp-4);">
+    <table class="table">
+        <thead><tr><th>Kind</th><th>Number</th><th>Notes</th><th></th></tr></thead>
+        <tbody>
+        <?php foreach ($unitSpots as $s): ?>
+            <tr>
+                <td><span class="badge"><?= e(ucfirst((string)$s['kind'])) ?></span></td>
+                <td><strong><?= e((string)$s['number']) ?></strong></td>
+                <td><span class="muted" style="font-size: var(--fs-sm);"><?= !empty($s['notes']) ? e((string)$s['notes']) : '—' ?></span></td>
+                <td style="text-align:right;">
+                    <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="/dashboard/parking.php?action=edit&id=<?= (int)$s['id'] ?>">Edit</a>
+                </td>
+            </tr>
+        <?php endforeach; ?>
+        </tbody>
+    </table>
+    </div>
+    <p style="margin-bottom: var(--sp-6);"><a class="btn btn--ghost" href="/dashboard/parking.php?action=new&unit_id=<?= (int)$unitId ?>">+ Assign another spot</a></p>
     <?php endif; ?>
 
     <!-- Per-unit documents -->

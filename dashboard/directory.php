@@ -48,7 +48,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'import'
                 $first      = $get('first_name');
                 $last       = $get('last_name');
                 $email      = $get('email');
+                $email2     = $get('email2');
                 $phone      = $get('phone');
+                $phone2     = $get('phone2');
+                if ($email2 !== '' && !filter_var($email2, FILTER_VALIDATE_EMAIL)) $email2 = '';
                 $isOwnerRaw = strtolower($get('is_owner'));
                 $isOwner    = in_array($isOwnerRaw, ['1','y','yes','owner','true'], true) ? 1
                             : (in_array($isOwnerRaw, ['0','n','no','renter','false'], true) ? 0 : 1);
@@ -81,9 +84,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'import'
                 $hash     = password_hash($tempPass, PASSWORD_BCRYPT, ['cost' => 12]);
                 $role     = $isOwner ? 'resident' : 'renter';
                 db()->prepare(
-                    'INSERT INTO users (association_id, first_name, last_name, email, phone, password_hash, role, unit_number, is_owner, status)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, "pending")'
-                )->execute([$assocId, $first, $last, $finalEmail, $phone ?: null, $hash, $role, $unit ?: null, $isOwner]);
+                    'INSERT INTO users (association_id, first_name, last_name, email, email2, phone, phone2, password_hash, role, unit_number, is_owner, status)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "pending")'
+                )->execute([$assocId, $first, $last, $finalEmail, $email2 ?: null, $phone ?: null, $phone2 ?: null, $hash, $role, $unit ?: null, $isOwner]);
                 $newId = (int)db()->lastInsertId();
 
                 // Only send the welcome email when we have a real address.
@@ -579,13 +582,13 @@ require __DIR__ . '/../includes/header.php';
         <h3 class="card__title">Import members from CSV</h3>
         <p class="muted" style="font-size: var(--fs-sm);">
             Required column: <code>unit_number</code>.
-            Optional: <code>first_name, last_name, email, phone, is_owner</code> (1/0 or yes/no).
+            Optional: <code>first_name, last_name, email, email2, phone, phone2, is_owner</code> (1/0 or yes/no).
             Rows without an email are imported with a placeholder address — the user shows in the directory as <em>(no email on file)</em> and gets no welcome email. Edit them later via the Directory's Edit button to set a real email.
         </p>
-        <pre style="background: var(--color-surface-2); padding: var(--sp-3); border-radius: var(--r-md); font-size: var(--fs-xs); overflow-x:auto;">unit_number,first_name,last_name,email,phone,is_owner
-101,Maria,Rodriguez,maria@example.com,555-0101,1
-102A,James,Lee,,,1
-B2,Sam,Garcia,sam@example.com,,0</pre>
+        <pre style="background: var(--color-surface-2); padding: var(--sp-3); border-radius: var(--r-md); font-size: var(--fs-xs); overflow-x:auto;">unit_number,first_name,last_name,email,email2,phone,phone2,is_owner
+101,Maria,Rodriguez,maria@example.com,maria.work@example.com,555-0101,555-0202,1
+102A,James,Lee,,,,,1
+B2,Sam,Garcia,sam@example.com,,,,0</pre>
         <form method="post" enctype="multipart/form-data" class="form">
             <?= csrf_field() ?>
             <input type="hidden" name="form" value="import">
