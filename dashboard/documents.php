@@ -116,6 +116,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit') 
     }
 }
 
+// --- Compose / save composed document (no file upload; HTML body via Quill) ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'compose') {
+    csrf_check();
+    if (!$canManage) { http_response_code(403); die('Forbidden'); }
+
+    $did         = (int)($_POST['id'] ?? 0);
+    $title       = trim((string)($_POST['title'] ?? ''));
+    $description = trim((string)($_POST['description'] ?? ''));
+    $category    = trim((string)($_POST['category'] ?? 'General'));
+    $access      = $_POST['access_level'] ?? 'members_only';
+    $unitId      = ($_POST['unit_id'] ?? '') === '' ? null : (int)$_POST['unit_id'];
+    $body        = (string)($_POST['body_html'] ?? '');
+    if (!in_array($access, ['public','members_only','board_only','unit_only'], true)) $access = 'members_only';
+    if ($access === 'unit_only' && !$unitId) $access = 'members_only';
+    if ($unitId) {
+        $check = db()->prepare('SELECT 1 FROM units WHERE id = ? AND association_id = ?');
+        $check->execute([$unitId, $assocId]);
+        if (!$check->fetchColumn()) $unitId = null;
+    }
+
+    $bodyText = trim(strip_tags(str_replace(['&nbsp;', "\xc2\xa0"], ' ', $body)));
+    if ($title === '')       $flashError = 'Title is required.';
+    elseif ($bodyText === '') $flashError = 'Body is required — write something in the editor.';
+    elseif ($did === 0) {
+        db()->prepare(
+            'INSERT INTO documents (association_id, unit_id, title, description, body_html, category,
+                                    file_path, file_type, access_level, uploaded_by, version)
+             VALUES (?, ?, ?, ?, ?, ?, NULL, "text/html", ?, ?, "1.0")'
+        )->execute([
+            $assocId, $unitId, $title, $description ?: null, $body, $category ?: null, $access, (int)$user['id'],
+        ]);
+        $newId = (int)db()->lastInsertId();
+        audit('document.composed', ['title' => $title, 'access' => $access, 'unit_id' => $unitId], $newId, 'document');
+        flash('success', "Created \"$title\".");
+        redirect('/dashboard/document.php?id=' . $newId);
+    } else {
+        // Edit existing composed document
+        $check = db()->prepare('SELECT file_path FROM documents WHERE id = ? AND association_id = ?');
+        $check->execute([$did, $assocId]);
+        $row = $check->fetch();
+        if (!$row || !empty($row['file_path'])) {
+            $flashError = 'That document is an uploaded file, not a composed one — use Edit metadata instead.';
+        } else {
+            db()->prepare(
+                'UPDATE documents
+                    SET title = ?, description = ?, body_html = ?, category = ?, access_level = ?, unit_id = ?
+                  WHERE id = ? AND association_id = ?'
+            )->execute([$title, $description ?: null, $body, $category ?: null, $access, $unitId, $did, $assocId]);
+            audit('document.edited', ['title' => $title, 'composed' => true], $did, 'document');
+            flash('success', "Updated \"$title\".");
+            redirect('/dashboard/document.php?id=' . $did);
+        }
+    }
+}
+
 // --- Upload handler ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'upload') {
     csrf_check();
@@ -266,6 +321,24 @@ if (($_GET['action'] ?? '') === 'edit' && $canManage) {
     $editDoc = $stmt->fetch() ?: null;
 }
 
+// Compose target (new or edit body)
+$composeDoc = null;
+$showCompose = ($_GET['action'] ?? '') === 'compose' && $canManage;
+if ($showCompose && !empty($_GET['id'])) {
+    $cid = (int)$_GET['id'];
+    $stmt = db()->prepare('SELECT * FROM documents WHERE id = ? AND association_id = ?');
+    $stmt->execute([$cid, $assocId]);
+    $composeDoc = $stmt->fetch() ?: null;
+    // Only allow composing on documents that are already composed (or new).
+    if ($composeDoc && !empty($composeDoc['file_path'])) {
+        $composeDoc = null;
+        $flashError = 'That document is an uploaded file — composing edits the HTML body, which it doesn\'t have.';
+    }
+}
+if ($showCompose) {
+    $page_extra_head = '<link href="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.snow.css" rel="stylesheet">';
+}
+
 // Pre-selected unit (from /dashboard/unit.php "+ Upload to unit" link, or from filter)
 $preselectUnitId = (int)($_GET['unit_id'] ?? 0);
 
@@ -290,6 +363,7 @@ require __DIR__ . '/../includes/header.php';
         <?php if ($canManage): ?>
             <div class="row" style="gap: var(--sp-2);">
                 <a class="btn btn--ghost" href="?manage_cats=1">Manage categories</a>
+                <a class="btn btn--ghost" href="?action=compose">✏️ Compose</a>
                 <a class="btn btn--primary" href="?action=new">+ Upload</a>
             </div>
         <?php endif; ?>
@@ -412,6 +486,133 @@ require __DIR__ . '/../includes/header.php';
             </div>
         </form>
     </div>
+    <?php endif; ?>
+
+    <?php if ($showCompose):
+        $cv = $composeDoc ?? ['title'=>'','description'=>'','body_html'=>'','category'=>'General','access_level'=>'members_only','unit_id'=>null,'id'=>0];
+    ?>
+    <div class="card card--padded" style="margin-bottom: var(--sp-6);">
+        <div class="card__head">
+            <h3 class="card__title"><?= $composeDoc ? 'Edit document body' : 'Compose a new document' ?></h3>
+            <a class="muted" style="font-size: var(--fs-sm);" href="/dashboard/documents.php">← Back</a>
+        </div>
+        <p class="muted" style="font-size: var(--fs-sm); margin-bottom: var(--sp-3);">
+            Write the document directly here — no PDF or Word file needed. You'll be able to print or save-as-PDF from the document view afterwards.
+        </p>
+        <form method="post" action="/dashboard/documents.php" class="form" data-doc-compose-form>
+            <?= csrf_field() ?>
+            <input type="hidden" name="form" value="compose">
+            <?php if ($composeDoc): ?><input type="hidden" name="id" value="<?= (int)$cv['id'] ?>"><?php endif; ?>
+
+            <div class="form-row form-row--2">
+                <div class="field">
+                    <label class="field__label" for="dc-title">Title</label>
+                    <input class="input" id="dc-title" name="title" required maxlength="255" value="<?= e((string)$cv['title']) ?>" placeholder="2026 Pool House Procedures">
+                </div>
+                <div class="field">
+                    <label class="field__label" for="dc-cat">Category</label>
+                    <select class="select" id="dc-cat" name="category">
+                        <?php $haveCatMatch = false;
+                        foreach ($categories as $c):
+                            $sel = $cv['category'] === $c;
+                            if ($sel) $haveCatMatch = true;
+                        ?>
+                            <option value="<?= e($c) ?>" <?= $sel ? 'selected' : '' ?>><?= e($c) ?></option>
+                        <?php endforeach; ?>
+                        <?php if (!empty($cv['category']) && !$haveCatMatch): ?>
+                            <option value="<?= e((string)$cv['category']) ?>" selected><?= e((string)$cv['category']) ?> (legacy)</option>
+                        <?php endif; ?>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row form-row--2">
+                <div class="field">
+                    <label class="field__label" for="dc-unit">Attach to unit (optional)</label>
+                    <select class="select" id="dc-unit" name="unit_id">
+                        <option value="">— Association-wide —</option>
+                        <?php foreach ($unitsList as $u_): ?>
+                            <option value="<?= (int)$u_['id'] ?>" <?= (int)($cv['unit_id'] ?? 0) === (int)$u_['id'] ? 'selected' : '' ?>>Unit <?= e((string)$u_['unit_number']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="field">
+                    <label class="field__label" for="dc-access">Access</label>
+                    <select class="select" id="dc-access" name="access_level">
+                        <option value="public"        <?= $cv['access_level']==='public'?'selected':'' ?>>Public — anyone with the link</option>
+                        <option value="members_only"  <?= $cv['access_level']==='members_only'?'selected':'' ?>>Members only</option>
+                        <option value="board_only"    <?= $cv['access_level']==='board_only'?'selected':'' ?>>Board only</option>
+                        <option value="unit_only"     <?= $cv['access_level']==='unit_only'?'selected':'' ?>>Unit only</option>
+                    </select>
+                </div>
+            </div>
+            <div class="field">
+                <label class="field__label" for="dc-desc">Description (optional, shown in the listing)</label>
+                <input class="input" id="dc-desc" name="description" maxlength="500" value="<?= e((string)($cv['description'] ?? '')) ?>">
+            </div>
+            <div class="field">
+                <label class="field__label">Body</label>
+                <div id="doc-editor" data-initial-html="<?= e((string)$cv['body_html']) ?>" style="background: #fff; border-radius: var(--r-md);"></div>
+                <textarea name="body_html" id="dc-body" hidden></textarea>
+                <div class="field__hint">Use the toolbar to format. Click the image button to drop a photo into the document.</div>
+            </div>
+            <div class="row" style="justify-content: flex-end;">
+                <a class="btn btn--ghost" href="/dashboard/documents.php">Cancel</a>
+                <button class="btn btn--primary" type="submit"><?= $composeDoc ? 'Save changes' : 'Create document' ?></button>
+            </div>
+        </form>
+    </div>
+
+    <input type="file" id="doc-img-input" accept="image/*" style="display:none;">
+    <script src="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.js"></script>
+    <script>
+    (function () {
+        if (typeof Quill === 'undefined') return;
+        var editorEl = document.getElementById('doc-editor');
+        if (!editorEl) return;
+        var hidden   = document.getElementById('dc-body');
+        var csrfTok  = document.querySelector('input[name="_csrf"]').value;
+        var initial  = editorEl.getAttribute('data-initial-html') || '';
+
+        var quill = new Quill('#doc-editor', {
+            theme: 'snow',
+            placeholder: 'Write the document. Toolbar handles formatting; image button drops photos inline.',
+            modules: {
+                toolbar: {
+                    container: [
+                        [{ 'header': [1, 2, 3, false] }],
+                        ['bold', 'italic', 'underline', 'strike'],
+                        [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+                        ['blockquote'],
+                        ['link', 'image'],
+                        ['clean']
+                    ],
+                    handlers: { image: function () { document.getElementById('doc-img-input').click(); } }
+                }
+            }
+        });
+        editorEl.querySelector('.ql-editor').style.minHeight = '320px';
+        if (initial) quill.clipboard.dangerouslyPasteHTML(0, initial);
+
+        var imgInput = document.getElementById('doc-img-input');
+        imgInput.addEventListener('change', async function (ev) {
+            var file = ev.target.files[0]; if (!file) return;
+            var fd = new FormData(); fd.append('file', file); fd.append('_csrf', csrfTok);
+            try {
+                var res = await fetch('/dashboard/upload-image.php', { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-CSRF': csrfTok }});
+                var data = await res.json();
+                if (data.ok && data.url) {
+                    var range = quill.getSelection(true);
+                    quill.insertEmbed(range.index, 'image', data.url, 'user');
+                    quill.setSelection(range.index + 1);
+                } else { alert('Upload failed: ' + (data.error || 'unknown error')); }
+            } catch (err) { alert('Upload failed: ' + err.message); }
+            imgInput.value = '';
+        });
+
+        var form = document.querySelector('form[data-doc-compose-form]');
+        if (form) form.addEventListener('submit', function () { hidden.value = quill.root.innerHTML; });
+    })();
+    </script>
     <?php endif; ?>
 
     <?php if ($showUpload): ?>
@@ -544,7 +745,8 @@ require __DIR__ . '/../includes/header.php';
                     <div class="muted" style="font-size: var(--fs-xs);">v<?= e((string)$r['version']) ?> &middot; <?= e(trim((string)$r['uploader']) ?: 'unknown') ?></div>
                 </td>
                 <td style="text-align:right; white-space: nowrap;">
-                    <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="/dashboard/file.php?type=document&id=<?= (int)$r['id'] ?>" target="_blank" rel="noopener">View</a>
+                    <?php $viewUrl = !empty($r['file_path']) ? '/dashboard/file.php?type=document&id=' . (int)$r['id'] : '/dashboard/document.php?id=' . (int)$r['id']; ?>
+                    <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="<?= e($viewUrl) ?>" <?= !empty($r['file_path']) ? 'target="_blank" rel="noopener"' : '' ?>>View</a>
                     <?php if ($canManage): ?>
                         <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="?action=edit&id=<?= (int)$r['id'] ?>">Edit</a>
                         <form method="post" action="/dashboard/documents.php" style="display:inline;" onsubmit="return confirm('Delete this document?');">
