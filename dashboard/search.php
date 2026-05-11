@@ -265,6 +265,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'cat_add
     redirect('/dashboard/search.php?action=categories');
 }
 
+// --- Rename category ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'cat_rename') {
+    csrf_check();
+    if (!$canManage) { http_response_code(403); die('Forbidden'); }
+    $cid     = (int)($_POST['id'] ?? 0);
+    $newName = trim((string)($_POST['name'] ?? ''));
+    if ($cid && $newName !== '') {
+        $oldStmt = db()->prepare('SELECT name FROM rule_categories WHERE id = ? AND association_id = ?');
+        $oldStmt->execute([$cid, $assocId]);
+        $oldName = (string)($oldStmt->fetchColumn() ?: '');
+        if ($oldName === '') {
+            flash('error', 'Category not found.');
+        } elseif ($oldName !== $newName) {
+            db()->beginTransaction();
+            try {
+                db()->prepare('UPDATE rule_categories SET name = ? WHERE id = ? AND association_id = ?')
+                    ->execute([$newName, $cid, $assocId]);
+                // Keep existing rules in sync so the rename propagates everywhere.
+                db()->prepare('UPDATE rules SET category = ? WHERE association_id = ? AND category = ?')
+                    ->execute([$newName, $assocId, $oldName]);
+                db()->commit();
+                audit('rule_category.renamed', ['from' => $oldName, 'to' => $newName], $cid, 'rule_category');
+                flash('success', "Renamed \"$oldName\" → \"$newName\". All existing rules updated.");
+            } catch (PDOException $e) {
+                db()->rollBack();
+                flash('error', "Could not rename — \"$newName\" is already in use.");
+            }
+        }
+    }
+    redirect('/dashboard/search.php?action=categories');
+}
+
 // --- Delete category ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'cat_delete') {
     csrf_check();
@@ -403,7 +435,9 @@ if ($q === '') {
     if (in_array($source, ['bylaw','board_rule','policy'], true)) {
         $sql .= ' AND source = ?'; $params[] = $source;
     }
-    $sql .= ' ORDER BY created_at DESC, id DESC LIMIT 200';
+    // Default order: rule_number (numeric where parseable, then string), then title.
+    // Boards reference rules by number, so this is the natural reading order.
+    $sql .= " ORDER BY CAST(rule_number AS UNSIGNED), rule_number, title LIMIT 200";
     $stmt = db()->prepare($sql);
     $stmt->execute($params);
     $results = $stmt->fetchAll();
@@ -611,6 +645,8 @@ function rule_form_card(?array $editing, array $categories): void {
             <p class="muted">Search, manage, and import your association's rules.</p>
         </div>
         <div class="row" style="gap: var(--sp-2); flex-wrap: wrap;">
+            <a class="btn btn--ghost" href="/dashboard/rules-print.php" target="_blank" rel="noopener" title="Open a print-friendly listing of every rule in number order">🖨 Print all</a>
+            <a class="btn <?= $canManage ? 'btn--ghost' : 'btn--primary' ?>" href="?action=suggest">+ Suggest a rule</a>
             <?php if ($canManage): ?>
                 <a class="btn btn--ghost" href="?action=suggestions">
                     Suggestions<?php if ($pendingSugCount): ?>
@@ -620,8 +656,6 @@ function rule_form_card(?array $editing, array $categories): void {
                 <a class="btn btn--ghost" href="?action=categories">Categories</a>
                 <a class="btn btn--ghost" href="?action=import">⬆ Import CSV</a>
                 <a class="btn btn--primary" href="?action=new">+ Add rule</a>
-            <?php else: ?>
-                <a class="btn btn--primary" href="?action=suggest">+ Suggest a rule</a>
             <?php endif; ?>
         </div>
     </div>
@@ -735,18 +769,25 @@ function rule_form_card(?array $editing, array $categories): void {
         <?php else: ?>
         <div style="overflow-x:auto;">
         <table class="table">
-            <thead><tr><th>Name</th><th>Sort order</th><th></th></tr></thead>
+            <thead><tr><th>Name</th><th style="text-align:right; width: 220px;">Actions</th></tr></thead>
             <tbody>
             <?php foreach ($categories as $c): ?>
                 <tr>
-                    <td><strong><?= e($c['name']) ?></strong></td>
-                    <td>—</td>
+                    <td>
+                        <form method="post" class="row" style="gap: var(--sp-2);">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="form" value="cat_rename">
+                            <input type="hidden" name="id" value="<?= (int)$c['id'] ?>">
+                            <input class="input" name="name" value="<?= e((string)$c['name']) ?>" required style="max-width: 320px;">
+                            <button class="btn btn--ghost" type="submit" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);">Save</button>
+                        </form>
+                    </td>
                     <td style="text-align:right;">
-                        <form method="post" style="display:inline;" onsubmit="return confirm('Delete this category? Existing rules keep their label.');">
+                        <form method="post" style="display:inline;" onsubmit="return confirm('Delete category &quot;<?= e((string)$c['name']) ?>&quot;? Existing rules keep their label as a plain-text value.');">
                             <?= csrf_field() ?>
                             <input type="hidden" name="form" value="cat_delete">
                             <input type="hidden" name="id" value="<?= (int)$c['id'] ?>">
-                            <button class="btn btn--ghost" type="submit">Delete</button>
+                            <button class="btn btn--ghost" type="submit" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs); color: var(--color-error);">Delete</button>
                         </form>
                     </td>
                 </tr>
@@ -1000,24 +1041,29 @@ function rule_form_card(?array $editing, array $categories): void {
                 <p class="muted" style="font-size: var(--fs-sm); margin-top: var(--sp-4);">Showing the most recent <?= count($results) ?> rule<?= count($results)===1?'':'s' ?>.</p>
                 <?php foreach ($results as $r): ?>
                 <div class="search-result">
-                    <div class="row row--between" style="margin-bottom: var(--sp-2);">
-                        <div class="row" style="gap: var(--sp-2);">
+                    <div class="row row--between" style="margin-bottom: var(--sp-2); align-items: baseline;">
+                        <div class="row" style="gap: var(--sp-2); align-items: baseline;">
+                            <?php if ($r['rule_number']): ?>
+                                <strong style="font-size: var(--fs-md); color: var(--color-navy);">#<?= e($r['rule_number']) ?></strong>
+                            <?php endif; ?>
                             <span class="badge badge--<?= $r['source']==='bylaw'?'navy':($r['source']==='policy'?'info':'orange') ?>"><?= e(str_replace('_',' ',$r['source'])) ?></span>
-                            <?php if ($r['rule_number']): ?><span class="muted" style="font-size: var(--fs-xs);">#<?= e($r['rule_number']) ?></span><?php endif; ?>
-                            <?php if ($r['category']): ?><span class="muted" style="font-size: var(--fs-xs);">&middot; <?= e($r['category']) ?></span><?php endif; ?>
+                            <?php if ($r['category']): ?>
+                                <span class="badge" style="background: var(--color-warning-bg); color: var(--color-warning); border: 1px solid rgba(182,130,42,0.25);"><?= e($r['category']) ?></span>
+                            <?php endif; ?>
                             <?php if ($r['effective_date']): ?><span class="muted" style="font-size: var(--fs-xs);">&middot; in effect <?= e(date('M j, Y', strtotime((string)$r['effective_date']))) ?></span><?php endif; ?>
                         </div>
-                        <?php if ($canManage): ?>
                         <div class="row" style="gap: var(--sp-2);">
+                            <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="/dashboard/rule.php?id=<?= (int)$r['id'] ?>">Open</a>
+                            <?php if ($canManage): ?>
                             <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="?action=edit&id=<?= (int)$r['id'] ?>">Edit</a>
                             <form method="post" style="display:inline;" onsubmit="return confirm('Delete this rule?');">
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="form" value="delete">
                                 <input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
-                                <button class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" type="submit">Delete</button>
+                                <button class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs); color: var(--color-error);" type="submit">Delete</button>
                             </form>
+                            <?php endif; ?>
                         </div>
-                        <?php endif; ?>
                     </div>
                     <strong><?= e($r['title']) ?></strong>
                     <p class="muted rule-body-clamp" style="margin: var(--sp-2) 0 0; font-size: var(--fs-sm); white-space: pre-wrap;"><?= e(trim(strip_tags(str_replace(['&nbsp;', "\xc2\xa0"], ' ', (string)$r['body'])))) ?></p>
@@ -1031,24 +1077,29 @@ function rule_form_card(?array $editing, array $categories): void {
                     $highlighted = preg_replace('/(' . preg_quote($q, '/') . ')/i', '<mark>$1</mark>', e($excerpt));
                 ?>
                 <div class="search-result">
-                    <div class="row row--between" style="margin-bottom: var(--sp-2);">
-                        <div class="row" style="gap: var(--sp-2);">
+                    <div class="row row--between" style="margin-bottom: var(--sp-2); align-items: baseline;">
+                        <div class="row" style="gap: var(--sp-2); align-items: baseline;">
+                            <?php if ($r['rule_number']): ?>
+                                <strong style="font-size: var(--fs-md); color: var(--color-navy);">#<?= e($r['rule_number']) ?></strong>
+                            <?php endif; ?>
                             <span class="badge badge--<?= $r['source']==='bylaw'?'navy':($r['source']==='policy'?'info':'orange') ?>"><?= e(str_replace('_',' ',$r['source'])) ?></span>
-                            <?php if ($r['rule_number']): ?><span class="muted" style="font-size: var(--fs-xs);">#<?= e($r['rule_number']) ?></span><?php endif; ?>
-                            <?php if ($r['category']): ?><span class="muted" style="font-size: var(--fs-xs);">&middot; <?= e($r['category']) ?></span><?php endif; ?>
+                            <?php if ($r['category']): ?>
+                                <span class="badge" style="background: var(--color-warning-bg); color: var(--color-warning); border: 1px solid rgba(182,130,42,0.25);"><?= e($r['category']) ?></span>
+                            <?php endif; ?>
                             <?php if ($r['effective_date']): ?><span class="muted" style="font-size: var(--fs-xs);">&middot; in effect <?= e(date('M j, Y', strtotime((string)$r['effective_date']))) ?></span><?php endif; ?>
                         </div>
-                        <?php if ($canManage): ?>
                         <div class="row" style="gap: var(--sp-2);">
+                            <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="/dashboard/rule.php?id=<?= (int)$r['id'] ?>">Open</a>
+                            <?php if ($canManage): ?>
                             <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="?action=edit&id=<?= (int)$r['id'] ?>">Edit</a>
                             <form method="post" style="display:inline;" onsubmit="return confirm('Delete this rule?');">
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="form" value="delete">
                                 <input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
-                                <button class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" type="submit">Delete</button>
+                                <button class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs); color: var(--color-error);" type="submit">Delete</button>
                             </form>
+                            <?php endif; ?>
                         </div>
-                        <?php endif; ?>
                     </div>
                     <strong><?= e($r['title']) ?></strong>
                     <p class="muted rule-body-clamp" style="margin: var(--sp-2) 0 0; font-size: var(--fs-sm); white-space: pre-wrap;"><?= $highlighted ?></p>
