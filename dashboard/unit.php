@@ -232,14 +232,19 @@ require __DIR__ . '/../includes/header.php';
                 <?php if (!empty($unit['garage_number'])): ?> · garage <?= e((string)$unit['garage_number']) ?><?php endif; ?>
                 <?php if (!empty($unit['parking_spot'])): ?> · parking <?= e((string)$unit['parking_spot']) ?><?php endif; ?>
             </p>
-            <?php if ($unit['annual_hoa_assessment'] !== null || $unit['annual_garage_assessment'] !== null): ?>
+            <?php
+            $aHoa = $unit['annual_hoa_assessment']    !== null ? (float)$unit['annual_hoa_assessment']    : null;
+            $aGar = $unit['annual_garage_assessment'] !== null ? (float)$unit['annual_garage_assessment'] : null;
+            if ($aHoa !== null || $aGar !== null):
+                $monthlyTotal = ($aHoa ?? 0) / 12 + ($aGar ?? 0) / 12;
+            ?>
             <p class="muted" style="font-size: var(--fs-sm); margin-top: var(--sp-1);">
-                <?php if ($unit['annual_hoa_assessment'] !== null): ?>
-                    HOA: <strong>$<?= number_format((float)$unit['annual_hoa_assessment'], 2) ?>/yr</strong>
+                <strong>$<?= number_format($monthlyTotal, 2) ?>/mo</strong>
+                <?php if ($aHoa !== null): ?>
+                    · HOA $<?= number_format($aHoa, 2) ?>/yr ($<?= number_format($aHoa / 12, 2) ?>/mo)
                 <?php endif; ?>
-                <?php if ($unit['annual_garage_assessment'] !== null): ?>
-                    <?php if ($unit['annual_hoa_assessment'] !== null): ?>·<?php endif; ?>
-                    Garage: <strong>$<?= number_format((float)$unit['annual_garage_assessment'], 2) ?>/yr</strong>
+                <?php if ($aGar !== null): ?>
+                    · Garage $<?= number_format($aGar, 2) ?>/yr ($<?= number_format($aGar / 12, 2) ?>/mo)
                 <?php endif; ?>
             </p>
             <?php endif; ?>

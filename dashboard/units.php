@@ -309,12 +309,21 @@ require __DIR__ . '/../includes/header.php';
     <table class="table">
         <thead>
             <tr>
-                <th>Unit</th><th>Type</th><th>Bd / Ba / Sqft</th><th>Garage / Parking</th><th>Own. %</th>
+                <th>Unit</th><th>Type</th><th>Bd / Ba / Sqft</th><th>Garage / Parking</th>
+                <th title="Monthly = (annual HOA + annual garage) / 12, derived from the annual assessments on each unit">Monthly fee</th>
+                <th>Own. %</th>
                 <th>Occupants</th><th style="text-align:right;">Actions</th>
             </tr>
         </thead>
         <tbody>
-        <?php foreach ($units as $u): ?>
+        <?php foreach ($units as $u):
+            // Monthly fee = (annual HOA + annual garage) / 12. We store annual on the
+            // unit (since boards budget annually) and derive monthly for display.
+            $annualHoa = $u['annual_hoa_assessment']    !== null ? (float)$u['annual_hoa_assessment']    : null;
+            $annualGar = $u['annual_garage_assessment'] !== null ? (float)$u['annual_garage_assessment'] : null;
+            $monthlyTotal = ($annualHoa ?? 0) / 12 + ($annualGar ?? 0) / 12;
+            $hasAssessment = $annualHoa !== null || $annualGar !== null;
+        ?>
             <tr>
                 <td><a href="/dashboard/unit.php?id=<?= (int)$u['id'] ?>"><strong><?= e((string)$u['unit_number']) ?></strong></a></td>
                 <td><?= e(str_replace('_',' ',(string)$u['type'])) ?></td>
@@ -331,6 +340,16 @@ require __DIR__ . '/../includes/header.php';
                         <span title="Parking" style="margin-left: 6px;">P:<?= e((string)$u['parking_spot']) ?></span>
                     <?php endif; ?>
                     <?php if (empty($u['garage_number']) && empty($u['parking_spot'])): ?>
+                        <span class="muted">—</span>
+                    <?php endif; ?>
+                </td>
+                <td>
+                    <?php if ($hasAssessment): ?>
+                        <strong>$<?= number_format($monthlyTotal, 2) ?>/mo</strong>
+                        <?php if ($annualHoa !== null && $annualGar !== null): ?>
+                            <div class="muted" style="font-size: var(--fs-xs);">HOA $<?= number_format($annualHoa / 12, 2) ?> + Garage $<?= number_format($annualGar / 12, 2) ?></div>
+                        <?php endif; ?>
+                    <?php else: ?>
                         <span class="muted">—</span>
                     <?php endif; ?>
                 </td>
