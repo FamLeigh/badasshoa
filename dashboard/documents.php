@@ -90,12 +90,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit') 
     $category    = trim((string)($_POST['category'] ?? 'General'));
     $access      = $_POST['access_level'] ?? 'members_only';
     $unitId      = ($_POST['unit_id'] ?? '') === '' ? null : (int)$_POST['unit_id'];
+    $memberId    = ($_POST['user_id'] ?? '') === '' ? null : (int)$_POST['user_id'];
     if (!in_array($access, ['public','members_only','board_only','unit_only'], true)) $access = 'members_only';
     if ($access === 'unit_only' && !$unitId) $access = 'members_only';
     if ($unitId) {
         $check = db()->prepare('SELECT 1 FROM units WHERE id = ? AND association_id = ?');
         $check->execute([$unitId, $assocId]);
         if (!$check->fetchColumn()) $unitId = null;
+    }
+    if ($memberId) {
+        $check = db()->prepare('SELECT 1 FROM users WHERE id = ? AND association_id = ?');
+        $check->execute([$memberId, $assocId]);
+        if (!$check->fetchColumn()) $memberId = null;
     }
 
     $check = db()->prepare('SELECT 1 FROM documents WHERE id = ? AND association_id = ?');
@@ -107,10 +113,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit') 
     } else {
         db()->prepare(
             'UPDATE documents
-                SET title = ?, description = ?, category = ?, access_level = ?, unit_id = ?
+                SET title = ?, description = ?, category = ?, access_level = ?, unit_id = ?, user_id = ?
               WHERE id = ? AND association_id = ?'
-        )->execute([$title, $description ?: null, $category ?: null, $access, $unitId, $did, $assocId]);
-        audit('document.edited', ['title' => $title, 'access' => $access, 'unit_id' => $unitId], $did, 'document');
+        )->execute([$title, $description ?: null, $category ?: null, $access, $unitId, $memberId, $did, $assocId]);
+        audit('document.edited', ['title' => $title, 'access' => $access, 'unit_id' => $unitId, 'user_id' => $memberId], $did, 'document');
         flash('success', "Updated \"$title\".");
         redirect('/dashboard/documents.php');
     }
@@ -127,6 +133,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'compose
     $category    = trim((string)($_POST['category'] ?? 'General'));
     $access      = $_POST['access_level'] ?? 'members_only';
     $unitId      = ($_POST['unit_id'] ?? '') === '' ? null : (int)$_POST['unit_id'];
+    $memberId    = ($_POST['user_id'] ?? '') === '' ? null : (int)$_POST['user_id'];
     $body        = (string)($_POST['body_html'] ?? '');
     if (!in_array($access, ['public','members_only','board_only','unit_only'], true)) $access = 'members_only';
     if ($access === 'unit_only' && !$unitId) $access = 'members_only';
@@ -135,20 +142,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'compose
         $check->execute([$unitId, $assocId]);
         if (!$check->fetchColumn()) $unitId = null;
     }
+    if ($memberId) {
+        $check = db()->prepare('SELECT 1 FROM users WHERE id = ? AND association_id = ?');
+        $check->execute([$memberId, $assocId]);
+        if (!$check->fetchColumn()) $memberId = null;
+    }
 
     $bodyText = trim(strip_tags(str_replace(['&nbsp;', "\xc2\xa0"], ' ', $body)));
     if ($title === '')       $flashError = 'Title is required.';
     elseif ($bodyText === '') $flashError = 'Body is required — write something in the editor.';
     elseif ($did === 0) {
         db()->prepare(
-            'INSERT INTO documents (association_id, unit_id, title, description, body_html, category,
+            'INSERT INTO documents (association_id, unit_id, user_id, title, description, body_html, category,
                                     file_path, file_type, access_level, uploaded_by, version)
-             VALUES (?, ?, ?, ?, ?, ?, NULL, "text/html", ?, ?, "1.0")'
+             VALUES (?, ?, ?, ?, ?, ?, ?, NULL, "text/html", ?, ?, "1.0")'
         )->execute([
-            $assocId, $unitId, $title, $description ?: null, $body, $category ?: null, $access, (int)$user['id'],
+            $assocId, $unitId, $memberId, $title, $description ?: null, $body, $category ?: null, $access, (int)$user['id'],
         ]);
         $newId = (int)db()->lastInsertId();
-        audit('document.composed', ['title' => $title, 'access' => $access, 'unit_id' => $unitId], $newId, 'document');
+        audit('document.composed', ['title' => $title, 'access' => $access, 'unit_id' => $unitId, 'user_id' => $memberId], $newId, 'document');
         flash('success', "Created \"$title\".");
         redirect('/dashboard/document.php?id=' . $newId);
     } else {
@@ -161,9 +173,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'compose
         } else {
             db()->prepare(
                 'UPDATE documents
-                    SET title = ?, description = ?, body_html = ?, category = ?, access_level = ?, unit_id = ?
+                    SET title = ?, description = ?, body_html = ?, category = ?, access_level = ?, unit_id = ?, user_id = ?
                   WHERE id = ? AND association_id = ?'
-            )->execute([$title, $description ?: null, $body, $category ?: null, $access, $unitId, $did, $assocId]);
+            )->execute([$title, $description ?: null, $body, $category ?: null, $access, $unitId, $memberId, $did, $assocId]);
             audit('document.edited', ['title' => $title, 'composed' => true], $did, 'document');
             flash('success', "Updated \"$title\".");
             redirect('/dashboard/document.php?id=' . $did);
@@ -181,6 +193,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'upload'
     $category    = trim((string)($_POST['category'] ?? 'General'));
     $access      = $_POST['access_level'] ?? 'members_only';
     $unitId      = $_POST['unit_id'] !== '' ? (int)$_POST['unit_id'] : null;
+    $memberId    = ($_POST['user_id'] ?? '') === '' ? null : (int)$_POST['user_id'];
     if (!in_array($access, ['public', 'members_only', 'board_only', 'unit_only'], true)) $access = 'members_only';
     // unit_only without a unit makes no sense — fall back to members_only.
     if ($access === 'unit_only' && !$unitId) $access = 'members_only';
@@ -189,6 +202,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'upload'
         $check = db()->prepare('SELECT 1 FROM units WHERE id = ? AND association_id = ?');
         $check->execute([$unitId, $assocId]);
         if (!$check->fetchColumn()) $unitId = null;
+    }
+    if ($memberId) {
+        $check = db()->prepare('SELECT 1 FROM users WHERE id = ? AND association_id = ?');
+        $check->execute([$memberId, $assocId]);
+        if (!$check->fetchColumn()) $memberId = null;
     }
 
     if ($title === '') {
@@ -225,15 +243,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'upload'
                 $flashError = 'Could not save file. Check storage permissions.';
             } else {
                 $stmt = db()->prepare(
-                    'INSERT INTO documents (association_id, unit_id, title, description, category, file_path, file_type, access_level, uploaded_by, version)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                    'INSERT INTO documents (association_id, unit_id, user_id, title, description, category, file_path, file_type, access_level, uploaded_by, version)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
                 );
                 $stmt->execute([
-                    $assocId, $unitId, $title, $description, $category, $relPath,
+                    $assocId, $unitId, $memberId, $title, $description, $category, $relPath,
                     $allowed[$ext], $access, (int)$user['id'], '1.0',
                 ]);
                 $newId = (int)db()->lastInsertId();
-                audit('document.uploaded', ['title' => $title, 'access' => $access, 'unit_id' => $unitId], $newId, 'document');
+                audit('document.uploaded', ['title' => $title, 'access' => $access, 'unit_id' => $unitId, 'user_id' => $memberId], $newId, 'document');
                 flash('success', "Uploaded \"$title\".");
                 redirect($unitId ? '/dashboard/unit.php?id=' . $unitId : '/dashboard/documents.php');
             }
@@ -263,17 +281,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'delete'
 $qCategory = trim((string)($_GET['category'] ?? ''));
 $qSearch   = trim((string)($_GET['q'] ?? ''));
 $qUnitId   = (int)($_GET['filter_unit_id'] ?? 0);
+$qUserId   = (int)($_GET['filter_user_id'] ?? 0);
 
 $sql = 'SELECT d.*, CONCAT(IFNULL(u.first_name,""), " ", IFNULL(u.last_name,"")) AS uploader,
-               un.unit_number AS unit_label
+               un.unit_number AS unit_label,
+               TRIM(CONCAT(IFNULL(mu.first_name,""), " ", IFNULL(mu.last_name,""))) AS member_label
         FROM documents d
-        LEFT JOIN users u ON u.id = d.uploaded_by
+        LEFT JOIN users u  ON u.id  = d.uploaded_by
         LEFT JOIN units un ON un.id = d.unit_id
+        LEFT JOIN users mu ON mu.id = d.user_id
         WHERE d.association_id = ?';
 $params = [$assocId];
 if ($qCategory !== '') { $sql .= ' AND d.category = ?'; $params[] = $qCategory; }
 if ($qSearch !== '')   { $sql .= ' AND (d.title LIKE ? OR d.description LIKE ?)'; $params[] = "%$qSearch%"; $params[] = "%$qSearch%"; }
 if ($qUnitId)          { $sql .= ' AND d.unit_id = ?'; $params[] = $qUnitId; }
+if ($qUserId)          { $sql .= ' AND d.user_id = ?'; $params[] = $qUserId; }
 
 // Visibility (uses viewing_role for view-as fidelity):
 //   - Managers see everything.
@@ -344,11 +366,24 @@ $preselectUnitId = (int)($_GET['unit_id'] ?? 0);
 
 // Units list for the upload dropdown + listing filter (manager-relevant only).
 $unitsList = [];
+$membersList = [];
 if ($canManage) {
     $u = db()->prepare('SELECT id, unit_number FROM units WHERE association_id = ? ORDER BY CAST(unit_number AS UNSIGNED), unit_number');
     $u->execute([$assocId]);
     $unitsList = $u->fetchAll();
+
+    // All non-inactive members — for the "attach to member" picker on document forms.
+    $m = db()->prepare(
+        "SELECT id, first_name, last_name, unit_number
+           FROM users
+          WHERE association_id = ? AND status <> 'inactive'
+          ORDER BY last_name, first_name"
+    );
+    $m->execute([$assocId]);
+    $membersList = $m->fetchAll();
 }
+
+$preselectUserId = (int)($_GET['user_id'] ?? 0);
 $page_title = 'Documents — ' . $association['name'];
 require __DIR__ . '/../includes/header.php';
 ?>
@@ -460,12 +495,27 @@ require __DIR__ . '/../includes/header.php';
                 <div class="field">
                     <label class="field__label" for="ed-unit">Attach to unit</label>
                     <select class="select" id="ed-unit" name="unit_id">
-                        <option value="">— Association-wide —</option>
+                        <option value="">— Not unit-specific —</option>
                         <?php foreach ($unitsList as $u_): ?>
                             <option value="<?= (int)$u_['id'] ?>" <?= (int)($editDoc['unit_id'] ?? 0) === (int)$u_['id'] ? 'selected' : '' ?>>Unit <?= e((string)$u_['unit_number']) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
+                <div class="field">
+                    <label class="field__label" for="ed-mem">Attach to member</label>
+                    <select class="select" id="ed-mem" name="user_id">
+                        <option value="">— Not member-specific —</option>
+                        <?php foreach ($membersList as $m_):
+                            $nm = trim($m_['first_name'] . ' ' . $m_['last_name']);
+                            if ($nm === '') continue;
+                        ?>
+                            <option value="<?= (int)$m_['id'] ?>" <?= (int)($editDoc['user_id'] ?? 0) === (int)$m_['id'] ? 'selected' : '' ?>><?= e($nm) ?><?= !empty($m_['unit_number']) ? ' · ' . e((string)$m_['unit_number']) : '' ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <div class="field__hint">Surfaces on that person's profile page.</div>
+                </div>
+            </div>
+            <div class="form-row form-row--2">
                 <div class="field">
                     <label class="field__label" for="ed-access">Access</label>
                     <select class="select" id="ed-access" name="access_level">
@@ -475,6 +525,7 @@ require __DIR__ . '/../includes/header.php';
                         <option value="unit_only"     <?= $editDoc['access_level']==='unit_only'?'selected':'' ?>>Unit only — its occupants + board</option>
                     </select>
                 </div>
+                <div class="field"><!-- spacer --></div>
             </div>
             <div class="field">
                 <label class="field__label" for="ed-desc">Description</label>
@@ -489,7 +540,7 @@ require __DIR__ . '/../includes/header.php';
     <?php endif; ?>
 
     <?php if ($showCompose):
-        $cv = $composeDoc ?? ['title'=>'','description'=>'','body_html'=>'','category'=>'General','access_level'=>'members_only','unit_id'=>null,'id'=>0];
+        $cv = $composeDoc ?? ['title'=>'','description'=>'','body_html'=>'','category'=>'General','access_level'=>'members_only','unit_id'=>null,'user_id'=>null,'id'=>0];
     ?>
     <div class="card card--padded" style="margin-bottom: var(--sp-6);">
         <div class="card__head">
@@ -529,12 +580,27 @@ require __DIR__ . '/../includes/header.php';
                 <div class="field">
                     <label class="field__label" for="dc-unit">Attach to unit (optional)</label>
                     <select class="select" id="dc-unit" name="unit_id">
-                        <option value="">— Association-wide —</option>
+                        <option value="">— Not unit-specific —</option>
                         <?php foreach ($unitsList as $u_): ?>
                             <option value="<?= (int)$u_['id'] ?>" <?= (int)($cv['unit_id'] ?? 0) === (int)$u_['id'] ? 'selected' : '' ?>>Unit <?= e((string)$u_['unit_number']) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
+                <div class="field">
+                    <label class="field__label" for="dc-mem">Attach to member (optional)</label>
+                    <select class="select" id="dc-mem" name="user_id">
+                        <option value="">— Not member-specific —</option>
+                        <?php foreach ($membersList as $m_):
+                            $nm = trim($m_['first_name'] . ' ' . $m_['last_name']);
+                            if ($nm === '') continue;
+                        ?>
+                            <option value="<?= (int)$m_['id'] ?>" <?= (int)($cv['user_id'] ?? 0) === (int)$m_['id'] ? 'selected' : '' ?>><?= e($nm) ?><?= !empty($m_['unit_number']) ? ' · ' . e((string)$m_['unit_number']) : '' ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <div class="field__hint">Surfaces on that person's profile page.</div>
+                </div>
+            </div>
+            <div class="form-row form-row--2">
                 <div class="field">
                     <label class="field__label" for="dc-access">Access</label>
                     <select class="select" id="dc-access" name="access_level">
@@ -544,6 +610,7 @@ require __DIR__ . '/../includes/header.php';
                         <option value="unit_only"     <?= $cv['access_level']==='unit_only'?'selected':'' ?>>Unit only</option>
                     </select>
                 </div>
+                <div class="field"><!-- spacer --></div>
             </div>
             <div class="field">
                 <label class="field__label" for="dc-desc">Description (optional, shown in the listing)</label>
@@ -644,13 +711,28 @@ require __DIR__ . '/../includes/header.php';
                 <div class="field">
                     <label class="field__label" for="unit_id">Attach to unit (optional)</label>
                     <select class="select" id="unit_id" name="unit_id">
-                        <option value="">— Association-wide —</option>
+                        <option value="">— Not unit-specific —</option>
                         <?php foreach ($unitsList as $u_): ?>
                             <option value="<?= (int)$u_['id'] ?>" <?= $preselectUnitId === (int)$u_['id'] ? 'selected' : '' ?>>Unit <?= e((string)$u_['unit_number']) ?></option>
                         <?php endforeach; ?>
                     </select>
                     <div class="field__hint">Pick a unit for rental agreements, deeds, and anything specific to one home.</div>
                 </div>
+                <div class="field">
+                    <label class="field__label" for="user_id">Attach to member (optional)</label>
+                    <select class="select" id="user_id" name="user_id">
+                        <option value="">— Not member-specific —</option>
+                        <?php foreach ($membersList as $m_):
+                            $nm = trim($m_['first_name'] . ' ' . $m_['last_name']);
+                            if ($nm === '') continue;
+                        ?>
+                            <option value="<?= (int)$m_['id'] ?>" <?= $preselectUserId === (int)$m_['id'] ? 'selected' : '' ?>><?= e($nm) ?><?= !empty($m_['unit_number']) ? ' · ' . e((string)$m_['unit_number']) : '' ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <div class="field__hint">Surfaces on that person's profile page.</div>
+                </div>
+            </div>
+            <div class="form-row form-row--2">
                 <div class="field">
                     <label class="field__label" for="access_level">Access</label>
                     <select class="select" id="access_level" name="access_level">
@@ -660,6 +742,7 @@ require __DIR__ . '/../includes/header.php';
                         <option value="unit_only" <?= $preselectUnitId ? 'selected' : '' ?>>Unit only — its occupants + board</option>
                     </select>
                 </div>
+                <div class="field"><!-- spacer --></div>
             </div>
             <div class="field">
                 <label class="field__label" for="file">File (max 25 MB)</label>

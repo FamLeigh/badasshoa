@@ -1,5 +1,14 @@
 [
     {
+        "id": "cl-20260511-180000-wo01",
+        "at": "2026-05-11T18:00:00-04:00",
+        "type": "feature",
+        "title": "Work Orders + per-member documents + nav cleanup",
+        "description": "New /dashboard/work-orders.php for admin-only operational tickets: open / in-progress / blocked / completed / closed, with priority, location, unit, assignee (board / PM), contractor (from your Contacts), cost estimate + actual, due date, and a full timeline that interleaves status changes with free-text notes. Concerns now have a 'Convert to Work Order' button that pre-fills a new WO from the concern's text and back-links them — you can see all WOs spawned from a concern right at the top of its detail page. Documents now accept an optional 'Attach to member' value alongside the existing 'Attach to unit' — a lease, an appointment letter, or any other paperwork tied to a specific person surfaces on their profile under My documents. Communications was renamed to Announcements and moved up near the top of the sidebar.",
+        "author": "Reboooot",
+        "link": "/dashboard/work-orders.php"
+    },
+    {
         "id": "cl-20260511-153000-bo01",
         "at": "2026-05-11T15:30:00-04:00",
         "type": "feature",

@@ -89,6 +89,21 @@ $stmt = db()->prepare('SELECT * FROM users WHERE id = ?');
 $stmt->execute([(int)$user['id']]);
 $me = $stmt->fetch();
 
+// Documents the board has scoped to me (e.g. a lease, an appointment letter).
+// Respects access_level: board_only is hidden from non-managers; everything
+// else is visible to the member it's scoped to.
+$myDocsSql = "SELECT id, title, description, category, file_path, file_type, created_at
+                FROM documents
+               WHERE association_id = ? AND user_id = ?";
+$myDocsParams = [$assocId, (int)$user['id']];
+if (!role_can_manage(viewing_role())) {
+    $myDocsSql .= " AND access_level <> 'board_only'";
+}
+$myDocsSql .= ' ORDER BY created_at DESC';
+$myDocsStmt = db()->prepare($myDocsSql);
+$myDocsStmt->execute($myDocsParams);
+$myDocs = $myDocsStmt->fetchAll();
+
 $active = 'profile';
 $page_title = 'My profile — ' . $association['name'];
 require __DIR__ . '/../includes/header.php';
@@ -199,6 +214,39 @@ require __DIR__ . '/../includes/header.php';
             <button class="btn btn--primary" type="submit">Save profile</button>
         </div>
     </form>
+
+    <?php if ($myDocs): ?>
+    <div class="card card--padded" style="margin-top: var(--sp-6);">
+        <h2 style="font-size: var(--fs-xl); margin: 0 0 var(--sp-3);">My documents</h2>
+        <p class="muted" style="font-size: var(--fs-sm); margin-bottom: var(--sp-4);">
+            Documents the board has attached to your account — leases, letters, etc.
+        </p>
+        <table class="table">
+            <thead><tr><th>Title</th><th>Category</th><th>Added</th><th></th></tr></thead>
+            <tbody>
+            <?php foreach ($myDocs as $d): ?>
+                <tr>
+                    <td>
+                        <strong><?= e((string)$d['title']) ?></strong>
+                        <?php if (!empty($d['description'])): ?>
+                            <div class="muted" style="font-size: var(--fs-xs);"><?= e(mb_strimwidth((string)$d['description'], 0, 100, '…')) ?></div>
+                        <?php endif; ?>
+                    </td>
+                    <td><?= e((string)($d['category'] ?? '')) ?></td>
+                    <td><?= e(date('M j, Y', strtotime((string)$d['created_at']))) ?></td>
+                    <td style="text-align:right; white-space: nowrap;">
+                        <?php if (!empty($d['file_path'])): ?>
+                            <a class="btn btn--ghost" href="/dashboard/file.php?id=<?= (int)$d['id'] ?>" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);">Download</a>
+                        <?php else: ?>
+                            <a class="btn btn--ghost" href="/dashboard/document.php?id=<?= (int)$d['id'] ?>" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);">Open</a>
+                        <?php endif; ?>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+    <?php endif; ?>
 
 </div>
 
