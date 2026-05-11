@@ -1,6 +1,12 @@
 <?php
 require __DIR__ . '/_bootstrap.php';
 
+// Renters don't get the settings area — it surfaces admin info they don't
+// need. Bounces them back to the dashboard if they hit the URL directly.
+if (viewing_role() === 'renter') {
+    redirect('/dashboard/');
+}
+
 $user = current_user();
 $canEdit = role_can_manage(viewing_role());
 $flashError = null;

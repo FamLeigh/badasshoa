@@ -317,7 +317,9 @@ if ($page_layout === 'app' && isset($association) && $association):
                 <?= nav_link('/dashboard/locations.php',   'locations',      'Locations',      'locations',      $active) ?>
                 <?= nav_link('/dashboard/activity.php',    'activity',       'Activity',       'activity',       $active) ?>
             <?php endif; ?>
-            <?= nav_link('/dashboard/settings.php',    'settings',       'Settings',       'settings',       $active) ?>
+            <?php if (viewing_role() !== 'renter'): /* renters don't need to see the settings area */ ?>
+                <?= nav_link('/dashboard/settings.php', 'settings',     'Settings',       'settings',       $active) ?>
+            <?php endif; ?>
             <?php if (!empty($association['subdomain'])): ?>
                 <a class="side-nav__link" href="/<?= e((string)$association['subdomain']) ?>/" target="_blank" rel="noopener" title="Open the public community landing in a new tab">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
