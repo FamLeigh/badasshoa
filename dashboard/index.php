@@ -114,7 +114,18 @@ require __DIR__ . '/../includes/header.php';
     <div class="row row--between" style="margin-bottom: var(--sp-6);">
         <div>
             <span class="badge badge--orange"><?= e($association['name']) ?></span>
-            <h1 style="font-size: var(--fs-3xl); margin: var(--sp-3) 0 var(--sp-1);"><?= e($greet) ?>, <?= e($user['first_name'] ?: 'there') ?>.</h1>
+            <h1 style="font-size: var(--fs-3xl); margin: var(--sp-3) 0 var(--sp-1);"><span data-greet><?= e($greet) ?></span>, <?= e($user['first_name'] ?: 'there') ?>.</h1>
+            <script>
+                // Server clock runs in UTC (see CLAUDE.md). The PHP-rendered
+                // greeting is therefore wrong for anyone not on UTC — fix in
+                // place with the user's local hour. data-greet attribute makes
+                // it easy to find.
+                (function () {
+                    var el = document.querySelector('[data-greet]'); if (!el) return;
+                    var h = new Date().getHours();
+                    el.textContent = h < 12 ? 'Good morning' : (h < 18 ? 'Good afternoon' : 'Good evening');
+                })();
+            </script>
             <p class="muted">Here&rsquo;s what&rsquo;s happening at <?= e($association['name']) ?> today.</p>
         </div>
         <div class="row">

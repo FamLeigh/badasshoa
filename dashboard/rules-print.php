@@ -16,20 +16,32 @@ $rules = $stmt->fetchAll();
 <meta charset="utf-8">
 <title>Rules &amp; Bylaws — <?= e((string)$association['name']) ?></title>
 <style>
-    body { font-family: Inter, system-ui, sans-serif; color: #111; margin: 1in; line-height: 1.45; }
-    h1.cover { font-size: 26pt; margin: 0 0 0.25em; }
-    .cover-meta { color: #555; font-size: 11pt; margin-bottom: 2em; padding-bottom: 1em; border-bottom: 2px solid #111; }
-    .rule { page-break-inside: avoid; margin-bottom: 1.25em; }
-    .rule h2 { font-size: 14pt; margin: 0 0 0.25em; }
-    .rule .num { color: #0f1f3d; font-weight: 800; margin-right: 0.4em; }
-    .rule .meta { color: #555; font-size: 9.5pt; margin-bottom: 0.4em; }
-    .rule .meta .pill { display: inline-block; padding: 1px 6px; border-radius: 8px; background: #f3edd9; color: #6b4a06; border: 1px solid #d9c97a; font-size: 9pt; margin-right: 6px; }
-    .rule .meta .src { display: inline-block; padding: 1px 6px; border-radius: 8px; background: #fdecdf; color: #b73f0c; border: 1px solid #f5a675; font-size: 9pt; margin-right: 6px; }
-    .rule .body { font-size: 11pt; white-space: pre-wrap; }
-    hr { border: 0; border-top: 1px solid #ddd; margin: 0.5em 0 1em; }
-    @media print { @page { margin: 0.7in; } }
+    @page { size: letter; margin: 0.4in; }
+    body { font-family: Inter, system-ui, sans-serif; color: #111; margin: 0; padding: 0; line-height: 1.35; }
+    h1.cover { font-size: 22pt; margin: 0 0 0.2em; }
+    .cover-meta { color: #555; font-size: 10pt; margin-bottom: 0.8em; padding-bottom: 0.6em; border-bottom: 2px solid #111; }
+    .rules-grid {
+        column-count: 2;
+        column-gap: 0.35in;
+        column-rule: 1px solid #ddd;
+    }
+    .rule {
+        break-inside: avoid;
+        page-break-inside: avoid;
+        margin: 0 0 0.6em;
+        padding-bottom: 0.4em;
+        border-bottom: 1px solid #eee;
+    }
+    .rule h2 { font-size: 11pt; margin: 0 0 0.15em; line-height: 1.2; }
+    .rule .num { color: #0f1f3d; font-weight: 800; margin-right: 0.25em; font-size: 11pt; }
+    .rule .meta { color: #555; font-size: 8pt; margin-bottom: 0.25em; }
+    .rule .meta .pill { display: inline-block; padding: 0 4pt; border-radius: 6pt; background: #f3edd9; color: #6b4a06; border: 1px solid #d9c97a; font-size: 7.5pt; margin-right: 3pt; }
+    .rule .meta .src  { display: inline-block; padding: 0 4pt; border-radius: 6pt; background: #fdecdf; color: #b73f0c; border: 1px solid #f5a675; font-size: 7.5pt; margin-right: 3pt; }
+    .rule .body { font-size: 9pt; white-space: pre-wrap; line-height: 1.3; }
+    hr { border: 0; border-top: 1px solid #ddd; margin: 0.3em 0 0.6em; }
+    @media print { a { color: inherit; text-decoration: none; } }
 </style>
-</head><body>
+</head><body style="padding: 0.4in;">
 
 <?= print_header_html($association) ?>
 
@@ -41,6 +53,7 @@ $rules = $stmt->fetchAll();
 <?php if (!$rules): ?>
     <p>No rules on file.</p>
 <?php else: ?>
+<div class="rules-grid">
     <?php foreach ($rules as $r): ?>
     <div class="rule">
         <div class="meta">
@@ -53,6 +66,7 @@ $rules = $stmt->fetchAll();
         <div class="body"><?= e(trim(strip_tags(str_replace(['&nbsp;', "\xc2\xa0"], ' ', (string)$r['body'])))) ?></div>
     </div>
     <?php endforeach; ?>
+</div>
 <?php endif; ?>
 
 <?= print_footer_html('Printed ' . date('M j, Y')) ?>

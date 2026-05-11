@@ -1,5 +1,14 @@
 [
     {
+        "id": "cl-20260511-220000-print",
+        "at": "2026-05-11T22:00:00-04:00",
+        "type": "improvement",
+        "title": "Denser Print-all-rules + dashboard greeting reads local time",
+        "description": "Print-all-rules now renders in two columns with tighter margins (0.4in) and slightly smaller type, so a full ruleset fits in roughly half the pages it used to. Each rule still breaks cleanly without splitting mid-block. Separately, the dashboard greeting (Good morning / afternoon / evening) was wrong for anyone not on UTC — the server clock is pinned to UTC and PHP was always computing the time of day from that. A tiny JS now overwrites the greeting using the browser's local time, so 3:30 PM EDT correctly reads 'Good afternoon'.",
+        "author": "Reboooot",
+        "link": "/dashboard/rules-print.php"
+    },
+    {
         "id": "cl-20260511-213000-fix2",
         "at": "2026-05-11T21:30:00-04:00",
         "type": "fix",
