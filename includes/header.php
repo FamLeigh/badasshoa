@@ -295,11 +295,13 @@ if ($page_layout === 'app' && isset($association) && $association):
             <?= nav_link('/dashboard/',                'home',           'Home',           'home',           $active) ?>
             <?= nav_link('/dashboard/communications.php', 'communications', 'Announcements', 'communications', $active) ?>
             <?= nav_link('/dashboard/events.php',      'committees',     'Events',         'events',         $active) ?>
+            <?= nav_link('/dashboard/faq.php',         'rules',          'FAQ',            'faq',            $active) ?>
             <?= nav_link('/dashboard/documents.php',   'documents',      'Documents',      'documents',      $active) ?>
             <?= nav_link('/dashboard/search.php',      'rules',          'Rules',          'rules',          $active) ?>
             <?= nav_link('/dashboard/directory.php',   'directory',      'Directory',      'directory',      $active) ?>
             <?php if (role_can_manage(viewing_role())): ?>
                 <?= nav_link('/dashboard/units.php',       'units',          'Units',          'units',          $active) ?>
+                <?= nav_link('/dashboard/contacts.php',    'contacts',       'Contacts',       'contacts',       $active) ?>
                 <?= nav_link('/dashboard/parking.php',     'parking',        'Parking',        'parking',        $active) ?>
             <?php endif; ?>
             <?= nav_link('/dashboard/committees.php',  'committees',     'Committees',     'committees',     $active) ?>
@@ -309,10 +311,8 @@ if ($page_layout === 'app' && isset($association) && $association):
                 <?= nav_link('/dashboard/work-orders.php', 'concerns',       'Work orders',    'work-orders',    $active) ?>
                 <?= nav_link('/dashboard/employees.php',   'directory',      'Employees',      'employees',      $active) ?>
                 <?= nav_link('/dashboard/insurance.php',   'documents',      'Insurance',      'insurance',      $active) ?>
-                <?= nav_link('/dashboard/contacts.php',    'contacts',       'Contacts',       'contacts',       $active) ?>
             <?php endif; ?>
             <?= nav_link('/dashboard/media.php',       'media',          'Media',          'media',          $active) ?>
-            <?= nav_link('/dashboard/faq.php',         'rules',          'FAQ',            'faq',            $active) ?>
             <?php if (role_can_manage(viewing_role())): ?>
                 <?= nav_link('/dashboard/locations.php',   'locations',      'Locations',      'locations',      $active) ?>
                 <?= nav_link('/dashboard/activity.php',    'activity',       'Activity',       'activity',       $active) ?>
