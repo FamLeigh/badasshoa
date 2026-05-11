@@ -1261,6 +1261,14 @@ html[data-nav-collapsed="1"] body.app-shell .side-nav { width: var(--side-nav-w-
 .feature h3 { font-size: var(--fs-xl); margin-bottom: var(--sp-2); }
 .feature p { color: var(--color-text-soft); margin: 0; }
 
+/* Compact variant — used for the secondary "boring-but-essential" strip
+   below the main feature grid. Less padding, no icon block, smaller text. */
+.feature--compact {
+    padding: var(--sp-4) var(--sp-5);
+}
+.feature--compact strong { font-size: var(--fs-md); display: block; }
+.feature--compact p { font-size: var(--fs-sm); }
+
 /* ============ pricing ============ */
 .price-card {
     background: var(--color-white);

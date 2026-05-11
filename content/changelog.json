@@ -1,5 +1,14 @@
 [
     {
+        "id": "cl-20260512-100000-marketing",
+        "at": "2026-05-12T10:00:00-04:00",
+        "type": "content",
+        "title": "Marketing site refreshed with the new feature set",
+        "description": "The public home at badasshoa.com now shows what's actually been built: 12 hero feature tiles (Rules, Documents, Announcements, ARC, Work Orders, Concerns, Events, Committees, Directory, Public Landing, Parking & Units, Global Search) plus a 'boring-but-essential' strip below (Insurance, Employees, Contacts, FAQ, Media, Locations, Storage, Activity log, Print everything). Hero copy and FAQ refreshed too — pricing bullets now honestly call out 1 GB free + $5/mo per extra GB instead of the old 'Unlimited storage' line.",
+        "author": "Reboooot",
+        "link": "/"
+    },
+    {
         "id": "cl-20260512-090000-batch",
         "at": "2026-05-12T09:00:00-04:00",
         "type": "feature",

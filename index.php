@@ -18,7 +18,7 @@ require __DIR__ . '/includes/header.php';
             <span class="hero__eyebrow">Modern HOA software</span>
             <h1>Transparent, Simplified and Built for Your Community.</h1>
             <p class="hero__lede">
-                Documents, rules, announcements, and a resident directory &mdash; every feature on every plan, in one portal your board can run and your community will actually use.
+                Rules, documents, announcements, work orders, architectural review, committees, events, and a real resident directory &mdash; every feature on every plan, in one portal your board can actually run.
             </p>
             <div class="hero__ctas">
                 <a class="btn btn--primary btn--lg" href="/signup.php">Get started free</a>
@@ -35,51 +35,134 @@ require __DIR__ . '/includes/header.php';
 
 <section class="section section--alt" id="features">
     <div class="container">
-        <div style="max-width:640px; margin-bottom: var(--sp-12);">
+        <div style="max-width:680px; margin-bottom: var(--sp-12);">
             <span class="badge badge--orange">Built for boards</span>
             <h2 class="mt-2">Everything your association needs. Nothing it doesn&rsquo;t.</h2>
             <p class="muted" style="font-size: var(--fs-lg);">
-                We picked the tools real boards actually use — and ditched the ones they don&rsquo;t. No bloat, no consultants, no page-long PDFs.
+                We picked the tools real boards actually use &mdash; and ditched the ones they don&rsquo;t. No bloat, no consultants, no page-long PDFs.
             </p>
         </div>
-        <div class="grid grid--2">
+
+        <div class="grid grid--3">
 
             <div class="feature">
-                <div class="feature__icon" aria-hidden="true">📂</div>
-                <h3>Documents &amp; Forms</h3>
-                <p>One directory for bylaws, meeting minutes, architectural request forms, and insurance certs. Versioned, searchable, access-controlled.</p>
+                <div class="feature__icon" aria-hidden="true">📜</div>
+                <h3>Rules &amp; Bylaws</h3>
+                <p>Searchable rulebook with categories and source tags (bylaw / board rule / policy). Owners suggest changes, the board edits + approves with one click. Print all or just what&rsquo;s on screen.</p>
             </div>
 
             <div class="feature">
-                <div class="feature__icon" aria-hidden="true">🔎</div>
-                <h3>Rule &amp; Bylaw Search</h3>
-                <p>Owners type "pet weight limit" and get the answer instantly. Boards stop fielding the same five questions over and over.</p>
+                <div class="feature__icon" aria-hidden="true">📄</div>
+                <h3>Documents</h3>
+                <p>Upload PDFs or compose rich-text documents inline. Scope anything to the whole community, a specific unit, or a specific member &mdash; leases, appointment letters, deeds. Categorized + access-controlled.</p>
             </div>
 
             <div class="feature">
                 <div class="feature__icon" aria-hidden="true">📣</div>
                 <h3>Announcements</h3>
-                <p>Send maintenance notices, emergency alerts, and event invites — to all residents, owners only, or board only. Route by audience.</p>
+                <p>Schedule a post for next Monday, pick how long it stays up (a day, a month, until a specific date, or never), route by audience. Auto-expire so old notices don&rsquo;t clutter the board.</p>
+            </div>
+
+            <div class="feature">
+                <div class="feature__icon" aria-hidden="true">🏗</div>
+                <h3>Architectural Review</h3>
+                <p>Owners file a request to paint, install a dish, build a deck, replace windows. Board reviews on a thread, approves / denies / approves-with-conditions. Decision letter generated. No more email chains.</p>
+            </div>
+
+            <div class="feature">
+                <div class="feature__icon" aria-hidden="true">🛠</div>
+                <h3>Work Orders</h3>
+                <p>Operational tickets the board + property manager actually use. Priority, location, unit, assignee, contractor, cost estimate &amp; actual, timeline of status changes + notes. Convert a complaint to a work order in one click.</p>
+            </div>
+
+            <div class="feature">
+                <div class="feature__icon" aria-hidden="true">💬</div>
+                <h3>Concerns &amp; Compliments</h3>
+                <p>Members file complaints, compliments, or suggestions &mdash; with an anonymity option. Board threads internal + public replies, sets status, marks resolved. Submitter gets emailed on every update.</p>
+            </div>
+
+            <div class="feature">
+                <div class="feature__icon" aria-hidden="true">📅</div>
+                <h3>Events &amp; Calendar</h3>
+                <p>Board meetings, social gatherings, work parties &mdash; including recurring events that auto-renew. Print today, this week, or this month. Click any event for the detail view.</p>
+            </div>
+
+            <div class="feature">
+                <div class="feature__icon" aria-hidden="true">🤝</div>
+                <h3>Committees</h3>
+                <p>Standing committees with chairs and members. Owners self-join from a card, board assigns directly. Print a one-page flyer to recruit. Description editor with inline formatting.</p>
             </div>
 
             <div class="feature">
                 <div class="feature__icon" aria-hidden="true">👥</div>
-                <h3>Resident Directory</h3>
-                <p>Unit-level roster with owner/renter badges, board roles, contact info. Privacy-respecting — residents control what they share.</p>
+                <h3>Resident &amp; Board Directory</h3>
+                <p>Unit-level roster with primary + secondary phone and email, mailing address, board office titles (President, VP, Secretary, Treasurer, Director). Owners, renters, and employees flagged. Privacy-respecting.</p>
             </div>
 
             <div class="feature">
-                <div class="feature__icon" aria-hidden="true">🖼️</div>
-                <h3>Media Library</h3>
-                <p>Public gallery for amenity photos. Private album for maintenance evidence. Tag images to violations or work orders.</p>
+                <div class="feature__icon" aria-hidden="true">🌐</div>
+                <h3>Public Landing Page</h3>
+                <p>Every association gets a branded public page at <code>badasshoa.com/{your-slug}/</code> &mdash; meet your board, public docs, upcoming events, contact form, embedded map. Visitors find you; you control what shows.</p>
             </div>
 
             <div class="feature">
-                <div class="feature__icon" aria-hidden="true">🛡️</div>
-                <h3>Role-Based Access</h3>
-                <p>Super admin, board admin, board member, property manager, resident, renter — each sees exactly what they should. Audit log included.</p>
+                <div class="feature__icon" aria-hidden="true">🅿️</div>
+                <h3>Parking &amp; Units</h3>
+                <p>Per-unit ownership %, square footage, HOA + garage assessments, monthly fee. Parking spots assigned to units with kind (garage / surface / covered / tandem). Rental tag when a unit&rsquo;s tenant-occupied.</p>
             </div>
 
+            <div class="feature">
+                <div class="feature__icon" aria-hidden="true">🔎</div>
+                <h3>Global Search</h3>
+                <p>One search box at the top hits rules, documents, announcements, events, concerns, ARC requests, and members. Click any result to open it. Access-aware so members never see what they shouldn&rsquo;t.</p>
+            </div>
+
+        </div>
+
+        <!-- "More tools" strip — the supporting cast -->
+        <div style="margin-top: var(--sp-12); padding-top: var(--sp-8); border-top: 1px solid var(--color-border);">
+            <h3 style="font-size: var(--fs-xl); margin: 0 0 var(--sp-2);">And the boring-but-essential bits</h3>
+            <p class="muted" style="margin-bottom: var(--sp-6); font-size: var(--fs-md);">
+                The tools that don&rsquo;t make a splashy demo but every board ends up needing.
+            </p>
+            <div class="grid grid--3" style="gap: var(--sp-4);">
+                <div class="feature feature--compact">
+                    <strong>📋 Insurance &amp; COIs</strong>
+                    <p class="muted" style="font-size: var(--fs-sm); margin: var(--sp-1) 0 0;">Track association policies + contractor certificates with color-coded renewal warnings.</p>
+                </div>
+                <div class="feature feature--compact">
+                    <strong>💼 Employees</strong>
+                    <p class="muted" style="font-size: var(--fs-sm); margin: var(--sp-1) 0 0;">Paid + volunteer staff with title, pay type, dates. Works even when an owner is also the maintenance person.</p>
+                </div>
+                <div class="feature feature--compact">
+                    <strong>☎ Contacts</strong>
+                    <p class="muted" style="font-size: var(--fs-sm); margin: var(--sp-1) 0 0;">Emergency lines, contractors, utilities. Print a one-page sheet you can hand to residents.</p>
+                </div>
+                <div class="feature feature--compact">
+                    <strong>❓ FAQ</strong>
+                    <p class="muted" style="font-size: var(--fs-sm); margin: var(--sp-1) 0 0;">Living FAQ with CSV import. Shows up on the public landing too.</p>
+                </div>
+                <div class="feature feature--compact">
+                    <strong>🖼 Media</strong>
+                    <p class="muted" style="font-size: var(--fs-sm); margin: var(--sp-1) 0 0;">Public photo galleries + private albums. Edit metadata after upload.</p>
+                </div>
+                <div class="feature feature--compact">
+                    <strong>📍 Locations</strong>
+                    <p class="muted" style="font-size: var(--fs-sm); margin: var(--sp-1) 0 0;">Name the lobby, pool, clubhouse, mail room. Used everywhere a location matters.</p>
+                </div>
+                <div class="feature feature--compact">
+                    <strong>💾 Storage tracking</strong>
+                    <p class="muted" style="font-size: var(--fs-sm); margin: var(--sp-1) 0 0;">1 GB free, Drive-style breakdown of where it&rsquo;s going. $5/mo per extra GB when you need more.</p>
+                </div>
+                <div class="feature feature--compact">
+                    <strong>🛡 Activity log</strong>
+                    <p class="muted" style="font-size: var(--fs-sm); margin: var(--sp-1) 0 0;">Every state change captured. &ldquo;Who deleted that document?&rdquo; answered in seconds.</p>
+                </div>
+                <div class="feature feature--compact">
+                    <strong>🖨 Print everything</strong>
+                    <p class="muted" style="font-size: var(--fs-sm); margin: var(--sp-1) 0 0;">Letterhead + footer on every printable view: rules, contacts, parking, events, ARC decisions.</p>
+                </div>
+            </div>
         </div>
     </div>
 </section>
@@ -98,12 +181,12 @@ require __DIR__ . '/includes/header.php';
                 <div class="price-card__price">$20<small>/mo</small></div>
                 <div class="price-card__limit">Up to 10 units</div>
                 <ul>
-                    <li>Documents, rules, directory, comms, media</li>
-                    <li>Unlimited storage</li>
-                    <li>Priority support</li>
-                    <li>Custom branding</li>
-                    <li>Audit log + API access</li>
-                    <li>SSO ready</li>
+                    <li>Every feature, every plan — rules, documents, work orders, ARC, events, committees</li>
+                    <li>Branded public landing page at <code>badasshoa.com/{your-slug}/</code></li>
+                    <li>Member &amp; board directory with officer roles</li>
+                    <li>Activity log + audit trail</li>
+                    <li>Custom branding (logo, hero, color)</li>
+                    <li>1 GB storage free · $5/mo per extra GB</li>
                 </ul>
                 <a class="btn btn--ghost" href="/signup.php?plan=starter">Start free trial</a>
             </div>
@@ -113,12 +196,12 @@ require __DIR__ . '/includes/header.php';
                 <div class="price-card__price">$0.50<small>/unit/mo</small></div>
                 <div class="price-card__limit">11 – 100 units</div>
                 <ul>
-                    <li>Documents, rules, directory, comms, media</li>
-                    <li>Unlimited storage</li>
-                    <li>Priority support</li>
-                    <li>Custom branding</li>
-                    <li>Audit log + API access</li>
-                    <li>SSO ready</li>
+                    <li>Every feature, every plan — rules, documents, work orders, ARC, events, committees</li>
+                    <li>Branded public landing page at <code>badasshoa.com/{your-slug}/</code></li>
+                    <li>Member &amp; board directory with officer roles</li>
+                    <li>Activity log + audit trail</li>
+                    <li>Custom branding (logo, hero, color)</li>
+                    <li>1 GB storage free · $5/mo per extra GB</li>
                 </ul>
                 <a class="btn btn--primary" href="/signup.php?plan=growth">Start free trial</a>
             </div>
@@ -128,12 +211,12 @@ require __DIR__ . '/includes/header.php';
                 <div class="price-card__price">$0.75<small>/unit/mo</small></div>
                 <div class="price-card__limit">101+ units</div>
                 <ul>
-                    <li>Documents, rules, directory, comms, media</li>
-                    <li>Unlimited storage</li>
-                    <li>Priority support</li>
-                    <li>Custom branding</li>
-                    <li>Audit log + API access</li>
-                    <li>SSO ready</li>
+                    <li>Every feature, every plan — rules, documents, work orders, ARC, events, committees</li>
+                    <li>Branded public landing page at <code>badasshoa.com/{your-slug}/</code></li>
+                    <li>Member &amp; board directory with officer roles</li>
+                    <li>Activity log + audit trail</li>
+                    <li>Custom branding (logo, hero, color)</li>
+                    <li>1 GB storage free · $5/mo per extra GB</li>
                 </ul>
                 <a class="btn btn--ghost" href="/signup.php?plan=professional">Start free trial</a>
             </div>
@@ -158,19 +241,23 @@ require __DIR__ . '/includes/header.php';
             <div class="stack-lg" style="color:rgba(255,255,255,0.85);">
                 <div>
                     <h4 style="color:#fff;">Do residents need an account?</h4>
-                    <p>Only if they want one. Boards can run BadassHOA in board-only mode and selectively invite owners as the directory fills out.</p>
+                    <p>Only if they want one. Boards can run BadassHOA in board-only mode and selectively invite owners as the directory fills out. Each association also gets a branded public landing page residents can see without signing in.</p>
                 </div>
                 <div>
-                    <h4 style="color:#fff;">Can I import our existing documents?</h4>
-                    <p>Yes. Drop PDFs into the documents page and tag them. Bulk import via folder upload is on the roadmap.</p>
+                    <h4 style="color:#fff;">Can I import our existing data?</h4>
+                    <p>Yes. CSV import for members, units, parking spots, rules, and FAQs. Drop PDFs into Documents and tag them. We get associations live in an afternoon, not a month.</p>
+                </div>
+                <div>
+                    <h4 style="color:#fff;">How do you handle storage?</h4>
+                    <p>1 GB free per association. A Drive-style breakdown shows exactly where it&rsquo;s going so you can clean up before paying for more. Extra GB is $5/mo each &mdash; no surprise bills.</p>
                 </div>
                 <div>
                     <h4 style="color:#fff;">What about payments / dues?</h4>
-                    <p>Not in this release. We&rsquo;d rather do one thing well than half-bake a billing system. Coming in Phase 3.</p>
+                    <p>Not in this release. We&rsquo;d rather do one thing well than half-bake a billing system. Coming next.</p>
                 </div>
                 <div>
                     <h4 style="color:#fff;">Is my association&rsquo;s data private?</h4>
-                    <p>Each association is fully isolated. We never share your data with anyone, ever. Audit log included on every plan.</p>
+                    <p>Each association is fully isolated. We never share your data with anyone, ever. Every state change goes into the audit log so you can answer &ldquo;who deleted that document?&rdquo; in seconds.</p>
                 </div>
             </div>
         </div>
