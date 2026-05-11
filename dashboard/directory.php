@@ -484,6 +484,9 @@ require __DIR__ . '/../includes/header.php';
     <?php endif; ?>
 
     <?php if ($editUser): ?>
+    <div class="row" style="margin-bottom: var(--sp-3);">
+        <a class="btn btn--ghost" href="/dashboard/directory.php">← Back to directory</a>
+    </div>
     <div class="card card--padded" style="margin-bottom: var(--sp-6);">
         <h3 class="card__title">Edit member</h3>
         <form method="post" class="form">
@@ -806,6 +809,8 @@ B2,Sam,Garcia,sam@example.com,,,,0</pre>
     </div>
     <?php endif; ?>
 
+    <?php if (!$editUser && !$showInvite && !$showImport): /* hide the full directory while editing a single member */ ?>
+
     <h2 id="board" style="font-size: var(--fs-xl); margin-top: var(--sp-2); scroll-margin-top: 80px;">Board</h2>
     <?php if (!$board): ?>
         <p class="muted">No board members on file yet.</p>
@@ -896,6 +901,8 @@ B2,Sam,Garcia,sam@example.com,,,,0</pre>
     </table>
     </div>
     <?php endif; ?>
+
+    <?php endif; /* close hide-listing-while-editing */ ?>
 
 </div>
 

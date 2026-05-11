@@ -294,6 +294,7 @@ if ($page_layout === 'app' && isset($association) && $association):
         <?php if ($page_layout === 'app'): ?>
             <?= nav_link('/dashboard/',                'home',           'Home',           'home',           $active) ?>
             <?= nav_link('/dashboard/communications.php', 'communications', 'Announcements', 'communications', $active) ?>
+            <?= nav_link('/dashboard/events.php',      'committees',     'Events',         'events',         $active) ?>
             <?= nav_link('/dashboard/documents.php',   'documents',      'Documents',      'documents',      $active) ?>
             <?= nav_link('/dashboard/search.php',      'rules',          'Rules',          'rules',          $active) ?>
             <?= nav_link('/dashboard/directory.php',   'directory',      'Directory',      'directory',      $active) ?>
@@ -302,7 +303,6 @@ if ($page_layout === 'app' && isset($association) && $association):
                 <?= nav_link('/dashboard/parking.php',     'parking',        'Parking',        'parking',        $active) ?>
             <?php endif; ?>
             <?= nav_link('/dashboard/committees.php',  'committees',     'Committees',     'committees',     $active) ?>
-            <?= nav_link('/dashboard/events.php',      'committees',     'Events',         'events',         $active) ?>
             <?= nav_link('/dashboard/concerns.php',    'concerns',       'Concerns',       'concerns',       $active) ?>
             <?= nav_link('/dashboard/arc.php',         'documents',      'Arch. review',   'arc',            $active) ?>
             <?php if (role_can_manage(viewing_role())): ?>

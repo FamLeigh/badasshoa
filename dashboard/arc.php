@@ -289,10 +289,42 @@ require __DIR__ . '/../includes/header.php';
 
 <div class="container" style="padding: var(--sp-8) var(--sp-6) var(--sp-12); max-width: 1100px;">
 
-    <?php if ($detail): /* ---------- DETAIL ---------- */ ?>
+    <?php if ($detail):
+        // Linked WOs spawned from this ARC (only meaningful for managers).
+        $linkedWOs = [];
+        if ($canManage) {
+            $loStmt = db()->prepare(
+                'SELECT id, title, status FROM work_orders
+                  WHERE association_id = ? AND source_arc_id = ?
+                  ORDER BY created_at DESC'
+            );
+            $loStmt->execute([$assocId, (int)$detail['id']]);
+            $linkedWOs = $loStmt->fetchAll();
+        }
+    ?>
         <div class="row row--between" style="margin-bottom: var(--sp-3); flex-wrap: wrap; gap: var(--sp-3);">
             <a class="muted" style="font-size: var(--fs-sm);" href="/dashboard/arc.php">← Back</a>
+            <?php if ($canManage): ?>
+                <a class="btn btn--primary" href="/dashboard/work-orders.php?action=new&from_arc=<?= (int)$detail['id'] ?>"
+                   title="Open a new Work Order pre-filled from this ARC — use when the HOA needs to inspect or do related work">
+                    🛠 Convert to Work Order
+                </a>
+            <?php endif; ?>
         </div>
+
+        <?php if ($canManage && !empty($linkedWOs)): ?>
+            <div class="card card--padded" style="margin-bottom: var(--sp-4); border-left: 3px solid var(--color-info); background: var(--color-info-bg);">
+                <strong>Linked work order<?= count($linkedWOs) === 1 ? '' : 's' ?>:</strong>
+                <ul style="margin: var(--sp-2) 0 0; padding-left: 1.2em; font-size: var(--fs-sm);">
+                <?php foreach ($linkedWOs as $wo): ?>
+                    <li>
+                        <a href="/dashboard/work-orders.php?id=<?= (int)$wo['id'] ?>">#<?= (int)$wo['id'] ?> · <?= e((string)$wo['title']) ?></a>
+                        <span class="badge" style="font-size: var(--fs-xs); margin-left: 6px;"><?= e(str_replace('_',' ',(string)$wo['status'])) ?></span>
+                    </li>
+                <?php endforeach; ?>
+                </ul>
+            </div>
+        <?php endif; ?>
 
         <div class="card card--padded" style="margin-bottom: var(--sp-4);">
             <div class="row" style="gap: var(--sp-2); margin-bottom: var(--sp-2); flex-wrap: wrap;">

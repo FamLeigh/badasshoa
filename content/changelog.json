@@ -1,5 +1,14 @@
 [
     {
+        "id": "cl-20260512-120000-arcwo",
+        "at": "2026-05-12T12:00:00-04:00",
+        "type": "feature",
+        "title": "ARC → Work Order, nav tidy-up, cleaner member edit",
+        "description": "Approved (or any) ARC request can be promoted to a Work Order with one click — same pattern as concerns. Use it when the HOA needs to inspect after completion or do related work on the common area. The WO is pre-filled with the ARC's title, body, and unit, and back-links via source_arc_id; the ARC detail page shows a 'Linked work orders' card listing every WO spawned from it. The WO header also shows a 🏗 'from ARC #N' badge for the reverse link. Sidebar: Events moved up under Announcements (used to sit below Documents/Rules). Directory: when editing a single member, the Board + Residents listing below the form is now hidden — replaced by a 'Back to directory' button so the page isn't scroll-heavy.",
+        "author": "Reboooot",
+        "link": "/dashboard/arc.php"
+    },
+    {
         "id": "cl-20260512-110000-concerns2",
         "at": "2026-05-12T11:00:00-04:00",
         "type": "feature",

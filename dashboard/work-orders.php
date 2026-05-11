@@ -45,6 +45,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array(($_POST['form'] ?? ''), ['
     $actual       = ($_POST['cost_actual']   ?? '') !== '' ? (float)$_POST['cost_actual']   : null;
     $dueDate      = trim((string)($_POST['due_date'] ?? ''));
     $sourceConcernId = ($_POST['source_concern_id'] ?? '') !== '' ? (int)$_POST['source_concern_id'] : null;
+    $sourceArcId     = ($_POST['source_arc_id']     ?? '') !== '' ? (int)$_POST['source_arc_id']     : null;
     if (!array_key_exists($priority, $PRIORITIES)) $priority = 'normal';
     if ($dueDate !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dueDate)) $dueDate = '';
 
@@ -72,17 +73,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array(($_POST['form'] ?? ''), ['
             db()->prepare(
                 'INSERT INTO work_orders
                     (association_id, title, body, priority, location_id, unit_id, assigned_user_id,
-                     contractor_contact_id, cost_estimate, cost_actual, due_date, source_concern_id, created_by)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                     contractor_contact_id, cost_estimate, cost_actual, due_date, source_concern_id, source_arc_id, created_by)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
             )->execute([
                 $assocId, $title, $body ?: null, $priority, $locationId, $unitId, $assignedId,
-                $contractorId, $estimate, $actual, $dueDate ?: null, $sourceConcernId, (int)$user['id'],
+                $contractorId, $estimate, $actual, $dueDate ?: null, $sourceConcernId, $sourceArcId, (int)$user['id'],
             ]);
             $newId = (int)db()->lastInsertId();
-            audit('work_order.created', ['title' => $title, 'source_concern_id' => $sourceConcernId], $newId, 'work_order');
-            // Audit the concern → WO conversion on the concern side too, so it shows in either timeline.
+            audit('work_order.created', ['title' => $title, 'source_concern_id' => $sourceConcernId, 'source_arc_id' => $sourceArcId], $newId, 'work_order');
+            // Audit the conversion on the source side too so it shows in either timeline.
             if ($sourceConcernId !== null) {
                 audit('concern.converted_to_work_order', ['work_order_id' => $newId, 'title' => $title], $sourceConcernId, 'concern');
+            }
+            if ($sourceArcId !== null) {
+                audit('arc_request.converted_to_work_order', ['work_order_id' => $newId, 'title' => $title], $sourceArcId, 'arc_request');
             }
             flash('success', "Work order \"$title\" created.");
             redirect('/dashboard/work-orders.php?id=' . $newId);
@@ -200,7 +204,8 @@ if ($detailId > 0) {
                 a.first_name AS assignee_first, a.last_name AS assignee_last,
                 c.label AS contractor_label,
                 cr.first_name AS creator_first, cr.last_name AS creator_last,
-                con.subject AS source_concern_subject, con.type AS source_concern_type
+                con.subject AS source_concern_subject, con.type AS source_concern_type,
+                arc.title   AS source_arc_title
            FROM work_orders w
            LEFT JOIN units u                 ON u.id  = w.unit_id
            LEFT JOIN locations l             ON l.id  = w.location_id
@@ -208,6 +213,7 @@ if ($detailId > 0) {
            LEFT JOIN association_contacts c  ON c.id  = w.contractor_contact_id
            LEFT JOIN users cr                ON cr.id = w.created_by
            LEFT JOIN concerns con            ON con.id = w.source_concern_id
+           LEFT JOIN arc_requests arc        ON arc.id = w.source_arc_id
           WHERE w.id = ? AND w.association_id = ?"
     );
     $stmt->execute([$detailId, $assocId]);
@@ -232,12 +238,25 @@ if ($action === 'edit' && $detailId > 0 && $detail) {
     $editWo = $detail;
 }
 
-// New form: support ?from_concern=N — preload title/body from the concern
+// New form: support ?from_concern=N — preload title/body from the concern.
 $prefillFromConcern = null;
 if ($action === 'new' && ($cid = (int)($_GET['from_concern'] ?? 0)) > 0) {
     $stmt = db()->prepare('SELECT id, subject, body, type FROM concerns WHERE id = ? AND association_id = ?');
     $stmt->execute([$cid, $assocId]);
     $prefillFromConcern = $stmt->fetch() ?: null;
+}
+
+// Also support ?from_arc=N — preload from an Architectural Review request.
+$prefillFromArc = null;
+if ($action === 'new' && ($aid = (int)($_GET['from_arc'] ?? 0)) > 0) {
+    $stmt = db()->prepare(
+        'SELECT r.id, r.title, r.description, r.category, r.unit_id, u.unit_number
+           FROM arc_requests r
+           LEFT JOIN units u ON u.id = r.unit_id
+          WHERE r.id = ? AND r.association_id = ?'
+    );
+    $stmt->execute([$aid, $assocId]);
+    $prefillFromArc = $stmt->fetch() ?: null;
 }
 
 // List filters
@@ -276,7 +295,7 @@ $active = 'work-orders';
 $page_title = 'Work orders — ' . $association['name'];
 require __DIR__ . '/../includes/header.php';
 
-function wo_form_card(?array $editing, ?array $prefill, array $units, array $locations, array $contractors, array $staff, array $PRIORITIES): void {
+function wo_form_card(?array $editing, ?array $prefill, ?array $arcPrefill, array $units, array $locations, array $contractors, array $staff, array $PRIORITIES): void {
     $isEdit = $editing !== null;
     $vals = $editing ?? [
         'id' => 0, 'title' => '', 'body' => '', 'priority' => 'normal',
@@ -287,18 +306,25 @@ function wo_form_card(?array $editing, ?array $prefill, array $units, array $loc
     if (!$isEdit && $prefill) {
         $vals['title'] = (string)$prefill['subject'];
         $vals['body']  = "From a {$prefill['type']} (concern #{$prefill['id']}):\n\n" . (string)$prefill['body'];
+    } elseif (!$isEdit && $arcPrefill) {
+        $vals['title']   = 'ARC follow-up: ' . (string)$arcPrefill['title'];
+        $vals['body']    = "From Architectural Review request #{$arcPrefill['id']} ({$arcPrefill['category']}):\n\n" . (string)$arcPrefill['description'];
+        if (!empty($arcPrefill['unit_id'])) $vals['unit_id'] = (int)$arcPrefill['unit_id'];
     }
     ?>
     <div class="card card--padded" style="margin-bottom: var(--sp-6);">
         <h3 class="card__title"><?= $isEdit ? 'Edit work order' : 'New work order' ?></h3>
         <?php if (!$isEdit && $prefill): ?>
             <p class="muted" style="font-size: var(--fs-sm);">Pre-filled from <a href="/dashboard/concerns.php?id=<?= (int)$prefill['id'] ?>">concern #<?= (int)$prefill['id'] ?> · <?= e((string)$prefill['subject']) ?></a>.</p>
+        <?php elseif (!$isEdit && $arcPrefill): ?>
+            <p class="muted" style="font-size: var(--fs-sm);">Pre-filled from <a href="/dashboard/arc.php?id=<?= (int)$arcPrefill['id'] ?>">🏗 Architectural Review request #<?= (int)$arcPrefill['id'] ?> · <?= e((string)$arcPrefill['title']) ?></a><?php if (!empty($arcPrefill['unit_number'])): ?> · Unit <?= e((string)$arcPrefill['unit_number']) ?><?php endif; ?>.</p>
         <?php endif; ?>
         <form method="post" class="form">
             <?= csrf_field() ?>
             <input type="hidden" name="form" value="<?= $isEdit ? 'edit' : 'add' ?>">
             <?php if ($isEdit): ?><input type="hidden" name="id" value="<?= (int)$vals['id'] ?>"><?php endif; ?>
-            <?php if (!$isEdit && $prefill): ?><input type="hidden" name="source_concern_id" value="<?= (int)$prefill['id'] ?>"><?php endif; ?>
+            <?php if (!$isEdit && $prefill):   ?><input type="hidden" name="source_concern_id" value="<?= (int)$prefill['id'] ?>"><?php endif; ?>
+            <?php if (!$isEdit && $arcPrefill): ?><input type="hidden" name="source_arc_id"     value="<?= (int)$arcPrefill['id'] ?>"><?php endif; ?>
 
             <div class="form-row form-row--2">
                 <div class="field">
@@ -407,6 +433,11 @@ function wo_form_card(?array $editing, ?array $prefill, array $units, array $loc
                             from <?= e((string)$detail['source_concern_type']) ?> #<?= (int)$detail['source_concern_id'] ?>
                         </a>
                     <?php endif; ?>
+                    <?php if (!empty($detail['source_arc_id'])): ?>
+                        <a class="badge badge--info" href="/dashboard/arc.php?id=<?= (int)$detail['source_arc_id'] ?>" style="text-decoration:none;">
+                            🏗 from ARC #<?= (int)$detail['source_arc_id'] ?>
+                        </a>
+                    <?php endif; ?>
                 </div>
             </div>
             <div class="row" style="gap: var(--sp-2);">
@@ -422,7 +453,7 @@ function wo_form_card(?array $editing, ?array $prefill, array $units, array $loc
 
         <?php if ($flashError): ?><div class="flash flash--error"><?= e($flashError) ?></div><?php endif; ?>
 
-        <?php if ($editWo): wo_form_card($editWo, null, $units, $locations, $contractors, $staff, $PRIORITIES); else: ?>
+        <?php if ($editWo): wo_form_card($editWo, null, null, $units, $locations, $contractors, $staff, $PRIORITIES); else: ?>
 
         <!-- Meta grid -->
         <div class="card card--padded" style="margin-bottom: var(--sp-4);">
@@ -557,7 +588,7 @@ function wo_form_card(?array $editing, ?array $prefill, array $units, array $loc
             <a class="muted" style="font-size: var(--fs-sm);" href="/dashboard/work-orders.php">← Back to list</a>
         </div>
         <?php if ($flashError): ?><div class="flash flash--error"><?= e($flashError) ?></div><?php endif; ?>
-        <?php wo_form_card($editWo, $prefillFromConcern, $units, $locations, $contractors, $staff, $PRIORITIES); ?>
+        <?php wo_form_card($editWo, $prefillFromConcern, $prefillFromArc, $units, $locations, $contractors, $staff, $PRIORITIES); ?>
 
     <?php else: ?>
         <!-- LIST VIEW -->
