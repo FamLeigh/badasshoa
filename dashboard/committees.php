@@ -23,6 +23,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'create'
     }
 }
 
+// --- Edit committee (name + description) ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit') {
+    csrf_check();
+    if (!$canManage) { http_response_code(403); die('Forbidden'); }
+    $cid  = (int)($_POST['id'] ?? 0);
+    $name = trim((string)($_POST['name'] ?? ''));
+    $desc = trim((string)($_POST['description'] ?? ''));
+    $check = db()->prepare('SELECT 1 FROM committees WHERE id = ? AND association_id = ?');
+    $check->execute([$cid, $assocId]);
+    if (!$check->fetchColumn()) { http_response_code(404); die('Committee not found'); }
+    if ($name === '') {
+        $flashError = 'Committee name is required.';
+    } else {
+        db()->prepare('UPDATE committees SET name = ?, description = ? WHERE id = ? AND association_id = ?')
+            ->execute([$name, $desc ?: null, $cid, $assocId]);
+        audit('committee.edited', ['name' => $name], $cid, 'committee');
+        flash('success', "Committee &ldquo;$name&rdquo; updated.");
+        redirect('/dashboard/committees.php#c' . $cid);
+    }
+}
+
 // --- Add member ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'add_member') {
     csrf_check();
@@ -121,7 +142,20 @@ $uStmt->execute([$assocId]);
 $allUsers = $uStmt->fetchAll();
 
 $showCreate = ($_GET['action'] ?? '') === 'new' && $canManage;
+
+$editCommittee = null;
+if (($_GET['action'] ?? '') === 'edit' && $canManage) {
+    $eid = (int)($_GET['id'] ?? 0);
+    $stmt = db()->prepare('SELECT * FROM committees WHERE id = ? AND association_id = ?');
+    $stmt->execute([$eid, $assocId]);
+    $editCommittee = $stmt->fetch() ?: null;
+}
+$showForm = $showCreate || $editCommittee;
+
 $page_title = 'Committees — ' . $association['name'];
+if ($showForm) {
+    $page_extra_head = '<link href="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.snow.css" rel="stylesheet">';
+}
 require __DIR__ . '/../includes/header.php';
 ?>
 
@@ -141,26 +175,65 @@ require __DIR__ . '/../includes/header.php';
 
     <?php if ($flashError): ?><div class="flash flash--error"><?= e($flashError) ?></div><?php endif; ?>
 
-    <?php if ($showCreate): ?>
+    <?php if ($showForm):
+        $isEdit = $editCommittee !== null;
+        $cv = $editCommittee ?? ['name' => '', 'description' => '', 'id' => 0];
+    ?>
     <div class="card card--padded" style="margin-bottom: var(--sp-6);">
-        <h3 class="card__title">New committee</h3>
-        <form method="post" class="form">
+        <div class="card__head">
+            <h3 class="card__title"><?= $isEdit ? 'Edit committee' : 'New committee' ?></h3>
+            <a class="muted" style="font-size: var(--fs-sm);" href="/dashboard/committees.php">← Back</a>
+        </div>
+        <form method="post" class="form" data-committee-form>
             <?= csrf_field() ?>
-            <input type="hidden" name="form" value="create">
+            <input type="hidden" name="form" value="<?= $isEdit ? 'edit' : 'create' ?>">
+            <?php if ($isEdit): ?><input type="hidden" name="id" value="<?= (int)$cv['id'] ?>"><?php endif; ?>
             <div class="field">
                 <label class="field__label" for="cname">Name</label>
-                <input class="input" id="cname" name="name" required placeholder="e.g. Rules Committee, Beautification Committee">
+                <input class="input" id="cname" name="name" required value="<?= e((string)$cv['name']) ?>" placeholder="e.g. Rules Committee, Beautification Committee">
             </div>
             <div class="field">
-                <label class="field__label" for="cdesc">Description (optional)</label>
-                <textarea class="textarea" id="cdesc" name="description" rows="3" placeholder="What does this committee do? When does it meet?"></textarea>
+                <label class="field__label">Description (optional)</label>
+                <div id="committee-editor" data-initial-html="<?= e((string)($cv['description'] ?? '')) ?>" style="background: #fff; border-radius: var(--r-md);"></div>
+                <textarea name="description" id="cdesc" hidden></textarea>
+                <div class="field__hint">Use the toolbar to format. What the committee does, when it meets, who to contact.</div>
             </div>
             <div class="row" style="justify-content: flex-end;">
                 <a class="btn btn--ghost" href="/dashboard/committees.php">Cancel</a>
-                <button class="btn btn--primary" type="submit">Create committee</button>
+                <button class="btn btn--primary" type="submit"><?= $isEdit ? 'Save changes' : 'Create committee' ?></button>
             </div>
         </form>
     </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.js"></script>
+    <script>
+    (function () {
+        if (typeof Quill === 'undefined') return;
+        var editorEl = document.getElementById('committee-editor');
+        if (!editorEl) return;
+        var hidden  = document.getElementById('cdesc');
+        var initial = editorEl.getAttribute('data-initial-html') || '';
+
+        var quill = new Quill('#committee-editor', {
+            theme: 'snow',
+            placeholder: 'What does this committee do? When does it meet?',
+            modules: {
+                toolbar: [
+                    [{ 'header': [3, false] }],
+                    ['bold', 'italic', 'underline'],
+                    [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+                    ['link'],
+                    ['clean']
+                ]
+            }
+        });
+        editorEl.querySelector('.ql-editor').style.minHeight = '160px';
+        if (initial) quill.clipboard.dangerouslyPasteHTML(0, initial);
+
+        var form = document.querySelector('form[data-committee-form]');
+        if (form) form.addEventListener('submit', function () { hidden.value = quill.root.innerHTML; });
+    })();
+    </script>
     <?php endif; ?>
 
     <?php if (!$committees): ?>
@@ -202,16 +275,19 @@ require __DIR__ . '/../includes/header.php';
                     <span class="muted"><?= count($cMembers) ?> member<?= count($cMembers)===1?'':'s' ?></span>
                 </div>
                 <?php if ($c['description']): ?>
-                    <p class="muted" style="font-size: var(--fs-sm); margin: var(--sp-3) 0 0; max-width: 60ch;"><?= e($c['description']) ?></p>
+                    <div class="muted" style="font-size: var(--fs-sm); margin: var(--sp-3) 0 0; max-width: 60ch; line-height: var(--lh-loose);"><?= (string)$c['description'] /* HTML from Quill — board-trusted */ ?></div>
                 <?php endif; ?>
             </div>
             <?php if ($canManage): ?>
-                <form method="post" style="margin:0;" onsubmit="return confirm('Delete this committee? Members will be removed.');">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="form" value="delete">
-                    <input type="hidden" name="id" value="<?= $cid ?>">
-                    <button class="btn btn--ghost" type="submit">Delete</button>
-                </form>
+                <div class="row" style="gap: var(--sp-2);">
+                    <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="?action=edit&id=<?= $cid ?>">Edit</a>
+                    <form method="post" style="margin:0;" onsubmit="return confirm('Delete this committee? Members will be removed.');">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="form" value="delete">
+                        <input type="hidden" name="id" value="<?= $cid ?>">
+                        <button class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs); color: var(--color-error);" type="submit">Delete</button>
+                    </form>
+                </div>
             <?php endif; ?>
         </div>
 
