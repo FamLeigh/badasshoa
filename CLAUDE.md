@@ -310,6 +310,48 @@ This file (CLAUDE.md) keeps an internal-only summary in the section below for cr
 6. **Per-user TZ preference** — dashboard greeting + clock already use browser local time; everywhere else still UTC. Adding a TZ pref on profile + a single `local_date()` helper would clean up server-rendered timestamps.
 7. **IP rate limiting on `/forgot.php`**.
 
+**Big-ticket comms / outreach features (queued — likely a Phase 3 batch):**
+
+All four share a `broadcasts` table (kind / audience / subject / body / scheduled_at / sent_at / status) + a `broadcast_recipients` table (broadcast_id / user_id / channel / status / provider_id / error). And all four cost real money per-send — needs a real billing path before going GA.
+
+8. **Broadcast SMS with opt-in / opt-out (TCPA-compliant).**
+    - Provider: Twilio (default), Telnyx or Bandwidth as alternates. Long code or short code; for HOAs a per-association toll-free number with verified business use makes the most sense.
+    - Per-user fields on `users`: `sms_opt_in` (TINYINT), `sms_opt_in_at` (TIMESTAMP), `sms_phone_verified_at`. **Opt-in must be express + recorded** — phone-verification round trip (send code, confirm) before any marketing-style broadcast.
+    - **STOP / HELP keyword handling** — inbound webhook → set `sms_opt_in = 0` on STOP, send help text on HELP. Required by carriers regardless of TCPA.
+    - Two tiers: "Emergency only" (TCPA-exempt under certain conditions) vs "General" (requires explicit opt-in). Surface the tier on each broadcast.
+    - Audit per recipient: delivered / undelivered / opted_out, with provider message-id for the trail.
+    - **Caveat:** TCPA penalties are $500–$1,500 per violation. Don't ship without counsel review of the consent flow.
+
+9. **Broadcast email with opt-in / opt-out + bounce handling.**
+    - Transactional email already works via msmtp. Broadcast is different — needs a provider that handles bulk, list-unsubscribe headers, bounce + complaint webhooks. **Postmark** is the cleanest choice for boards (excellent reputation, real human support); **AWS SES** is cheaper if Kevin's price-sensitive; **SendGrid** if he wants templating built-in.
+    - Per-user fields: `email_broadcast_opt_in` (distinct from transactional opt-out — owners can't opt out of dues notices, can opt out of newsletters), `email_opt_in_at`, `last_bounced_at`, `bounce_count`.
+    - Every broadcast gets a `List-Unsubscribe` header + a one-click unsubscribe link.
+    - Bounce + complaint webhook → auto-flip `email_broadcast_opt_in = 0` after N bounces or any complaint.
+    - **Two tiers** same as SMS: "Required" (assessments, legal notices — sent regardless of broadcast-opt-in but always to the email of record) vs "Optional" (newsletter, social events).
+    - DKIM + SPF + DMARC must be set up on the sending domain before any volume — Postmark / SES walk you through it.
+
+10. **Broadcast call (pre-recorded voice).**
+    - Twilio Voice + `<Play>` of an uploaded MP3, or `<Say>` with TTS. Falls back to leaving a voicemail if no pickup.
+    - Per-user `voice_opt_in` field — even more restrictive than SMS opt-in. **Express written consent required for marketing robocalls** under TCPA; emergency / public safety calls have a narrow exemption.
+    - Time-of-day guardrails: TCPA window is 8 AM – 9 PM in the recipient's local timezone. Build refuses to schedule outside that window.
+    - Best use case for an HOA: hurricane warnings, urgent water shutoffs, building lockdowns. Not for "pool party Saturday."
+    - Per-call audit: answered / voicemail / no-answer / opted-out. Twilio gives you the call SID and recording (if you record).
+    - **Highest legal risk of the four — get counsel sign-off before any production traffic.** Consider gating behind an "Emergency only" tier from day one.
+
+11. **Physical mail integration (Lob.com).**
+    - Use cases driving this: violation notices (Florida requires first-class mail at minimum; certified for fines + final notices), board meeting notices (state statute may require mailed notice for annual meetings), and invoices / dues statements (when the billing module ships).
+    - **Lob** is the obvious provider — REST API for letters, postcards, certified mail with USPS tracking; address normalization built in; templated HTML → PDF → physical letter.
+    - New table `mail_pieces`: id, association_id, kind ENUM('violation','meeting_notice','invoice','general'), recipient_user_id, recipient_address_snapshot (frozen at send time so a later address change doesn't break the trail), lob_id, status (created/in_transit/delivered/returned/failed), tracking_url, cost_cents, created_at, delivered_at.
+    - Address comes from `users.mailing_address*` columns if present, else the unit address.
+    - Per-association settings: lob API key (in association config, encrypted), default letterhead, return address.
+    - Cost: ~$1–$2 per letter for first class, ~$5+ for certified. Pass-through pricing OR baked into the plan.
+    - **Florida-specific:** violation notice statutes (Ch. 718 for condos, Ch. 720 for HOAs) have very specific service requirements — get those right before automating any notice. Certified mail with return receipt is the safe default for anything fineable.
+
+**Cross-cutting compliance work needed for any of #8–#11:**
+- A new `/dashboard/communication-preferences.php` for each user (and a section on `/dashboard/profile.php`) showing what they're opted into per channel.
+- Audit-log every consent state change (opted in / out / verified phone).
+- An association-level "do I have a real billing path?" check before allowing any of the above — these incur per-send costs, and we don't want a board accidentally spending $400 on a robocall that wasn't authorized.
+
 **Important caveats / known gotchas:**
 - E-signatures are E-SIGN/UETA-shaped but Kevin should have counsel review before relying on them for binding documents. The implementation captures everything the law requires (intent, consent, association, audit, tamper-detection); the disclosure language could be more formal (right-to-paper-copy, right-to-withdraw).
 - The settings page's profile + landing forms used to both POST `form=update` to a single handler that overwrote every column — fixed via section markers. If you add a third form to settings.php, give it its own section value or you'll regress this.
