@@ -1,5 +1,14 @@
 [
     {
+        "id": "cl-20260512-150000-rulecat",
+        "at": "2026-05-12T15:00:00-04:00",
+        "type": "improvement",
+        "title": "Rules: filter by category",
+        "description": "The Rules page search bar gained a Category dropdown alongside the existing Source filter. Categories come from your curated list plus any legacy categories still in use on existing rules (so old imports stay filterable). Live search now also honors source + category so typing 'noise' with Category=Pets returns only pet-related noise rules. The Print button passes the category filter through, and the printed cover meta line shows it ('159 rules · matching \"pet\" · category: Pets').",
+        "author": "Reboooot",
+        "link": "/dashboard/search.php"
+    },
+    {
         "id": "cl-20260512-140000-renters2",
         "at": "2026-05-12T14:00:00-04:00",
         "type": "improvement",

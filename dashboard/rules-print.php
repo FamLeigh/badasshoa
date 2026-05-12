@@ -8,6 +8,7 @@ require __DIR__ . '/_bootstrap.php';
 // results" link from the search bar honors the current filter.
 $q      = trim((string)($_GET['q'] ?? ''));
 $source = $_GET['source'] ?? '';
+$catFilter = trim((string)($_GET['category'] ?? ''));
 $validSource = in_array($source, ['bylaw','board_rule','policy'], true);
 
 if ($q !== '') {
@@ -15,12 +16,14 @@ if ($q !== '') {
              WHERE association_id = ?
                AND MATCH(title, body) AGAINST (? IN NATURAL LANGUAGE MODE)';
     $params = [$assocId, $q];
-    if ($validSource) { $sql .= ' AND source = ?'; $params[] = $source; }
+    if ($validSource)      { $sql .= ' AND source = ?';   $params[] = $source; }
+    if ($catFilter !== '') { $sql .= ' AND category = ?'; $params[] = $catFilter; }
     $sql .= ' ORDER BY CAST(rule_number AS UNSIGNED), rule_number, title';
 } else {
     $sql = 'SELECT * FROM rules WHERE association_id = ?';
     $params = [$assocId];
-    if ($validSource) { $sql .= ' AND source = ?'; $params[] = $source; }
+    if ($validSource)      { $sql .= ' AND source = ?';   $params[] = $source; }
+    if ($catFilter !== '') { $sql .= ' AND category = ?'; $params[] = $catFilter; }
     $sql .= ' ORDER BY CAST(rule_number AS UNSIGNED), rule_number, title';
 }
 $stmt = db()->prepare($sql);
@@ -29,8 +32,9 @@ $rules = $stmt->fetchAll();
 
 // Build a human-readable filter line for the cover-meta strip.
 $filterBits = [];
-if ($q !== '')      $filterBits[] = 'matching "' . $q . '"';
-if ($validSource)   $filterBits[] = ucfirst(str_replace('_', ' ', $source)) . 's only';
+if ($q !== '')         $filterBits[] = 'matching "' . $q . '"';
+if ($validSource)      $filterBits[] = ucfirst(str_replace('_', ' ', $source)) . 's only';
+if ($catFilter !== '') $filterBits[] = 'category: ' . $catFilter;
 $filterLabel = $filterBits ? ' · ' . implode(' · ', $filterBits) : '';
 ?><!doctype html>
 <html lang="en"><head>

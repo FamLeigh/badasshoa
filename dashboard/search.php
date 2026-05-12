@@ -485,6 +485,7 @@ if (($_GET['action'] ?? '') === 'edit' && $canManage) {
 // Search / list
 $q       = trim((string)($_GET['q'] ?? ''));
 $source  = $_GET['source'] ?? '';
+$catFilter = trim((string)($_GET['category'] ?? ''));
 $results = [];
 
 // No search query → show all rules (newest first), so the page is useful as
@@ -496,6 +497,9 @@ if ($q === '') {
     $params = [$assocId];
     if (in_array($source, ['bylaw','board_rule','policy'], true)) {
         $sql .= ' AND source = ?'; $params[] = $source;
+    }
+    if ($catFilter !== '') {
+        $sql .= ' AND category = ?'; $params[] = $catFilter;
     }
     // Default order: rule_number (numeric where parseable, then string), then title.
     // Boards reference rules by number, so this is the natural reading order.
@@ -514,6 +518,9 @@ if ($q !== '') {
     $params = [$q, $assocId, $q];
     if (in_array($source, ['bylaw','board_rule','policy'], true)) {
         $sql .= ' AND source = ?'; $params[] = $source;
+    }
+    if ($catFilter !== '') {
+        $sql .= ' AND category = ?'; $params[] = $catFilter;
     }
     $sql .= ' ORDER BY score DESC LIMIT 30';
     $stmt = db()->prepare($sql);
@@ -762,13 +769,14 @@ function rule_form_card(?array $editing, array $categories): void {
                 <a class="btn btn--primary" href="/dashboard/search.php">← Show all rules</a>
             <?php endif; ?>
             <?php
-            // When a filter is active (search query or source picked), the
+            // When a filter is active (search query, source, or category), the
             // Print button passes the filter through so users can print
             // exactly what they're looking at. Otherwise it prints everything.
-            $hasFilter = ($q !== '') || in_array($source, ['bylaw','board_rule','policy'], true);
+            $hasFilter = ($q !== '') || in_array($source, ['bylaw','board_rule','policy'], true) || $catFilter !== '';
             $printQs   = [];
-            if ($q !== '') $printQs['q'] = $q;
-            if (in_array($source, ['bylaw','board_rule','policy'], true)) $printQs['source'] = $source;
+            if ($q !== '')                                                $printQs['q']        = $q;
+            if (in_array($source, ['bylaw','board_rule','policy'], true)) $printQs['source']   = $source;
+            if ($catFilter !== '')                                        $printQs['category'] = $catFilter;
             $printHref = '/dashboard/rules-print.php' . ($printQs ? '?' . http_build_query($printQs) : '');
             ?>
             <a class="btn btn--ghost" href="<?= e($printHref) ?>" target="_blank" rel="noopener" title="<?= $hasFilter ? 'Print only the rules matching your current filter' : 'Print every rule in number order' ?>">🖨 <?= $hasFilter ? 'Print results' : 'Print all' ?></a>
@@ -1262,6 +1270,25 @@ function rule_form_card(?array $editing, array $categories): void {
                 <option value="bylaw"      <?= $source==='bylaw'?'selected':'' ?>>Bylaws</option>
                 <option value="board_rule" <?= $source==='board_rule'?'selected':'' ?>>Board rules</option>
                 <option value="policy"     <?= $source==='policy'?'selected':'' ?>>Policies</option>
+            </select>
+            <?php
+            // Category options = curated $categories + any "ghost" categories
+            // already in use on existing rules (so old data stays filterable
+            // even if the curated row was deleted).
+            $catNames = array_column($categories, 'name');
+            $usedStmt = db()->prepare("SELECT DISTINCT category FROM rules
+                                        WHERE association_id = ? AND category IS NOT NULL AND category <> ''");
+            $usedStmt->execute([$assocId]);
+            foreach ($usedStmt->fetchAll() as $row) {
+                if (!in_array($row['category'], $catNames, true)) $catNames[] = $row['category'];
+            }
+            sort($catNames, SORT_NATURAL | SORT_FLAG_CASE);
+            ?>
+            <select class="select" name="category" style="max-width: 200px;">
+                <option value="">Any category</option>
+                <?php foreach ($catNames as $c): ?>
+                    <option value="<?= e((string)$c) ?>" <?= $catFilter === $c ? 'selected' : '' ?>><?= e((string)$c) ?></option>
+                <?php endforeach; ?>
             </select>
             <button class="btn btn--primary" type="submit">Search</button>
         </form>

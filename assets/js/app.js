@@ -342,21 +342,26 @@
     // --- live search (rules) ---
     var search = document.querySelector('[data-live-search]');
     if (search) {
-        var input   = search.querySelector('input[type="search"]');
-        var results = search.querySelector('[data-results]');
+        var input    = search.querySelector('input[type="search"]');
+        var results  = search.querySelector('[data-results]');
         var endpoint = search.getAttribute('data-endpoint') || '/dashboard/search.php';
+        var sourceSel = search.querySelector('select[name="source"]');
+        var catSel    = search.querySelector('select[name="category"]');
         var t = null;
-        input.addEventListener('input', function () {
-            clearTimeout(t);
+        function fire() {
             var q = input.value.trim();
             if (q.length < 2) { results.innerHTML = ''; return; }
-            t = setTimeout(function () {
-                fetch(endpoint + '?q=' + encodeURIComponent(q) + '&ajax=1', { credentials: 'same-origin' })
-                    .then(function (r) { return r.text(); })
-                    .then(function (html) { results.innerHTML = html; })
-                    .catch(function () { /* ignore */ });
-            }, 200);
-        });
+            var qs = 'q=' + encodeURIComponent(q) + '&ajax=1';
+            if (sourceSel && sourceSel.value) qs += '&source=' + encodeURIComponent(sourceSel.value);
+            if (catSel    && catSel.value)    qs += '&category=' + encodeURIComponent(catSel.value);
+            fetch(endpoint + '?' + qs, { credentials: 'same-origin' })
+                .then(function (r) { return r.text(); })
+                .then(function (html) { results.innerHTML = html; })
+                .catch(function () { /* ignore */ });
+        }
+        input.addEventListener('input', function () { clearTimeout(t); t = setTimeout(fire, 200); });
+        if (sourceSel) sourceSel.addEventListener('change', fire);
+        if (catSel)    catSel.addEventListener('change', fire);
     }
 
     // --- step nav for signup ---
