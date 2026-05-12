@@ -1,5 +1,14 @@
 [
     {
+        "id": "cl-20260512-180000-forms2",
+        "at": "2026-05-12T18:00:00-04:00",
+        "type": "feature",
+        "title": "Forms library expanded — 8 new types + Bellair-card guest form",
+        "description": "Guest registration now matches the official Bellair Registration Card (10/2025) — Name, full address, total in party + names of all others, Car license (make / color / plate / state), Owner / Family / Guest-of-Owner / Tenant / Guest-of-Tenant radio, house-rules-acknowledged checkbox (required), and Emergency contact (name + phone) fieldset. Eight new form types alongside: 🔧 Maintenance request (issue kind + urgency + access instructions), 🐕 Pet registration (species + breed + weight + vaccinations + emergency vet), 🚗 Resident vehicle registration (permanent, distinct from temp parking), 🔨 Contractor / work notice (dates + hours + access), 🎉 Amenity reservation (clubhouse / pool deck / BBQ pits with deposit acknowledgement), 🌪️ Hurricane prep checklist (storm name + staying vs evacuating + a 9-item checklist), ☎️ Emergency contact submission (who to call if you're unreachable), 📨 Estoppel / sale request (title companies for closings). All print as permits with the big confirmation code. On unit pages the form launchers are now inline text links instead of big cards.",
+        "author": "Reboooot",
+        "link": "/dashboard/forms.php"
+    },
+    {
         "id": "cl-20260512-160000-forms",
         "at": "2026-05-12T16:00:00-04:00",
         "type": "feature",

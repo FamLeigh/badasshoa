@@ -73,14 +73,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'submit'
     $title = '';
     switch ($type) {
         case 'guest_registration':
+            // Matches the Bellair Registration Card (10/2025 version).
             $payload = [
-                'guest_name'   => trim((string)($_POST['guest_name'] ?? '')),
-                'guest_phone'  => trim((string)($_POST['guest_phone'] ?? '')),
-                'vehicle_plate'=> trim((string)($_POST['vehicle_plate'] ?? '')),
-                'vehicle_desc' => trim((string)($_POST['vehicle_desc'] ?? '')),
+                'name'                  => trim((string)($_POST['name'] ?? '')),
+                'street'                => trim((string)($_POST['street'] ?? '')),
+                'city'                  => trim((string)($_POST['city'] ?? '')),
+                'state'                 => trim((string)($_POST['state'] ?? '')),
+                'zip'                   => trim((string)($_POST['zip'] ?? '')),
+                'cell_phone'            => trim((string)($_POST['cell_phone'] ?? '')),
+                'party_size'            => (int)($_POST['party_size'] ?? 1),
+                'party_names'           => trim((string)($_POST['party_names'] ?? '')),
+                'car_make'              => trim((string)($_POST['car_make'] ?? '')),
+                'car_color'             => trim((string)($_POST['car_color'] ?? '')),
+                'car_plate'             => trim((string)($_POST['car_plate'] ?? '')),
+                'car_state'             => trim((string)($_POST['car_state'] ?? '')),
+                'relationship'          => $_POST['relationship'] ?? '',
+                'agreed_rules'          => isset($_POST['agreed_rules']) ? 1 : 0,
+                'emergency_contact_name'  => trim((string)($_POST['emergency_contact_name'] ?? '')),
+                'emergency_contact_phone' => trim((string)($_POST['emergency_contact_phone'] ?? '')),
             ];
-            $title = $payload['guest_name'] !== '' ? 'Guest: ' . $payload['guest_name'] : 'Guest registration';
-            if ($payload['guest_name'] === '') $flashError = $flashError ?: 'Guest name is required.';
+            if (!in_array($payload['relationship'], ['owner','family','guest_of_owner','tenant','guest_of_tenant'], true)) $payload['relationship'] = '';
+            $title = $payload['name'] !== '' ? 'Guest: ' . $payload['name'] . ($payload['party_size'] > 1 ? ' (party of ' . $payload['party_size'] . ')' : '') : 'Guest registration';
+            if ($payload['name'] === '')      $flashError = $flashError ?: 'Name is required.';
+            elseif (!$payload['agreed_rules']) $flashError = $flashError ?: 'Please acknowledge the house rules agreement.';
             break;
         case 'parking_pass':
             $payload = [
@@ -92,6 +107,121 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'submit'
             ];
             $title = $payload['vehicle_plate'] !== '' ? 'Parking: ' . $payload['vehicle_plate'] : 'Parking pass';
             if ($payload['vehicle_plate'] === '') $flashError = $flashError ?: 'License plate is required.';
+            break;
+        case 'maintenance_request':
+            $payload = [
+                'issue_kind'         => $_POST['issue_kind'] ?? 'other',
+                'urgency'            => $_POST['urgency'] ?? 'medium',
+                'description'        => trim((string)($_POST['description'] ?? '')),
+                'location_in_unit'   => trim((string)($_POST['location_in_unit'] ?? '')),
+                'access_instructions'=> trim((string)($_POST['access_instructions'] ?? '')),
+                'contact_phone'      => trim((string)($_POST['contact_phone'] ?? '')),
+            ];
+            if (!in_array($payload['issue_kind'], ['plumbing','electrical','hvac','appliance','structural','common_area','other'], true)) $payload['issue_kind'] = 'other';
+            if (!in_array($payload['urgency'], ['low','medium','high','emergency'], true)) $payload['urgency'] = 'medium';
+            $title = 'Maintenance: ' . str_replace('_', ' ', $payload['issue_kind']);
+            if ($payload['description'] === '') $flashError = $flashError ?: 'Tell us what needs fixing.';
+            break;
+        case 'pet_registration':
+            $payload = [
+                'pet_name'             => trim((string)($_POST['pet_name'] ?? '')),
+                'species'              => $_POST['species'] ?? 'dog',
+                'breed'                => trim((string)($_POST['breed'] ?? '')),
+                'weight_lbs'           => ($_POST['weight_lbs'] ?? '') !== '' ? (float)$_POST['weight_lbs'] : null,
+                'color'                => trim((string)($_POST['color'] ?? '')),
+                'vaccinations_current' => isset($_POST['vaccinations_current']) ? 1 : 0,
+                'emergency_vet'        => trim((string)($_POST['emergency_vet'] ?? '')),
+            ];
+            if (!in_array($payload['species'], ['dog','cat','fish','bird','reptile','other'], true)) $payload['species'] = 'other';
+            $title = 'Pet: ' . ($payload['pet_name'] ?: 'unnamed') . ' (' . $payload['species'] . ')';
+            if ($payload['pet_name'] === '') $flashError = $flashError ?: "Pet name is required.";
+            break;
+        case 'vehicle_registration':
+            $payload = [
+                'vehicle_plate'    => trim((string)($_POST['vehicle_plate'] ?? '')),
+                'vehicle_state'    => trim((string)($_POST['vehicle_state'] ?? '')),
+                'vehicle_color'    => trim((string)($_POST['vehicle_color'] ?? '')),
+                'vehicle_desc'     => trim((string)($_POST['vehicle_desc'] ?? '')),
+                'assigned_spot'    => trim((string)($_POST['assigned_spot'] ?? '')),
+                'primary_driver'   => trim((string)($_POST['primary_driver'] ?? '')),
+                'secondary_drivers'=> trim((string)($_POST['secondary_drivers'] ?? '')),
+            ];
+            $title = 'Vehicle: ' . ($payload['vehicle_plate'] ?: 'unspecified');
+            if ($payload['vehicle_plate'] === '') $flashError = $flashError ?: 'License plate is required.';
+            break;
+        case 'contractor_notice':
+            $payload = [
+                'contractor_name'  => trim((string)($_POST['contractor_name'] ?? '')),
+                'contractor_phone' => trim((string)($_POST['contractor_phone'] ?? '')),
+                'work_kind'        => trim((string)($_POST['work_kind'] ?? '')),
+                'description'      => trim((string)($_POST['description'] ?? '')),
+                'work_hours'       => trim((string)($_POST['work_hours'] ?? '')),
+                'access_instructions' => trim((string)($_POST['access_instructions'] ?? '')),
+            ];
+            $title = 'Work: ' . ($payload['work_kind'] ?: 'unspecified');
+            if ($payload['contractor_name'] === '') $flashError = $flashError ?: 'Contractor name is required.';
+            break;
+        case 'amenity_reservation':
+            $payload = [
+                'amenity'              => $_POST['amenity'] ?? 'clubhouse',
+                'event_name'           => trim((string)($_POST['event_name'] ?? '')),
+                'event_time'           => trim((string)($_POST['event_time'] ?? '')),
+                'headcount'            => (int)($_POST['headcount'] ?? 0),
+                'alcohol_served'       => isset($_POST['alcohol_served']) ? 1 : 0,
+                'deposit_acknowledged' => isset($_POST['deposit_acknowledged']) ? 1 : 0,
+                'cleanup_responsible'  => trim((string)($_POST['cleanup_responsible'] ?? '')),
+            ];
+            if (!in_array($payload['amenity'], ['clubhouse','pool_deck','bbq_pits','fitness_room','other'], true)) $payload['amenity'] = 'other';
+            $title = 'Reservation: ' . str_replace('_', ' ', $payload['amenity']) . ($payload['event_name'] !== '' ? ' — ' . $payload['event_name'] : '');
+            if ($starts === '') $flashError = $flashError ?: 'Event date is required.';
+            elseif (!$payload['deposit_acknowledged']) $flashError = $flashError ?: 'Please acknowledge the deposit policy.';
+            break;
+        case 'hurricane_checklist':
+            $payload = [
+                'storm_name'           => trim((string)($_POST['storm_name'] ?? '')),
+                'plan'                 => $_POST['plan'] ?? 'staying',
+                'expected_return'      => trim((string)($_POST['expected_return'] ?? '')),
+                'balcony_clear'        => isset($_POST['balcony_clear']) ? 1 : 0,
+                'shutters_closed'      => isset($_POST['shutters_closed']) ? 1 : 0,
+                'water_off'            => isset($_POST['water_off']) ? 1 : 0,
+                'power_off'            => isset($_POST['power_off']) ? 1 : 0,
+                'evacuation_plan'      => isset($_POST['evacuation_plan']) ? 1 : 0,
+                'emergency_contact_on_file' => isset($_POST['emergency_contact_on_file']) ? 1 : 0,
+                'key_with_neighbor'    => isset($_POST['key_with_neighbor']) ? 1 : 0,
+                'pet_plan'             => isset($_POST['pet_plan']) ? 1 : 0,
+                'insurance_docs_safe'  => isset($_POST['insurance_docs_safe']) ? 1 : 0,
+            ];
+            if (!in_array($payload['plan'], ['staying','evacuating'], true)) $payload['plan'] = 'staying';
+            $title = 'Storm prep: ' . ($payload['storm_name'] ?: 'general');
+            break;
+        case 'emergency_contact':
+            $payload = [
+                'contact_name'         => trim((string)($_POST['contact_name'] ?? '')),
+                'contact_relationship' => trim((string)($_POST['contact_relationship'] ?? '')),
+                'contact_phone_primary'   => trim((string)($_POST['contact_phone_primary'] ?? '')),
+                'contact_phone_secondary' => trim((string)($_POST['contact_phone_secondary'] ?? '')),
+                'contact_email'        => trim((string)($_POST['contact_email'] ?? '')),
+                'has_key'              => isset($_POST['has_key']) ? 1 : 0,
+                'pet_info'             => trim((string)($_POST['pet_info'] ?? '')),
+                'medical_notes'        => trim((string)($_POST['medical_notes'] ?? '')),
+            ];
+            $title = 'Emergency contact: ' . ($payload['contact_name'] ?: 'unspecified');
+            if ($payload['contact_name'] === '')          $flashError = $flashError ?: 'Contact name is required.';
+            elseif ($payload['contact_phone_primary'] === '') $flashError = $flashError ?: 'Primary phone is required.';
+            break;
+        case 'estoppel_request':
+            $payload = [
+                'requesting_party' => trim((string)($_POST['requesting_party'] ?? '')),
+                'requestor_email'  => trim((string)($_POST['requestor_email'] ?? '')),
+                'requestor_phone'  => trim((string)($_POST['requestor_phone'] ?? '')),
+                'closing_date'     => trim((string)($_POST['closing_date'] ?? '')),
+                'new_owner_name'   => trim((string)($_POST['new_owner_name'] ?? '')),
+                'rush_processing'  => isset($_POST['rush_processing']) ? 1 : 0,
+                'fee_acknowledged' => isset($_POST['fee_acknowledged']) ? 1 : 0,
+            ];
+            $title = 'Estoppel: Unit ' . ($unitId ? '#' . $unitId : 'request');
+            if ($payload['requesting_party'] === '') $flashError = $flashError ?: 'Requesting party (title company) is required.';
+            elseif (!$payload['fee_acknowledged'])   $flashError = $flashError ?: 'Please acknowledge the estoppel fee.';
             break;
         case 'move_in':
         case 'move_out':
@@ -311,13 +441,91 @@ require __DIR__ . '/../includes/header.php';
             <div style="margin-top: var(--sp-5); display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--sp-3);">
                 <?php
                 $labels = [
-                    'guest_name'    => 'Guest name',
-                    'guest_phone'   => 'Guest phone',
+                    // Guest registration (Bellair card)
+                    'name'          => 'Name',
+                    'street'        => 'Street',
+                    'city'          => 'City',
+                    'state'         => 'State',
+                    'zip'           => 'Zip',
+                    'cell_phone'    => 'Cell phone',
+                    'party_size'    => 'Total in party',
+                    'party_names'   => 'Names of others in party',
+                    'car_make'      => 'Car make',
+                    'car_color'     => 'Car color',
+                    'car_plate'     => 'Car plate',
+                    'car_state'     => 'Plate state',
+                    'relationship'  => 'Role',
+                    'agreed_rules'  => 'House rules acknowledged',
+                    'emergency_contact_name'  => 'Emergency contact',
+                    'emergency_contact_phone' => 'Emergency phone',
+                    // Parking pass
                     'vehicle_plate' => 'License plate',
                     'vehicle_desc'  => 'Vehicle',
                     'vehicle_color' => 'Color',
+                    'vehicle_state' => 'Plate state',
                     'driver_name'   => 'Driver',
                     'parking_spot'  => 'Assigned spot',
+                    // Maintenance
+                    'issue_kind'         => 'Issue',
+                    'urgency'            => 'Urgency',
+                    'location_in_unit'   => 'Location in unit',
+                    'access_instructions'=> 'Access instructions',
+                    // Pet
+                    'pet_name'             => 'Pet name',
+                    'species'              => 'Species',
+                    'breed'                => 'Breed',
+                    'weight_lbs'           => 'Weight (lbs)',
+                    'color'                => 'Color',
+                    'vaccinations_current' => 'Vaccinations current',
+                    'emergency_vet'        => 'Emergency vet',
+                    // Vehicle registration
+                    'assigned_spot'     => 'Assigned spot',
+                    'primary_driver'    => 'Primary driver',
+                    'secondary_drivers' => 'Other drivers',
+                    // Contractor
+                    'contractor_name'  => 'Contractor',
+                    'contractor_phone' => 'Contractor phone',
+                    'work_kind'        => 'Work',
+                    'work_hours'       => 'Work hours',
+                    // Amenity
+                    'amenity'              => 'Amenity',
+                    'event_name'           => 'Event',
+                    'event_time'           => 'Time',
+                    'headcount'            => 'Headcount',
+                    'alcohol_served'       => 'Alcohol served',
+                    'deposit_acknowledged' => 'Deposit acknowledged',
+                    'cleanup_responsible'  => 'Cleanup responsible',
+                    // Hurricane
+                    'storm_name'           => 'Storm',
+                    'plan'                 => 'Plan',
+                    'expected_return'      => 'Expected return',
+                    'balcony_clear'        => 'Balcony cleared',
+                    'shutters_closed'      => 'Shutters closed',
+                    'water_off'            => 'Water shutoff ready',
+                    'power_off'            => 'Major appliances unplugged',
+                    'evacuation_plan'      => 'Evacuation plan',
+                    'emergency_contact_on_file' => 'Emergency contact on file',
+                    'key_with_neighbor'    => 'Key with neighbor',
+                    'pet_plan'             => 'Pet plan',
+                    'insurance_docs_safe'  => 'Insurance docs safe',
+                    // Emergency contact
+                    'contact_name'            => 'Contact name',
+                    'contact_relationship'    => 'Relationship',
+                    'contact_phone_primary'   => 'Primary phone',
+                    'contact_phone_secondary' => 'Secondary phone',
+                    'contact_email'           => 'Email',
+                    'has_key'                 => 'Has key',
+                    'pet_info'                => 'Pet info',
+                    'medical_notes'           => 'Medical notes',
+                    // Estoppel
+                    'requesting_party' => 'Requesting party',
+                    'requestor_email'  => 'Requestor email',
+                    'requestor_phone'  => 'Requestor phone',
+                    'closing_date'     => 'Closing date',
+                    'new_owner_name'   => 'New owner',
+                    'rush_processing'  => 'Rush processing',
+                    'fee_acknowledged' => 'Fee acknowledged',
+                    // Generic
                     'moving_company'=> 'Moving company',
                     'truck_plate'   => 'Truck plate',
                     'contact_phone' => 'Contact phone',
@@ -390,18 +598,58 @@ require __DIR__ . '/../includes/header.php';
             </div>
 
             <?php if ($newType === 'guest_registration'): ?>
+                <p class="muted" style="font-size: var(--fs-sm); margin: 0 0 var(--sp-3);">For owners, family, guests of owner, tenant or tenant guest. Please try to use the orange guest parking hang tags.</p>
                 <div class="form-row form-row--2">
-                    <div class="field"><label class="field__label" for="gn">Guest name</label><input class="input" id="gn" name="guest_name" required></div>
-                    <div class="field"><label class="field__label" for="gp">Guest phone</label><input class="input" id="gp" name="guest_phone"></div>
+                    <div class="field"><label class="field__label" for="fs">Arrival date</label><input class="input" type="date" id="fs" name="starts_at" value="<?= e(date('Y-m-d')) ?>" required></div>
+                    <div class="field"><label class="field__label" for="fe">Departure date</label><input class="input" type="date" id="fe" name="ends_at" required></div>
+                </div>
+                <div class="field"><label class="field__label" for="gn">Name</label><input class="input" id="gn" name="name" required></div>
+                <div class="field"><label class="field__label" for="gst">Street</label><input class="input" id="gst" name="street"></div>
+                <div class="form-row" style="display:grid; grid-template-columns: 1.4fr 1fr 0.8fr 1fr; gap: var(--sp-3);">
+                    <div class="field"><label class="field__label" for="gc">City</label><input class="input" id="gc" name="city"></div>
+                    <div class="field"><label class="field__label" for="gs">State</label><input class="input" id="gs" name="state" maxlength="3"></div>
+                    <div class="field"><label class="field__label" for="gz">Zip</label><input class="input" id="gz" name="zip"></div>
+                    <div class="field"><label class="field__label" for="gcp">Cell phone</label><input class="input" id="gcp" name="cell_phone"></div>
                 </div>
                 <div class="form-row form-row--2">
-                    <div class="field"><label class="field__label" for="vp">License plate</label><input class="input" id="vp" name="vehicle_plate" placeholder="ABC-1234"></div>
-                    <div class="field"><label class="field__label" for="vd">Vehicle (year / make / model)</label><input class="input" id="vd" name="vehicle_desc" placeholder="2022 Toyota Camry"></div>
+                    <div class="field"><label class="field__label" for="gps">Total # in party</label><input class="input" type="number" id="gps" name="party_size" min="1" max="20" value="1"></div>
+                    <div class="field"><!-- spacer --></div>
                 </div>
-                <div class="form-row form-row--2">
-                    <div class="field"><label class="field__label" for="fs">Arriving</label><input class="input" type="date" id="fs" name="starts_at" value="<?= e(date('Y-m-d')) ?>" required></div>
-                    <div class="field"><label class="field__label" for="fe">Leaving</label><input class="input" type="date" id="fe" name="ends_at" required></div>
+                <div class="field"><label class="field__label" for="gpn">Names of all others in party</label><textarea class="textarea" id="gpn" name="party_names" rows="2" placeholder="One per line"></textarea></div>
+
+                <fieldset style="border: 1px solid var(--color-border); border-radius: var(--r-md); padding: var(--sp-3) var(--sp-4); margin-bottom: var(--sp-4);">
+                    <legend style="padding: 0 var(--sp-2); color: var(--color-text-soft); font-size: var(--fs-sm);">Vehicle (Car License #'s)</legend>
+                    <div class="form-row" style="display:grid; grid-template-columns: 1fr 1fr 1.2fr 0.7fr; gap: var(--sp-3);">
+                        <div class="field"><label class="field__label" for="gcm">Make</label><input class="input" id="gcm" name="car_make"></div>
+                        <div class="field"><label class="field__label" for="gcc">Color</label><input class="input" id="gcc" name="car_color"></div>
+                        <div class="field"><label class="field__label" for="gcpl">Plate</label><input class="input" id="gcpl" name="car_plate"></div>
+                        <div class="field"><label class="field__label" for="gcs">State</label><input class="input" id="gcs" name="car_state" maxlength="3"></div>
+                    </div>
+                </fieldset>
+
+                <div class="field">
+                    <label class="field__label">Check one</label>
+                    <div style="display:flex; gap: var(--sp-4); flex-wrap: wrap; padding: var(--sp-2) 0;">
+                        <label style="display:flex; align-items:center; gap: 6px;"><input type="radio" name="relationship" value="owner" required> Owner</label>
+                        <label style="display:flex; align-items:center; gap: 6px;"><input type="radio" name="relationship" value="family"> Family</label>
+                        <label style="display:flex; align-items:center; gap: 6px;"><input type="radio" name="relationship" value="guest_of_owner"> Guest(s) of Owner</label>
+                        <label style="display:flex; align-items:center; gap: 6px;"><input type="radio" name="relationship" value="tenant"> Tenant</label>
+                        <label style="display:flex; align-items:center; gap: 6px;"><input type="radio" name="relationship" value="guest_of_tenant"> Guest(s) of Tenant</label>
+                    </div>
                 </div>
+
+                <label style="display:flex; align-items:flex-start; gap: var(--sp-2); padding: var(--sp-3); background: var(--color-warning-bg); border-radius: var(--r-md); margin-bottom: var(--sp-4);">
+                    <input type="checkbox" name="agreed_rules" required style="margin-top: 3px;">
+                    <span style="font-size: var(--fs-sm);"><strong>I agree to abide by all house rules and regulations</strong>, a copy of which I have received &amp; read.</span>
+                </label>
+
+                <fieldset style="border: 1px solid var(--color-border); border-radius: var(--r-md); padding: var(--sp-3) var(--sp-4); margin-bottom: var(--sp-4);">
+                    <legend style="padding: 0 var(--sp-2); color: var(--color-text-soft); font-size: var(--fs-sm);">In the event of emergency, contact</legend>
+                    <div class="form-row form-row--2">
+                        <div class="field"><label class="field__label" for="gen">Name</label><input class="input" id="gen" name="emergency_contact_name"></div>
+                        <div class="field"><label class="field__label" for="gep">Home or cell phone</label><input class="input" id="gep" name="emergency_contact_phone"></div>
+                    </div>
+                </fieldset>
             <?php elseif ($newType === 'parking_pass'): ?>
                 <div class="form-row form-row--2">
                     <div class="field"><label class="field__label" for="vp">License plate</label><input class="input" id="vp" name="vehicle_plate" required placeholder="ABC-1234"></div>
@@ -419,6 +667,190 @@ require __DIR__ . '/../includes/header.php';
                     <div class="field"><label class="field__label" for="fs">Valid from</label><input class="input" type="date" id="fs" name="starts_at" value="<?= e(date('Y-m-d')) ?>" required></div>
                     <div class="field"><label class="field__label" for="fe">Valid through</label><input class="input" type="date" id="fe" name="ends_at" required></div>
                 </div>
+            <?php elseif ($newType === 'maintenance_request'): ?>
+                <div class="form-row form-row--2">
+                    <div class="field">
+                        <label class="field__label" for="ik">Issue kind</label>
+                        <select class="select" id="ik" name="issue_kind">
+                            <option value="plumbing">Plumbing</option>
+                            <option value="electrical">Electrical</option>
+                            <option value="hvac">HVAC / AC / heat</option>
+                            <option value="appliance">Appliance</option>
+                            <option value="structural">Structural / drywall / floor</option>
+                            <option value="common_area">Common area</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label class="field__label" for="ur">Urgency</label>
+                        <select class="select" id="ur" name="urgency">
+                            <option value="low">Low — when convenient</option>
+                            <option value="medium" selected>Medium — this week</option>
+                            <option value="high">High — within 48 hours</option>
+                            <option value="emergency">Emergency — now (call 911 if life safety)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="field"><label class="field__label" for="desc">What's wrong?</label><textarea class="textarea" id="desc" name="description" rows="4" required placeholder="The disposal makes a grinding noise and won't turn off…"></textarea></div>
+                <div class="form-row form-row--2">
+                    <div class="field"><label class="field__label" for="lu">Location in unit</label><input class="input" id="lu" name="location_in_unit" placeholder="Kitchen sink · Master bath · Hallway closet"></div>
+                    <div class="field"><label class="field__label" for="cp">Contact phone</label><input class="input" id="cp" name="contact_phone"></div>
+                </div>
+                <div class="field"><label class="field__label" for="ai">Access instructions</label><textarea class="textarea" id="ai" name="access_instructions" rows="2" placeholder="Lockbox code, neighbor key, best time to come, etc."></textarea></div>
+
+            <?php elseif ($newType === 'pet_registration'): ?>
+                <div class="form-row form-row--2">
+                    <div class="field"><label class="field__label" for="pn">Pet name</label><input class="input" id="pn" name="pet_name" required></div>
+                    <div class="field">
+                        <label class="field__label" for="sp">Species</label>
+                        <select class="select" id="sp" name="species">
+                            <option value="dog">Dog</option>
+                            <option value="cat">Cat</option>
+                            <option value="fish">Fish</option>
+                            <option value="bird">Bird</option>
+                            <option value="reptile">Reptile</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row form-row--2">
+                    <div class="field"><label class="field__label" for="br">Breed</label><input class="input" id="br" name="breed" placeholder="Golden retriever · Tabby · …"></div>
+                    <div class="field"><label class="field__label" for="wt">Weight (lbs)</label><input class="input" type="number" step="0.1" min="0" id="wt" name="weight_lbs"></div>
+                </div>
+                <div class="form-row form-row--2">
+                    <div class="field"><label class="field__label" for="cl">Color / markings</label><input class="input" id="cl" name="color"></div>
+                    <div class="field"><label class="field__label" for="ev">Emergency vet (clinic + phone)</label><input class="input" id="ev" name="emergency_vet"></div>
+                </div>
+                <label style="display:flex; align-items:center; gap: var(--sp-2); padding: var(--sp-2);">
+                    <input type="checkbox" name="vaccinations_current">
+                    Vaccinations current (rabies + standard) — proof on file or available on request
+                </label>
+
+            <?php elseif ($newType === 'vehicle_registration'): ?>
+                <p class="muted" style="font-size: var(--fs-sm); margin: 0 0 var(--sp-3);">Permanent record of vehicles you keep on the property. Different from a temp parking pass.</p>
+                <div class="form-row" style="display:grid; grid-template-columns: 1.4fr 0.7fr 1fr; gap: var(--sp-3);">
+                    <div class="field"><label class="field__label" for="vp">License plate</label><input class="input" id="vp" name="vehicle_plate" required></div>
+                    <div class="field"><label class="field__label" for="vs">State</label><input class="input" id="vs" name="vehicle_state" maxlength="3"></div>
+                    <div class="field"><label class="field__label" for="vc">Color</label><input class="input" id="vc" name="vehicle_color"></div>
+                </div>
+                <div class="form-row form-row--2">
+                    <div class="field"><label class="field__label" for="vd">Year / make / model</label><input class="input" id="vd" name="vehicle_desc" placeholder="2022 Toyota Camry"></div>
+                    <div class="field"><label class="field__label" for="as">Assigned spot</label><input class="input" id="as" name="assigned_spot" placeholder="Garage #12"></div>
+                </div>
+                <div class="form-row form-row--2">
+                    <div class="field"><label class="field__label" for="pd">Primary driver</label><input class="input" id="pd" name="primary_driver"></div>
+                    <div class="field"><label class="field__label" for="sd">Other drivers (optional)</label><input class="input" id="sd" name="secondary_drivers" placeholder="Spouse, kids, etc."></div>
+                </div>
+
+            <?php elseif ($newType === 'contractor_notice'): ?>
+                <p class="muted" style="font-size: var(--fs-sm); margin: 0 0 var(--sp-3);">Notify the board (and neighbors) that you'll have a contractor in your unit.</p>
+                <div class="form-row form-row--2">
+                    <div class="field"><label class="field__label" for="cn">Contractor name / company</label><input class="input" id="cn" name="contractor_name" required></div>
+                    <div class="field"><label class="field__label" for="cph">Contractor phone</label><input class="input" id="cph" name="contractor_phone"></div>
+                </div>
+                <div class="form-row form-row--2">
+                    <div class="field"><label class="field__label" for="wk">Work kind</label><input class="input" id="wk" name="work_kind" placeholder="Kitchen reno · Bathroom · Flooring · Paint · …"></div>
+                    <div class="field"><label class="field__label" for="wh">Work hours</label><input class="input" id="wh" name="work_hours" placeholder="9 AM – 5 PM weekdays"></div>
+                </div>
+                <div class="form-row form-row--2">
+                    <div class="field"><label class="field__label" for="fs">Start date</label><input class="input" type="date" id="fs" name="starts_at" required></div>
+                    <div class="field"><label class="field__label" for="fe">Estimated completion</label><input class="input" type="date" id="fe" name="ends_at"></div>
+                </div>
+                <div class="field"><label class="field__label" for="dsc">Description (what's being done)</label><textarea class="textarea" id="dsc" name="description" rows="3"></textarea></div>
+                <div class="field"><label class="field__label" for="ai">Access instructions</label><textarea class="textarea" id="ai" name="access_instructions" rows="2" placeholder="Lockbox / neighbor / I'll meet them at the door"></textarea></div>
+
+            <?php elseif ($newType === 'amenity_reservation'): ?>
+                <div class="form-row form-row--2">
+                    <div class="field">
+                        <label class="field__label" for="am">Amenity</label>
+                        <select class="select" id="am" name="amenity">
+                            <option value="clubhouse">Clubhouse</option>
+                            <option value="pool_deck">Pool deck</option>
+                            <option value="bbq_pits">BBQ pits</option>
+                            <option value="fitness_room">Fitness room</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    <div class="field"><label class="field__label" for="hc">Headcount</label><input class="input" type="number" id="hc" name="headcount" min="1" max="200" value="10" required></div>
+                </div>
+                <div class="form-row form-row--2">
+                    <div class="field"><label class="field__label" for="fs">Date</label><input class="input" type="date" id="fs" name="starts_at" required></div>
+                    <div class="field"><label class="field__label" for="et">Time</label><input class="input" id="et" name="event_time" placeholder="6 PM – 10 PM"></div>
+                </div>
+                <div class="form-row form-row--2">
+                    <div class="field"><label class="field__label" for="en">Event name</label><input class="input" id="en" name="event_name" placeholder="Birthday · Anniversary · …"></div>
+                    <div class="field"><label class="field__label" for="cr">Cleanup responsible (name)</label><input class="input" id="cr" name="cleanup_responsible"></div>
+                </div>
+                <label style="display:flex; align-items:center; gap: var(--sp-2); padding: var(--sp-2);">
+                    <input type="checkbox" name="alcohol_served"> Alcohol will be served
+                </label>
+                <label style="display:flex; align-items:flex-start; gap: var(--sp-2); padding: var(--sp-3); background: var(--color-warning-bg); border-radius: var(--r-md);">
+                    <input type="checkbox" name="deposit_acknowledged" required style="margin-top: 3px;">
+                    <span style="font-size: var(--fs-sm);"><strong>I acknowledge the amenity reservation deposit policy</strong> — typically refundable after the space is left in good condition.</span>
+                </label>
+
+            <?php elseif ($newType === 'hurricane_checklist'): ?>
+                <div class="form-row form-row--2">
+                    <div class="field"><label class="field__label" for="sn">Storm name</label><input class="input" id="sn" name="storm_name" placeholder="Hurricane Helene"></div>
+                    <div class="field">
+                        <label class="field__label">Plan</label>
+                        <div style="display:flex; gap: var(--sp-3); padding: var(--sp-2) 0;">
+                            <label style="display:flex; align-items:center; gap: 6px;"><input type="radio" name="plan" value="staying" checked> Staying</label>
+                            <label style="display:flex; align-items:center; gap: 6px;"><input type="radio" name="plan" value="evacuating"> Evacuating</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="field"><label class="field__label" for="er">Expected return (if evacuating)</label><input class="input" type="date" id="er" name="expected_return"></div>
+
+                <p style="margin: var(--sp-3) 0 var(--sp-2); font-weight: 600;">Checklist (tick what you've done)</p>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 6px 16px;">
+                    <label><input type="checkbox" name="balcony_clear"> Balcony furniture / planters / grills brought inside</label>
+                    <label><input type="checkbox" name="shutters_closed"> Storm shutters closed and locked</label>
+                    <label><input type="checkbox" name="water_off"> Water shutoff located (or off, if leaving)</label>
+                    <label><input type="checkbox" name="power_off"> Major appliances unplugged</label>
+                    <label><input type="checkbox" name="evacuation_plan"> Evacuation destination + route ready</label>
+                    <label><input type="checkbox" name="emergency_contact_on_file"> Emergency contact on file with board</label>
+                    <label><input type="checkbox" name="key_with_neighbor"> Trusted neighbor has my key</label>
+                    <label><input type="checkbox" name="pet_plan"> Pets accounted for</label>
+                    <label><input type="checkbox" name="insurance_docs_safe"> Insurance docs in waterproof / cloud storage</label>
+                </div>
+
+            <?php elseif ($newType === 'emergency_contact'): ?>
+                <p class="muted" style="font-size: var(--fs-sm); margin: 0 0 var(--sp-3);">Who should the board call if there's a fire / flood / medical and you're not reachable?</p>
+                <div class="form-row form-row--2">
+                    <div class="field"><label class="field__label" for="cn">Contact name</label><input class="input" id="cn" name="contact_name" required></div>
+                    <div class="field"><label class="field__label" for="cr">Relationship</label><input class="input" id="cr" name="contact_relationship" placeholder="Spouse · Sibling · Friend"></div>
+                </div>
+                <div class="form-row form-row--2">
+                    <div class="field"><label class="field__label" for="cpp">Primary phone</label><input class="input" id="cpp" name="contact_phone_primary" required></div>
+                    <div class="field"><label class="field__label" for="cps">Secondary phone</label><input class="input" id="cps" name="contact_phone_secondary"></div>
+                </div>
+                <div class="field"><label class="field__label" for="cem">Email</label><input class="input" type="email" id="cem" name="contact_email"></div>
+                <label style="display:flex; align-items:center; gap: var(--sp-2); padding: var(--sp-2);">
+                    <input type="checkbox" name="has_key"> This person has a key (or knows how to get one)
+                </label>
+                <div class="field"><label class="field__label" for="pi">Pet info (if you're away)</label><textarea class="textarea" id="pi" name="pet_info" rows="2" placeholder="Fido needs feeding, his food is in the pantry…"></textarea></div>
+                <div class="field"><label class="field__label" for="mn">Medical notes for responders (optional)</label><textarea class="textarea" id="mn" name="medical_notes" rows="2"></textarea></div>
+
+            <?php elseif ($newType === 'estoppel_request'): ?>
+                <p class="muted" style="font-size: var(--fs-sm); margin: 0 0 var(--sp-3);">For title companies / closing agents when a unit is being sold.</p>
+                <div class="form-row form-row--2">
+                    <div class="field"><label class="field__label" for="rp">Requesting party (title company)</label><input class="input" id="rp" name="requesting_party" required></div>
+                    <div class="field"><label class="field__label" for="cd">Estimated closing date</label><input class="input" type="date" id="cd" name="closing_date"></div>
+                </div>
+                <div class="form-row form-row--2">
+                    <div class="field"><label class="field__label" for="re">Requestor email</label><input class="input" type="email" id="re" name="requestor_email"></div>
+                    <div class="field"><label class="field__label" for="rph">Requestor phone</label><input class="input" id="rph" name="requestor_phone"></div>
+                </div>
+                <div class="field"><label class="field__label" for="nb">New owner name (if known)</label><input class="input" id="nb" name="new_owner_name"></div>
+                <label style="display:flex; align-items:center; gap: var(--sp-2); padding: var(--sp-2);">
+                    <input type="checkbox" name="rush_processing"> Rush processing (rush fee applies)
+                </label>
+                <label style="display:flex; align-items:flex-start; gap: var(--sp-2); padding: var(--sp-3); background: var(--color-warning-bg); border-radius: var(--r-md);">
+                    <input type="checkbox" name="fee_acknowledged" required style="margin-top: 3px;">
+                    <span style="font-size: var(--fs-sm);"><strong>I acknowledge the estoppel fee</strong> set by the association (typically $250; rush adds more).</span>
+                </label>
+
             <?php elseif ($newType === 'move_in' || $newType === 'move_out'): ?>
                 <div class="form-row form-row--2">
                     <div class="field"><label class="field__label" for="fs">Move date</label><input class="input" type="date" id="fs" name="starts_at" required></div>

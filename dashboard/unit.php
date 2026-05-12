@@ -496,19 +496,14 @@ require __DIR__ . '/../includes/header.php';
     <?php endif; ?>
 
     <!-- Forms for this unit -->
-    <h2 style="font-size: var(--fs-xl);">Forms <span class="muted" style="font-size: var(--fs-sm); font-weight: 400;">— guest registration, parking pass, move-in/out, key request</span></h2>
+    <h2 style="font-size: var(--fs-xl);">Forms <span class="muted" style="font-size: var(--fs-sm); font-weight: 400;">— file a new one or see what's been submitted</span></h2>
     <?php $TYPES = form_types(); ?>
-    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: var(--sp-2); margin-bottom: var(--sp-4);">
-        <?php foreach ($TYPES as $key => $meta): if ($key === 'other') continue; ?>
-            <a class="card" href="/dashboard/forms.php?action=new&type=<?= e($key) ?>&unit_id=<?= (int)$unitId ?>"
-               style="padding: var(--sp-3); display:flex; gap: var(--sp-2); align-items:center; text-decoration:none; color:inherit; transition: transform 120ms;"
-               onmouseover="this.style.transform='translateY(-1px)'"
-               onmouseout="this.style.transform=''">
-                <span style="font-size: 20px;"><?= e($meta['icon']) ?></span>
-                <strong style="font-size: var(--fs-sm);"><?= e($meta['label']) ?></strong>
-            </a>
+    <p class="muted" style="font-size: var(--fs-sm); margin-bottom: var(--sp-4);">
+        File a form for Unit <?= e((string)$unit['unit_number']) ?>:
+        <?php $i = 0; foreach ($TYPES as $key => $meta): if ($key === 'other') continue; ?>
+            <?= $i++ > 0 ? ' · ' : '' ?><a href="/dashboard/forms.php?action=new&type=<?= e($key) ?>&unit_id=<?= (int)$unitId ?>"><?= e($meta['icon']) ?> <?= e($meta['label']) ?></a>
         <?php endforeach; ?>
-    </div>
+    </p>
 
     <?php if ($unitForms): ?>
         <div style="overflow-x:auto; margin-bottom: var(--sp-6);">

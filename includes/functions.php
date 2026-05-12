@@ -45,12 +45,20 @@ function ensure_dir(string $absPath): void
 function form_types(): array
 {
     return [
-        'guest_registration' => ['label' => 'Guest registration', 'icon' => '👋', 'submit_url' => '/dashboard/forms.php?action=new&type=guest_registration'],
-        'parking_pass'       => ['label' => 'Temp parking pass',  'icon' => '🅿️', 'submit_url' => '/dashboard/forms.php?action=new&type=parking_pass'],
-        'move_in'            => ['label' => 'Move-in notice',     'icon' => '📦', 'submit_url' => '/dashboard/forms.php?action=new&type=move_in'],
-        'move_out'           => ['label' => 'Move-out notice',    'icon' => '📤', 'submit_url' => '/dashboard/forms.php?action=new&type=move_out'],
-        'key_request'        => ['label' => 'Key / fob request',  'icon' => '🔑', 'submit_url' => '/dashboard/forms.php?action=new&type=key_request'],
-        'other'              => ['label' => 'Other',              'icon' => '📝', 'submit_url' => '/dashboard/forms.php?action=new&type=other'],
+        'guest_registration'   => ['label' => 'Guest registration',     'icon' => '👋', 'submit_url' => '/dashboard/forms.php?action=new&type=guest_registration'],
+        'parking_pass'         => ['label' => 'Temp parking pass',      'icon' => '🅿️', 'submit_url' => '/dashboard/forms.php?action=new&type=parking_pass'],
+        'maintenance_request'  => ['label' => 'Maintenance request',    'icon' => '🔧', 'submit_url' => '/dashboard/forms.php?action=new&type=maintenance_request'],
+        'pet_registration'     => ['label' => 'Pet registration',       'icon' => '🐕', 'submit_url' => '/dashboard/forms.php?action=new&type=pet_registration'],
+        'vehicle_registration' => ['label' => 'Resident vehicle',       'icon' => '🚗', 'submit_url' => '/dashboard/forms.php?action=new&type=vehicle_registration'],
+        'contractor_notice'    => ['label' => 'Contractor / work notice','icon'=> '🔨', 'submit_url' => '/dashboard/forms.php?action=new&type=contractor_notice'],
+        'amenity_reservation'  => ['label' => 'Amenity reservation',    'icon' => '🎉', 'submit_url' => '/dashboard/forms.php?action=new&type=amenity_reservation'],
+        'hurricane_checklist'  => ['label' => 'Hurricane prep',         'icon' => '🌪️', 'submit_url' => '/dashboard/forms.php?action=new&type=hurricane_checklist'],
+        'emergency_contact'    => ['label' => 'Emergency contact',      'icon' => '☎️', 'submit_url' => '/dashboard/forms.php?action=new&type=emergency_contact'],
+        'move_in'              => ['label' => 'Move-in notice',         'icon' => '📦', 'submit_url' => '/dashboard/forms.php?action=new&type=move_in'],
+        'move_out'             => ['label' => 'Move-out notice',        'icon' => '📤', 'submit_url' => '/dashboard/forms.php?action=new&type=move_out'],
+        'key_request'          => ['label' => 'Key / fob request',      'icon' => '🔑', 'submit_url' => '/dashboard/forms.php?action=new&type=key_request'],
+        'estoppel_request'     => ['label' => 'Estoppel / sale',        'icon' => '📨', 'submit_url' => '/dashboard/forms.php?action=new&type=estoppel_request'],
+        'other'                => ['label' => 'Other',                  'icon' => '📝', 'submit_url' => '/dashboard/forms.php?action=new&type=other'],
     ];
 }
 
