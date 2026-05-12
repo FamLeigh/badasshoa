@@ -260,37 +260,72 @@ This file (CLAUDE.md) keeps an internal-only summary in the section below for cr
 
 ## Where we left off (resume here next session)
 
-**Last session ended:** 2026-05-10 — **shipped to production at https://badasshoa.com**. Schema migrations 001 + 003–013 ran cleanly against `u535581001_badassHOA`, super admin seeded, msmtp wired against `smtp.hostinger.com:465` with `success@badasshoa.com`, deploy automated via `push.sh` (laptop) + `deploy.sh` (server). Smoke tests passed: home/login/admin/forgot all 200, `/admin/` redirects to login when unauthenticated, no PHP errors in log, real SMTP send confirmed (`smtpstatus=250 Ok: queued`).
+**Last session ended:** 2026-05-12 — **massive feature sprint shipped to prod**. Migrations through 041 (signatures library) all applied to `u535581001_badassHOA`. Bellair is now properly populated (196 active members, 128 units, 159 rules with 2022-12-01 effective date, 21 FAQs, 3 board officers including Scott Bender as Director). Last commit `a65d0fb`. Working tree clean.
 
-**Local dev state in DB:**
-- Association `id=1, slug=demo` (Bellair Condo Association) → 420 N Atlantic Ave, Daytona Beach FL — geocoded, map iframe renders.
-- 3 seeded events: "Pool reopening party" (`audience=all`, public), "Annual HOA meeting" (`audience=members`), "Closed board session" (`audience=board`).
-- Association `id=3, slug=test` exists but has no address geocoded.
+**What got built in this sprint** (in rough chronological order):
+- Concerns + parking + media metadata + units rebuild (parking_spots + primary owner + rental flag)
+- Phone2/email2 + headshots + bios on users
+- Committees: WYSIWYG, edit, join/leave, flyers, Make-Chair + Step-down buttons, collapsed descriptions
+- Recurring events + day/week/month/upcoming print + clickable date-tile cards
+- Public-landing fixes (board pending-status, geocode re-run)
+- Documents: per-unit + per-member scope + storage breakdown
+- Work Orders (admin-only ops tickets) + Concerns → WO conversion
+- Architectural Review (ARC) requests + ARC → WO conversion
+- Employees (orthogonal to role) with type-ahead picker
+- Insurance + COIs with expiry warnings
+- Storage quota tracking (1 GB free + $5/mo per extra GB)
+- Global search box (rules + docs + announcements + events + concerns + ARC + members)
+- Per-association branded landing + map + meet-your-board
+- Concerns with target person/unit + rule citations
+- Renters locked out of: ARC submit, committee join, Settings, Committees
+- Forms library: 14 form types (guest registration matching the actual Bellair card, parking pass, maintenance, pet reg, vehicle reg, contractor notice, amenity reservation, hurricane checklist, emergency contact, move-in/out, key request, estoppel, other)
+- Electronic signatures (E-SIGN / Florida UETA) with type/draw/upload + audit trail + SHA-256 tamper hash
+- Saved signatures: private per-user reusable library (managers can't see them)
+- Funny 404 page (HOA Violation Notice)
+- Marketing home refresh
 
 **Production state in DB:**
-- Empty schema except for one super admin (`me@kevinleigh.com`). No associations, no demo data — production starts clean.
+- 1 association: Bellair Condo Association (slug=bellair) at 420 N Atlantic Ave, Daytona Beach FL
+- 196 active members; 128 units; 159 rules; 21 FAQs; 0 forms filed yet
+- Board officers: Kevin Leigh (board_admin), Wayne Dictor (board_member), Mark Applegate (property_manager), Scott Bender (board_member · Director)
+- Email driver still `log` (paused since 2026-05-10) — flip back to `msmtp` when ready
 
 **Logins:**
-- **Local** super admin: `me@kevinleigh.com / bhoaK0m3r2.6`
-- **Local** demo board: `me+bellair@kevinleigh.com / changeme!`
-- **Prod** super admin: `me@kevinleigh.com / bhoaK0m3r2.6` (same hash, can change after first login)
+- **Prod** super admin: `me@kevinleigh.com / bhoaK0m3r2.6`
+- Local MAMP DB hasn't been touched in days — local schema is behind prod by migrations 014–041. If reviving local dev, run migrations 014 onward from `migrations/` in order.
 
-**Quick visual check (local):** `https://badasshoa.com:8890/demo/` is the public landing, no login required.
-**Quick visual check (prod):** `https://badasshoa.com/` is the marketing home; `https://badasshoa.com/login.php` for the auth UI.
+**Quick visual check (prod):**
+- Marketing home: https://badasshoa.com/
+- Public landing: https://badasshoa.com/bellair/
+- Dashboard: https://badasshoa.com/dashboard/
+- Forms: https://badasshoa.com/dashboard/forms.php
+- Latest changelog entry visible at the top of https://badasshoa.com/changelog.php
 
-**Candidates for next session** (in rough order of "user has been moving in this direction"):
-1. **Board meeting minutes** — separate from announcements, stored as a list of past meetings with date + uploaded PDF + optional summary. Renders in a "Board meetings" section on the landing if any are public.
-2. **Newsletter signup** — email-only opt-in form on the landing → `newsletter_subscribers(association_id, email, confirmed_at, unsubscribe_token)` table → CSV export for the board.
-3. **Property history / building info card** — year built, number of buildings, HOA fee range, pet policy, etc. Structured fields in `associations` + a "Quick facts" section on the landing.
-4. **Per-user TZ preference** on `/dashboard/settings.php` and a single display formatter — fixes the UTC-everywhere display polish item.
-5. **IP rate limiting on `/forgot.php`** — small, low-risk, listed under "Phase 1.5 left over."
+**Candidates for next session** (queued + roughly prioritized by where Kevin's headed):
+1. **Lobby-TV digital signage / community board** — long-standing queued item. Probably a rotating-content TV mode that auto-cycles recent announcements + upcoming events + photos + emergency info on a building-lobby display. Auto-refresh, no-login URL with a token.
+2. **Maintenance request → Work Order conversion** — same pattern as Concern → WO and ARC → WO, but on `maintenance_request` form submissions. Currently a maintenance form just sits as a submission; should land in the work orders queue.
+3. **Turn email back on** — flip prod `config.mail.driver` from `log` to `msmtp` whenever Kevin says. Already wired; one line change in `~/domains/badasshoa.com/public_html/config.php` on the server.
+4. **Board meeting minutes** — still a candidate from the earlier list; documents + announcements cover most of it but a dedicated minutes timeline view would be cleaner.
+5. **Newsletter signup** on the public landing.
+6. **Per-user TZ preference** — dashboard greeting + clock already use browser local time; everywhere else still UTC. Adding a TZ pref on profile + a single `local_date()` helper would clean up server-rendered timestamps.
+7. **IP rate limiting on `/forgot.php`**.
 
-**Known small follow-ups not blocking anything:**
-- See "Phase 1.5 left over" list above (CSV import, audit log viewer, image thumbnails, etc).
+**Important caveats / known gotchas:**
+- E-signatures are E-SIGN/UETA-shaped but Kevin should have counsel review before relying on them for binding documents. The implementation captures everything the law requires (intent, consent, association, audit, tamper-detection); the disclosure language could be more formal (right-to-paper-copy, right-to-withdraw).
+- The settings page's profile + landing forms used to both POST `form=update` to a single handler that overwrote every column — fixed via section markers. If you add a third form to settings.php, give it its own section value or you'll regress this.
+- The pool FAQ (id 8) has Bellair-specific placeholder copy with `[VERIFY]` markers that may still be in the answer text — Kevin meant to refine but session ended before the update SQL ran. The full update is in `/tmp/bellair_faq_pool_update.sql` (laptop only, didn't ship) — was interrupted before he could approve the bigger rewrite from the actual paper pool-rules sign he sent.
+- The first Bellair user form hasn't been filed yet — Kevin was going to file a temp parking pass to validate the flow but session ended.
 
 ---
 
 ## Changelog
+
+- **2026-05-11 to 2026-05-12 — Phase-2 feature sprint.**
+    - Migrations 014 → 041 (28 migrations). Working tree clean at commit `a65d0fb`.
+    - Bellair populated: 196 active members, 128 units, 159 rules, 21 FAQs, board officers including Director Scott Bender.
+    - Tools added: Work Orders, Architectural Review, Employees, Insurance + COIs, per-unit/per-member documents, Forms library (14 types — guest registration mirrors the actual Bellair card), Electronic signatures (E-SIGN/UETA) with saved-signature library, Concerns with target person/unit/rule, Storage breakdown, Global search, ARC↔WO + Concern↔WO conversion, Activity log viewer, Funny 404 page, Public landing with map + meet-your-board.
+    - Renter restrictions: can't file ARC, can't join committees, no Settings or Committees nav.
+    - See `/Where we left off` section above for full state + next-session candidates. Email still paused (`config.mail.driver = log`).
 
 - **2026-05-10 — Shipped to production at https://badasshoa.com.**
     - DB `u535581001_badassHOA` provisioned in hPanel; schema migrations 001 + 003–013 imported via SSH (skipped `002_seed_dev.sql` — prod starts clean)
