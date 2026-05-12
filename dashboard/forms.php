@@ -253,17 +253,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'submit'
 
     // --- Signature capture ---
     // Required for forms with legal weight (see forms_requiring_signature()).
-    // Captures intent (typed/drawn/uploaded sig), explicit consent to
-    // electronic records (ESIGN), and audit trail (IP, UA, timestamp,
-    // payload hash). Optional for other form types — if any signature
-    // fields are present we still record them, just not required.
+    // Four input shapes:
+    //   * signature_kind = 'typed'    + signature_typed_name
+    //   * signature_kind = 'drawn'    + signature_drawn_data (canvas data URL)
+    //   * signature_kind = 'uploaded' + $_FILES['signature_upload']
+    //   * signature_kind = 'saved'    + use_saved_signature_id (their library)
+    // Audit (IP, UA, ts, hash) captured regardless of which shape.
     $sigKind = $_POST['signature_kind'] ?? '';
-    if (!in_array($sigKind, ['typed','drawn','uploaded'], true)) $sigKind = '';
+    if (!in_array($sigKind, ['typed','drawn','uploaded','saved'], true)) $sigKind = '';
     $sigTyped     = trim((string)($_POST['signature_typed_name'] ?? ''));
     $sigDataUrl   = (string)($_POST['signature_drawn_data'] ?? '');
+    $useSavedId   = (int)($_POST['use_saved_signature_id'] ?? 0);
     $consentGiven = isset($_POST['consent_given']) ? 1 : 0;
 
     $sigImagePath = null;
+
+    // 'saved' shape: pull the saved sig from the user's library and copy
+    // it onto this submission. The form_submission stores its own typed
+    // name / image_path so the saved row is just a convenience cache.
+    if ($sigKind === 'saved' && $useSavedId > 0) {
+        $s = db()->prepare('SELECT * FROM user_signatures WHERE id = ? AND user_id = ?');
+        $s->execute([$useSavedId, (int)$user['id']]);
+        $saved = $s->fetch();
+        if (!$saved) {
+            $flashError = $flashError ?: 'That saved signature is no longer available.';
+            $sigKind = '';
+        } else {
+            $sigKind  = (string)$saved['kind'];          // collapses back to typed/drawn/uploaded
+            $sigTyped = (string)($saved['typed_name'] ?? '');
+            // For drawn/uploaded, copy the image to a per-submission file
+            // so the original library entry can be deleted without breaking
+            // already-signed submissions.
+            if ($saved['kind'] !== 'typed' && !empty($saved['image_path'])) {
+                $src = storage_path((string)$saved['image_path']);
+                if (is_file($src)) {
+                    $ext = strtolower(pathinfo((string)$saved['image_path'], PATHINFO_EXTENSION)) ?: 'png';
+                    $relDir = "uploads/$assocId/signatures";
+                    ensure_dir(storage_path($relDir));
+                    $name = bin2hex(random_bytes(12)) . '.' . $ext;
+                    $rel  = "$relDir/$name";
+                    if (copy($src, storage_path($rel))) $sigImagePath = $rel;
+                }
+                if (!$sigImagePath) $flashError = $flashError ?: 'Could not load that saved signature image.';
+            }
+            // Update last_used_at so the saved tab orders by recency.
+            touch_user_signature((int)$user['id'], $useSavedId);
+        }
+    }
+
     if ($sigKind === 'drawn' && $sigDataUrl !== '') {
         $sigImagePath = save_signature_data_url($sigDataUrl, $assocId);
         if (!$sigImagePath) { $flashError = $flashError ?: 'We could not save your drawn signature — try again or pick a different method.'; }
@@ -338,6 +375,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'submit'
             'type' => $type, 'code' => $code,
             'signed' => $sigKind !== '', 'sig_kind' => $sigKind ?: null,
         ], $newId, 'form_submission');
+
+        // Optionally save this signature to the user's private library for
+        // future forms. Only when the user picked the box AND made a fresh
+        // signature this round (not when they reused a saved one).
+        $saveForLater = isset($_POST['save_signature_for_later']);
+        $usedFreshSig = ($sigKind !== '') && $useSavedId === 0;
+        if ($saveForLater && $usedFreshSig) {
+            $label = mb_substr(trim((string)($_POST['signature_label'] ?? '')), 0, 80);
+            // For drawn/uploaded, copy the per-submission image into a
+            // long-lived "library" path so deletion of the submission
+            // doesn't also wipe the saved signature.
+            $libPath = null;
+            if ($sigKind !== 'typed' && $sigImagePath !== null) {
+                $src = storage_path($sigImagePath);
+                if (is_file($src)) {
+                    $ext = strtolower(pathinfo($sigImagePath, PATHINFO_EXTENSION)) ?: 'png';
+                    $relDir = 'uploads/' . $assocId . '/signatures/library';
+                    ensure_dir(storage_path($relDir));
+                    $name = bin2hex(random_bytes(12)) . '.' . $ext;
+                    $libPath = "$relDir/$name";
+                    if (!copy($src, storage_path($libPath))) $libPath = null;
+                }
+            }
+            if ($sigKind === 'typed' || $libPath !== null) {
+                db()->prepare(
+                    'INSERT INTO user_signatures (user_id, kind, label, typed_name, image_path)
+                     VALUES (?, ?, ?, ?, ?)'
+                )->execute([
+                    (int)$user['id'], $sigKind, $label ?: null,
+                    $sigKind === 'typed' ? $sigTyped : null,
+                    $libPath,
+                ]);
+                audit('signature.saved', ['kind' => $sigKind, 'label' => $label ?: null], (int)db()->lastInsertId(), 'user_signature');
+            }
+        }
 
         // Notify the board — heads-up not approval-required.
         notify_association_managers(
@@ -989,17 +1061,49 @@ require __DIR__ . '/../includes/header.php';
                 <textarea class="textarea" id="fn" name="notes" rows="2"></textarea>
             </div>
 
-            <?php $requiresSig = form_requires_signature($newType); ?>
+            <?php
+            $requiresSig = form_requires_signature($newType);
+            $savedSigs   = user_saved_signatures((int)$user['id']);
+            $defaultTab  = $savedSigs ? 'saved' : 'typed';
+            ?>
             <fieldset style="border: 2px solid var(--color-navy); border-radius: var(--r-md); padding: var(--sp-4); margin-bottom: var(--sp-4); background: #fafaf6;" data-sig-pad>
                 <legend style="padding: 0 var(--sp-2); color: var(--color-navy); font-weight: 700;">✍️ Electronic signature <?= $requiresSig ? '<span style="color: var(--color-error);">(required)</span>' : '(optional)' ?></legend>
 
                 <!-- Method tabs -->
-                <div class="row" style="gap: 0; margin-bottom: var(--sp-3); border-bottom: 1px solid var(--color-border);">
-                    <button type="button" class="sig-tab is-active" data-sig-tab="typed">Type</button>
-                    <button type="button" class="sig-tab"           data-sig-tab="drawn">Draw</button>
-                    <button type="button" class="sig-tab"           data-sig-tab="uploaded">Upload</button>
+                <div class="row" style="gap: 0; margin-bottom: var(--sp-3); border-bottom: 1px solid var(--color-border); flex-wrap: wrap;">
+                    <?php if ($savedSigs): ?>
+                        <button type="button" class="sig-tab is-active" data-sig-tab="saved">⭐ Saved (<?= count($savedSigs) ?>)</button>
+                    <?php endif; ?>
+                    <button type="button" class="sig-tab <?= !$savedSigs ? 'is-active' : '' ?>" data-sig-tab="typed">Type</button>
+                    <button type="button" class="sig-tab"                                       data-sig-tab="drawn">Draw</button>
+                    <button type="button" class="sig-tab"                                       data-sig-tab="uploaded">Upload</button>
                 </div>
-                <input type="hidden" name="signature_kind" value="typed" data-sig-kind-input>
+                <input type="hidden" name="signature_kind" value="<?= e($defaultTab === 'saved' ? 'saved' : $defaultTab) ?>" data-sig-kind-input>
+                <input type="hidden" name="use_saved_signature_id" value="" data-sig-saved-input>
+
+                <?php if ($savedSigs): ?>
+                <!-- Saved -->
+                <div data-sig-panel="saved">
+                    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&display=swap" rel="stylesheet">
+                    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--sp-3);">
+                        <?php foreach ($savedSigs as $s): ?>
+                            <label style="display:block; cursor: pointer; border: 2px solid var(--color-border); border-radius: var(--r-md); padding: var(--sp-3); background: #fff; transition: border-color 120ms;">
+                                <input type="radio" name="saved_signature_pick" value="<?= (int)$s['id'] ?>" data-sig-saved-pick style="margin-bottom: 6px;">
+                                <?php if ($s['kind'] === 'typed'): ?>
+                                    <div style="font-family: 'Caveat', cursive; font-size: 20pt; color: var(--color-navy); line-height: 1.1;"><?= e((string)$s['typed_name']) ?></div>
+                                <?php else: ?>
+                                    <img src="/dashboard/signature-image.php?saved_id=<?= (int)$s['id'] ?>" alt="Saved signature" style="max-width: 100%; max-height: 70px; display: block;">
+                                <?php endif; ?>
+                                <div class="muted" style="font-size: var(--fs-xs); margin-top: 6px;">
+                                    <?= e((string)($s['label'] ?: ucfirst($s['kind']))) ?>
+                                    · saved <?= e(date('M j, Y', strtotime((string)$s['created_at']))) ?>
+                                </div>
+                            </label>
+                        <?php endforeach; ?>
+                    </div>
+                    <div class="muted" style="font-size: var(--fs-xs); margin-top: var(--sp-2);">Pick one — or switch to Type / Draw / Upload to use a fresh signature. Manage saved signatures from your <a href="/dashboard/profile.php">profile</a>.</div>
+                </div>
+                <?php endif; ?>
 
                 <!-- Typed -->
                 <div data-sig-panel="typed">
@@ -1026,6 +1130,17 @@ require __DIR__ . '/../includes/header.php';
                 <div data-sig-panel="uploaded" hidden>
                     <label class="field__label" for="sig-up">Upload a signature image (PNG / JPG / WEBP · 3 MB max)</label>
                     <input class="input" type="file" id="sig-up" name="signature_upload" accept="image/png,image/jpeg,image/webp">
+                </div>
+
+                <!-- Save for future use (only shown when user makes a NEW signature) -->
+                <div data-sig-save-row style="margin-top: var(--sp-3); padding: var(--sp-3); background: #fff; border: 1px dashed var(--color-border); border-radius: var(--r-md);">
+                    <label style="display:flex; align-items:center; gap: var(--sp-2);">
+                        <input type="checkbox" name="save_signature_for_later" value="1">
+                        <span style="font-size: var(--fs-sm);">💾 Save this signature to my account for future forms <span class="muted">(private to you — only you can see and use it)</span></span>
+                    </label>
+                    <div data-sig-save-label-row style="margin-top: 8px; display:none;">
+                        <input class="input" type="text" name="signature_label" placeholder="Label (optional, e.g. 'My signature' or 'Initials')" maxlength="80">
+                    </div>
                 </div>
 
                 <!-- Consent -->
@@ -1064,13 +1179,41 @@ require __DIR__ . '/../includes/header.php';
             var drawnIn = pad.querySelector('[data-sig-drawn-input]');
             var clearBtn= pad.querySelector('[data-sig-clear]');
 
+            var savedIn   = pad.querySelector('[data-sig-saved-input]');
+            var saveRow   = pad.querySelector('[data-sig-save-row]');
+            var saveLabel = pad.querySelector('[data-sig-save-label-row]');
+            var saveChk   = saveRow ? saveRow.querySelector('input[name="save_signature_for_later"]') : null;
+
             function switchTo(kind) {
                 tabs.forEach(function (t) { t.classList.toggle('is-active', t.dataset.sigTab === kind); });
                 panels.forEach(function (p) { p.hidden = p.dataset.sigPanel !== kind; });
                 kindIn.value = kind;
+                // Saved-tab uses the saved-id; the kind field is sent as 'saved'
+                // and the server resolves it from use_saved_signature_id.
                 if (kind === 'drawn') initCanvas();
+                if (kind === 'saved') {
+                    if (saveRow) saveRow.style.display = 'none'; // can't "save again" what's already saved
+                    if (savedIn && !savedIn.value) {
+                        var first = pad.querySelector('[data-sig-saved-pick]');
+                        if (first) { first.checked = true; savedIn.value = first.value; }
+                    }
+                } else {
+                    if (saveRow) saveRow.style.display = '';
+                    if (savedIn) savedIn.value = '';
+                }
             }
             tabs.forEach(function (t) { t.addEventListener('click', function () { switchTo(t.dataset.sigTab); }); });
+
+            // Saved-radio picker
+            pad.querySelectorAll('[data-sig-saved-pick]').forEach(function (r) {
+                r.addEventListener('change', function () {
+                    if (savedIn) savedIn.value = r.value;
+                });
+            });
+            // Reveal label input when "Save this signature" gets ticked
+            if (saveChk && saveLabel) {
+                saveChk.addEventListener('change', function () { saveLabel.style.display = saveChk.checked ? '' : 'none'; });
+            }
 
             // Canvas setup is lazy — only when the Draw tab is opened
             var initialized = false;

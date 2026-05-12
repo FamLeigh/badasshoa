@@ -100,6 +100,27 @@ function payload_hash(array $payload): string
     return hash('sha256', json_encode($clean, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
 }
 
+// User's reusable signature library — private to them. Used to populate the
+// "Saved" tab on the form signature pad. Sorted by most-recently-used so
+// the one they reach for most often is on top.
+function user_saved_signatures(int $userId): array
+{
+    $s = db()->prepare(
+        'SELECT * FROM user_signatures
+          WHERE user_id = ?
+          ORDER BY COALESCE(last_used_at, created_at) DESC, id DESC'
+    );
+    $s->execute([$userId]);
+    return $s->fetchAll();
+}
+
+// Mark a saved signature as just-used (refreshes its sort position).
+function touch_user_signature(int $userId, int $sigId): void
+{
+    db()->prepare('UPDATE user_signatures SET last_used_at = NOW() WHERE id = ? AND user_id = ?')
+        ->execute([$sigId, $userId]);
+}
+
 // Save a drawn-signature data URL (data:image/png;base64,…) to disk and
 // return the storage path. Returns null on failure.
 function save_signature_data_url(string $dataUrl, int $assocId): ?string

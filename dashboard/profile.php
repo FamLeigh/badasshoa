@@ -89,6 +89,28 @@ $stmt = db()->prepare('SELECT * FROM users WHERE id = ?');
 $stmt->execute([(int)$user['id']]);
 $me = $stmt->fetch();
 
+// Delete a saved signature (owner-only).
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'delete_signature') {
+    csrf_check();
+    $sid = (int)($_POST['id'] ?? 0);
+    $s = db()->prepare('SELECT image_path FROM user_signatures WHERE id = ? AND user_id = ?');
+    $s->execute([$sid, (int)$user['id']]);
+    $row = $s->fetch();
+    if ($row) {
+        if (!empty($row['image_path'])) {
+            $abs = storage_path((string)$row['image_path']);
+            if (is_file($abs)) @unlink($abs);
+        }
+        db()->prepare('DELETE FROM user_signatures WHERE id = ? AND user_id = ?')->execute([$sid, (int)$user['id']]);
+        audit('signature.deleted', [], $sid, 'user_signature');
+        flash('success', 'Saved signature deleted.');
+    }
+    redirect('/dashboard/profile.php');
+}
+
+// Saved signatures (private library for this user).
+$mySignatures = user_saved_signatures((int)$user['id']);
+
 // Employment records for this user (read-only on profile — board edits via /dashboard/employees.php).
 $myJobsStmt = db()->prepare(
     "SELECT * FROM employees
@@ -223,6 +245,38 @@ require __DIR__ . '/../includes/header.php';
             <button class="btn btn--primary" type="submit">Save profile</button>
         </div>
     </form>
+
+    <?php if ($mySignatures): ?>
+    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&display=swap" rel="stylesheet">
+    <div class="card card--padded" style="margin-top: var(--sp-6);">
+        <h2 style="font-size: var(--fs-xl); margin: 0 0 var(--sp-3);">✍️ My signatures</h2>
+        <p class="muted" style="font-size: var(--fs-sm); margin-bottom: var(--sp-3);">
+            Private to you — these never appear anywhere except your own signature picker on forms. When you sign a form using a saved signature, the system embeds a copy on that submission, so deleting a saved signature here doesn't affect already-submitted forms.
+        </p>
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--sp-3);">
+            <?php foreach ($mySignatures as $s): ?>
+                <div style="border: 1px solid var(--color-border); border-radius: var(--r-md); padding: var(--sp-3); background: #fff;">
+                    <?php if ($s['kind'] === 'typed'): ?>
+                        <div style="font-family: 'Caveat', cursive; font-size: 22pt; color: var(--color-navy); line-height: 1.1; min-height: 50px;"><?= e((string)$s['typed_name']) ?></div>
+                    <?php else: ?>
+                        <img src="/dashboard/signature-image.php?saved_id=<?= (int)$s['id'] ?>" alt="Saved signature" style="max-width: 100%; max-height: 80px; display: block;">
+                    <?php endif; ?>
+                    <div class="muted" style="font-size: var(--fs-xs); margin-top: 8px;">
+                        <strong><?= e((string)($s['label'] ?: ucfirst($s['kind']))) ?></strong>
+                        · saved <?= e(date('M j, Y', strtotime((string)$s['created_at']))) ?>
+                        <?php if (!empty($s['last_used_at'])): ?> · last used <?= e(date('M j, Y', strtotime((string)$s['last_used_at']))) ?><?php endif; ?>
+                    </div>
+                    <form method="post" style="display:inline; margin-top: 8px;" onsubmit="return confirm('Delete this saved signature? Already-signed forms keep their copy.');">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="form" value="delete_signature">
+                        <input type="hidden" name="id" value="<?= (int)$s['id'] ?>">
+                        <button class="btn btn--ghost" type="submit" style="padding: 0.3rem 0.7rem; font-size: var(--fs-xs); color: var(--color-error);">Delete</button>
+                    </form>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+    <?php endif; ?>
 
     <?php if ($myJobs): ?>
     <div class="card card--padded" style="margin-top: var(--sp-6);">

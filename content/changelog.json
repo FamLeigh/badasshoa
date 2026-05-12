@@ -1,5 +1,14 @@
 [
     {
+        "id": "cl-20260512-220000-savedsig",
+        "at": "2026-05-12T22:00:00-04:00",
+        "type": "feature",
+        "title": "Saved signatures — reuse your signature on future forms (private to you)",
+        "description": "After signing any form, you can now tick 'Save this signature to my account for future forms' (with an optional label like 'My signature' or 'Initials'). Next time you file a form, a new ⭐ Saved tab appears on the signature pad with your saved signatures — pick one and you're done. Strictly private: only the owner can see and use their saved signatures. Even board admins can't see them. Manage (delete) them from the new 'My signatures' card on your profile. Each form submission still embeds its own copy of the signature image, so deleting a saved signature doesn't invalidate forms you've already signed.",
+        "author": "Reboooot",
+        "link": "/dashboard/profile.php"
+    },
+    {
         "id": "cl-20260512-200000-esign",
         "at": "2026-05-12T20:00:00-04:00",
         "type": "feature",
