@@ -296,6 +296,7 @@ if ($page_layout === 'app' && isset($association) && $association):
             <?= nav_link('/dashboard/communications.php', 'communications', 'Announcements', 'communications', $active) ?>
             <?= nav_link('/dashboard/events.php',      'committees',     'Events',         'events',         $active) ?>
             <?= nav_link('/dashboard/faq.php',         'rules',          'FAQ',            'faq',            $active) ?>
+            <?= nav_link('/dashboard/forms.php',       'documents',      'Forms',          'forms',          $active) ?>
             <?= nav_link('/dashboard/documents.php',   'documents',      'Documents',      'documents',      $active) ?>
             <?= nav_link('/dashboard/search.php',      'rules',          'Rules',          'rules',          $active) ?>
             <?= nav_link('/dashboard/directory.php',   'directory',      'Directory',      'directory',      $active) ?>

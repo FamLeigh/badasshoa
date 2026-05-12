@@ -197,6 +197,16 @@ $docStmt = db()->prepare(
 $docStmt->execute([$assocId, $unitId]);
 $unitDocs = $docStmt->fetchAll();
 
+// --- Recent forms filed for this unit ---
+$formStmt = db()->prepare(
+    'SELECT f.id, f.form_type, f.title, f.confirmation_code, f.status, f.starts_at, f.ends_at, f.created_at
+       FROM form_submissions f
+      WHERE f.association_id = ? AND f.unit_id = ?
+      ORDER BY f.created_at DESC LIMIT 10'
+);
+$formStmt->execute([$assocId, $unitId]);
+$unitForms = $formStmt->fetchAll();
+
 // --- Candidates for "Add occupant" dropdown: active members not already linked ---
 $candStmt = db()->prepare(
     "SELECT id, first_name, last_name, email
@@ -483,6 +493,50 @@ require __DIR__ . '/../includes/header.php';
     </table>
     </div>
     <p style="margin-bottom: var(--sp-6);"><a class="btn btn--ghost" href="/dashboard/parking.php?action=new&unit_id=<?= (int)$unitId ?>">+ Assign another spot</a></p>
+    <?php endif; ?>
+
+    <!-- Forms for this unit -->
+    <h2 style="font-size: var(--fs-xl);">Forms <span class="muted" style="font-size: var(--fs-sm); font-weight: 400;">— guest registration, parking pass, move-in/out, key request</span></h2>
+    <?php $TYPES = form_types(); ?>
+    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: var(--sp-2); margin-bottom: var(--sp-4);">
+        <?php foreach ($TYPES as $key => $meta): if ($key === 'other') continue; ?>
+            <a class="card" href="/dashboard/forms.php?action=new&type=<?= e($key) ?>&unit_id=<?= (int)$unitId ?>"
+               style="padding: var(--sp-3); display:flex; gap: var(--sp-2); align-items:center; text-decoration:none; color:inherit; transition: transform 120ms;"
+               onmouseover="this.style.transform='translateY(-1px)'"
+               onmouseout="this.style.transform=''">
+                <span style="font-size: 20px;"><?= e($meta['icon']) ?></span>
+                <strong style="font-size: var(--fs-sm);"><?= e($meta['label']) ?></strong>
+            </a>
+        <?php endforeach; ?>
+    </div>
+
+    <?php if ($unitForms): ?>
+        <div style="overflow-x:auto; margin-bottom: var(--sp-6);">
+        <table class="table">
+            <thead><tr><th>Type</th><th>Title</th><th>Window</th><th>Code</th><th>Status</th></tr></thead>
+            <tbody>
+            <?php foreach ($unitForms as $f):
+                $m = $TYPES[$f['form_type']] ?? ['label' => $f['form_type'], 'icon' => '📝'];
+                $expired = !empty($f['ends_at']) && strtotime((string)$f['ends_at']) < strtotime(date('Y-m-d'));
+                $statusBadge = $f['status'] === 'revoked' ? 'badge--error' : ($expired ? '' : 'badge--success');
+                $statusLabel = $f['status'] === 'revoked' ? 'revoked' : ($expired ? 'expired' : 'active');
+            ?>
+                <tr style="cursor:pointer;" onclick="window.location='/dashboard/forms.php?id=<?= (int)$f['id'] ?>'">
+                    <td><?= e($m['icon']) ?> <?= e($m['label']) ?></td>
+                    <td><a href="/dashboard/forms.php?id=<?= (int)$f['id'] ?>"><strong><?= e((string)$f['title']) ?></strong></a></td>
+                    <td style="font-size: var(--fs-sm);">
+                        <?= !empty($f['starts_at']) ? e(date('M j', strtotime((string)$f['starts_at']))) : '' ?>
+                        <?= !empty($f['ends_at'])   ? ' – ' . e(date('M j', strtotime((string)$f['ends_at']))) : '' ?>
+                    </td>
+                    <td><code style="font-size: var(--fs-xs);"><?= e((string)$f['confirmation_code']) ?></code></td>
+                    <td><span class="badge <?= $statusBadge ?>"><?= e($statusLabel) ?></span></td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+        </div>
+    <?php else: ?>
+        <p class="muted" style="margin-bottom: var(--sp-6);">No forms filed for this unit yet.</p>
     <?php endif; ?>
 
     <!-- Per-unit documents -->

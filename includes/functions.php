@@ -38,6 +38,41 @@ function ensure_dir(string $absPath): void
     }
 }
 
+// --- form submissions ---------------------------------------------------
+// Form types Bellair has now — extend the ENUM in a future migration to add
+// more. Each pair: machine key → ['label' => human, 'icon' => emoji,
+// 'submit_url' => starting URL for the submit form].
+function form_types(): array
+{
+    return [
+        'guest_registration' => ['label' => 'Guest registration', 'icon' => '👋', 'submit_url' => '/dashboard/forms.php?action=new&type=guest_registration'],
+        'parking_pass'       => ['label' => 'Temp parking pass',  'icon' => '🅿️', 'submit_url' => '/dashboard/forms.php?action=new&type=parking_pass'],
+        'move_in'            => ['label' => 'Move-in notice',     'icon' => '📦', 'submit_url' => '/dashboard/forms.php?action=new&type=move_in'],
+        'move_out'           => ['label' => 'Move-out notice',    'icon' => '📤', 'submit_url' => '/dashboard/forms.php?action=new&type=move_out'],
+        'key_request'        => ['label' => 'Key / fob request',  'icon' => '🔑', 'submit_url' => '/dashboard/forms.php?action=new&type=key_request'],
+        'other'              => ['label' => 'Other',              'icon' => '📝', 'submit_url' => '/dashboard/forms.php?action=new&type=other'],
+    ];
+}
+
+function form_type_label(string $type): string
+{
+    return form_types()[$type]['label'] ?? ucfirst(str_replace('_', ' ', $type));
+}
+
+// Generate a friendly confirmation code — 8 chars, unambiguous alphabet.
+// Format: XXXX-XXXX. Pairs nicely with on-screen display + verbal sharing.
+function generate_form_code(): string
+{
+    $alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no 0/O/1/I/L
+    $out = '';
+    $bytes = random_bytes(8);
+    for ($i = 0; $i < 8; $i++) {
+        $out .= $alphabet[ord($bytes[$i]) % strlen($alphabet)];
+        if ($i === 3) $out .= '-';
+    }
+    return $out;
+}
+
 // --- storage quota ------------------------------------------------------
 // Each association gets storage_quota_bytes (default 1 GiB) plus
 // storage_paid_extra_gb additional GiB (settable by super admin).

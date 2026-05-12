@@ -1,5 +1,14 @@
 [
     {
+        "id": "cl-20260512-160000-forms",
+        "at": "2026-05-12T16:00:00-04:00",
+        "type": "feature",
+        "title": "Forms: guest registration, parking pass, move-in/out, key requests",
+        "description": "New 📝 Forms page at /dashboard/forms.php. Residents pick a form type, fill it out, and get an instant printable permit with a unique confirmation code (e.g. AB72-9XKM) — no waiting for board approval. Five form types to start: 👋 Guest registration, 🅿️ Temp parking pass, 📦 Move-in notice, 📤 Move-out notice, 🔑 Key/fob request. Each form prints as a tilted-letterhead permit with the big confirmation code, valid-from/through dates, vehicle plate or guest name, and your unit. Board sees the full log + can revoke any permit (with optional reason). On the unit detail page, a Forms section shows recent submissions and quick-launch tiles for each form type. New form types are a one-line ENUM addition for the future.",
+        "author": "Reboooot",
+        "link": "/dashboard/forms.php"
+    },
+    {
         "id": "cl-20260512-150000-rulecat",
         "at": "2026-05-12T15:00:00-04:00",
         "type": "improvement",
