@@ -268,14 +268,13 @@
         var crumb = calc.querySelector('[data-calc-breakdown]');
         var ctaBtn = calc.querySelector('[data-calc-cta]');
 
-        // 30-day free trial. Three pricing bands:
-        //   1-10   → $20 flat (Starter)
-        //   11-100 → $0.50/unit (Growth)
-        //   101+   → $0.75/unit (Professional)
+        // 30-day free trial. Two pricing bands (Professional removed
+        // 2026-05-13 — was superfluous):
+        //   1-20   → $20 flat (Starter)
+        //   21+    → $20 base + $0.50 per unit over 20 (Growth)
         function tierFor(units) {
-            if (units <= 10)  return { name: 'Starter',      price: 20,           cta: 'Start 30-day free trial' };
-            if (units <= 100) return { name: 'Growth',       price: 0.50 * units, cta: 'Start 30-day free trial' };
-            return                   { name: 'Professional', price: 0.75 * units, cta: 'Start 30-day free trial' };
+            if (units <= 20) return { name: 'Starter', price: 20,                          cta: 'Start 30-day free trial' };
+            return                  { name: 'Growth',  price: 20 + 0.50 * (units - 20),    cta: 'Start 30-day free trial' };
         }
 
         function fmt(n) {
@@ -294,12 +293,10 @@
             if (price)  price.textContent = fmt(t.price) + '/mo';
             if (ctaBtn) ctaBtn.textContent = t.cta;
             if (crumb) {
-                if (units <= 10) {
-                    crumb.textContent = 'Starter: $20/mo flat for up to 10 units. 30-day free trial included.';
-                } else if (units <= 100) {
-                    crumb.textContent = '$0.50 × ' + units + ' units = ' + fmt(t.price) + '/mo. 30-day free trial.';
+                if (units <= 20) {
+                    crumb.textContent = 'Starter: $20/mo flat for up to 20 units. 30-day free trial included.';
                 } else {
-                    crumb.textContent = '$0.75 × ' + units + ' units = ' + fmt(t.price) + '/mo. 30-day free trial.';
+                    crumb.textContent = '$20 base + $0.50 × ' + (units - 20) + ' units over 20 = ' + fmt(t.price) + '/mo. 30-day free trial.';
                 }
             }
         }

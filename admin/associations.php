@@ -397,7 +397,15 @@ require __DIR__ . '/../includes/header.php';
                 <div class="field">
                     <label class="field__label" for="na-plan">Plan</label>
                     <select class="select" id="na-plan" name="plan">
-                        <?php foreach (['starter'=>'Starter','growth'=>'Growth','professional'=>'Professional','enterprise'=>'Enterprise'] as $val=>$lbl): ?>
+                        <?php
+                        // Professional was dropped 2026-05-13. We still tolerate it as a legacy
+                        // value (in_array allowlist below) so existing rows render, but new
+                        // selections are limited to the current three tiers.
+                        $planOptions = ['starter'=>'Starter','growth'=>'Growth','enterprise'=>'Enterprise'];
+                        if (isset($editAssoc['plan']) && $editAssoc['plan'] === 'professional') {
+                            $planOptions['professional'] = 'Professional (legacy)';
+                        }
+                        foreach ($planOptions as $val=>$lbl): ?>
                             <option value="<?= e($val) ?>" <?= $createDefaults['plan']===$val?'selected':'' ?>><?= e($lbl) ?></option>
                         <?php endforeach; ?>
                     </select>
@@ -503,7 +511,15 @@ require __DIR__ . '/../includes/header.php';
                 <div class="field">
                     <label class="field__label" for="ea-plan">Plan</label>
                     <select class="select" id="ea-plan" name="plan">
-                        <?php foreach (['starter'=>'Starter','growth'=>'Growth','professional'=>'Professional','enterprise'=>'Enterprise'] as $val=>$lbl): ?>
+                        <?php
+                        // Professional was dropped 2026-05-13. We still tolerate it as a legacy
+                        // value (in_array allowlist below) so existing rows render, but new
+                        // selections are limited to the current three tiers.
+                        $planOptions = ['starter'=>'Starter','growth'=>'Growth','enterprise'=>'Enterprise'];
+                        if (isset($editAssoc['plan']) && $editAssoc['plan'] === 'professional') {
+                            $planOptions['professional'] = 'Professional (legacy)';
+                        }
+                        foreach ($planOptions as $val=>$lbl): ?>
                             <option value="<?= e($val) ?>" <?= $editAssoc['plan']===$val?'selected':'' ?>><?= e($lbl) ?></option>
                         <?php endforeach; ?>
                     </select>

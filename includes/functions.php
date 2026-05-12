@@ -749,15 +749,15 @@ function us_ca_states_datalist(string $id = 'us-ca-states'): string
 }
 
 // --- pricing calc (single source of truth) ------------------------------
-// 30-day free trial on every paid tier. Three pricing bands:
-//   1-10   units → $20/mo flat
-//   11-100 units → $0.50/unit (no base)
-//   101+   units → $0.75/unit (no base)
-// Enterprise is a feature differentiator (SSO, SLA, multi-property), not a price tier.
+// 30-day free trial on every paid tier. Two pricing bands (Professional was
+// dropped 2026-05-13 — superfluous):
+//   1-20   units → $20/mo flat
+//   21+    units → $20 base + $0.50 per unit over 20
+// Enterprise is a feature differentiator (multi-property portfolios + SLA),
+// not a price tier — quoted custom.
 function calc_monthly_price(int $units): array
 {
     $u = max(1, $units);
-    if ($u <= 10)  return ['tier' => 'starter',      'price' => 20.0,        'cta' => 'Start 30-day free trial'];
-    if ($u <= 100) return ['tier' => 'growth',       'price' => 0.50 * $u,   'cta' => 'Start 30-day free trial'];
-    return                ['tier' => 'professional', 'price' => 0.75 * $u,   'cta' => 'Start 30-day free trial'];
+    if ($u <= 20) return ['tier' => 'starter', 'price' => 20.0, 'cta' => 'Start 30-day free trial'];
+    return                ['tier' => 'growth',  'price' => 20.0 + 0.50 * ($u - 20), 'cta' => 'Start 30-day free trial'];
 }

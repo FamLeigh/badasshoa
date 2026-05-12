@@ -347,6 +347,15 @@ All four share a `broadcasts` table (kind / audience / subject / body / schedule
     - Cost: ~$1–$2 per letter for first class, ~$5+ for certified. Pass-through pricing OR baked into the plan.
     - **Florida-specific:** violation notice statutes (Ch. 718 for condos, Ch. 720 for HOAs) have very specific service requirements — get those right before automating any notice. Certified mail with return receipt is the safe default for anything fineable.
 
+12. **Custom domain per association ($5/mo add-on).**
+    - **App layer (easy, half a day):** add `associations.custom_domain VARCHAR(190) UNIQUE NULL`; in `_bootstrap.php` if `$_SERVER['HTTP_HOST']` doesn't match `badasshoa.com`, look up the association by `custom_domain` and set context; add a Custom Domain card to `/dashboard/settings.php` for the board to enter + a setup-instructions block ("Point an A record at our IP, CNAME `www` at our domain").
+    - **Ops layer (hard, hosting-dependent):**
+        - On Hostinger shared: each custom domain must be added in hPanel manually before Apache will serve it. Workable for ~5-10 paying tenants; doesn't scale beyond that. Cert provisioning is also manual.
+        - **Right answer once we have multiple paying tenants:** move BadassHOA to a VPS (DigitalOcean / Hetzner / Linode, ~$10-20/mo) with **Caddy** as the reverse proxy. Caddy auto-provisions Let's Encrypt certs for any domain that resolves to the IP. Zero per-customer ops.
+        - Alternative: Cloudflare's "Custom Hostnames" (SaaS for Platforms) — they handle certs per custom domain, but pricing kicks in around $200/mo. Overkill until volume.
+    - **Pricing:** $5/mo per association is fair (SquareSpace / Wix / Shopify all charge $10-20/mo for the same thing). Surface in association settings with a clear billing note.
+    - **Build order:** ship the app-layer columns + bootstrap routing now (Phase 2.5) so the data model doesn't need a future migration. Hold off on customer-facing on/off until VPS migration happens. **Recommendation: do the VPS move once Bellair has its second paying neighbor association.**
+
 **Cross-cutting compliance work needed for any of #8–#11:**
 - A new `/dashboard/communication-preferences.php` for each user (and a section on `/dashboard/profile.php`) showing what they're opted into per channel.
 - Audit-log every consent state change (opted in / out / verified phone).

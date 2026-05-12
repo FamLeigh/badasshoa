@@ -152,7 +152,7 @@ require __DIR__ . '/includes/header.php';
                 </div>
                 <div class="feature feature--compact">
                     <strong>💾 Storage tracking</strong>
-                    <p class="muted" style="font-size: var(--fs-sm); margin: var(--sp-1) 0 0;">1 GB free, Drive-style breakdown of where it&rsquo;s going. $5/mo per extra GB when you need more.</p>
+                    <p class="muted" style="font-size: var(--fs-sm); margin: var(--sp-1) 0 0;">1 GB included &mdash; plenty to get started. Drive-style breakdown shows where it&rsquo;s going. Add more only if needed.</p>
                 </div>
                 <div class="feature feature--compact">
                     <strong>🛡 Activity log</strong>
@@ -171,54 +171,55 @@ require __DIR__ . '/includes/header.php';
     <div class="container">
         <div style="max-width:640px; margin-bottom: var(--sp-10);">
             <span class="badge badge--navy">Simple pricing</span>
-            <h2 class="mt-2">Pay for what your building actually has.</h2>
-            <p class="muted">Pricing scales with unit count. No per-resident fees, no setup costs, no surprises.</p>
+            <h2 class="mt-2">Only pay for what you need.</h2>
+            <p class="muted">No per-resident fees, no setup costs, no surprises. Every feature on every plan &mdash; the plan you pick is just about how many units you have.</p>
         </div>
 
-        <div class="grid grid--3">
+        <div class="grid grid--2" style="max-width: 980px; margin: 0 auto;">
             <div class="price-card">
                 <div class="price-card__name">Starter</div>
                 <div class="price-card__price">$20<small>/mo</small></div>
-                <div class="price-card__limit">Up to 10 units</div>
+                <div class="price-card__limit">Up to 20 units</div>
                 <ul>
-                    <li>Every feature, every plan — rules, documents, work orders, ARC, events, committees</li>
-                    <li>Branded public landing page at <code>badasshoa.com/{your-slug}/</code></li>
-                    <li>Member &amp; board directory with officer roles</li>
-                    <li>Activity log + audit trail</li>
-                    <li>Custom branding (logo, hero, color)</li>
-                    <li>1 GB storage free · $5/mo per extra GB</li>
+                    <li>📜 Rules &amp; bylaws · suggestions · category filter · print all / filtered</li>
+                    <li>📄 Documents (versioned, scoped per unit / per member, access-controlled)</li>
+                    <li>📣 Announcements with scheduling + auto-expiry</li>
+                    <li>📅 Events &amp; calendar (recurring, printable, public)</li>
+                    <li>🏗 Architectural Review requests with board decisions</li>
+                    <li>🛠 Work Orders (admin-only ops tickets, timeline + notes)</li>
+                    <li>💬 Concerns &amp; compliments with threaded replies</li>
+                    <li>🤝 Committees (chairs, members, printable flyers)</li>
+                    <li>👥 Resident &amp; board directory with officer titles</li>
+                    <li>🌐 Branded public landing page at <code>badasshoa.com/{slug}/</code></li>
+                    <li>📝 Forms library (14 types) with electronic signatures</li>
+                    <li>📋 Insurance &amp; COI tracker · 🅿️ parking · 💼 employees · ☎️ contacts · ❓ FAQ</li>
+                    <li>🔎 Global search · 🛡 audit log · 🎨 custom branding</li>
+                    <li>💾 1 GB of storage included — plenty to get started, add more only if needed</li>
                 </ul>
                 <a class="btn btn--ghost" href="/signup.php?plan=starter">Start free trial</a>
             </div>
 
             <div class="price-card price-card--featured">
                 <div class="price-card__name">Growth</div>
-                <div class="price-card__price">$0.50<small>/unit/mo</small></div>
-                <div class="price-card__limit">11 – 100 units</div>
+                <div class="price-card__price">$20<small> + $0.50/unit over 20</small></div>
+                <div class="price-card__limit">21+ units · any size</div>
                 <ul>
-                    <li>Every feature, every plan — rules, documents, work orders, ARC, events, committees</li>
-                    <li>Branded public landing page at <code>badasshoa.com/{your-slug}/</code></li>
-                    <li>Member &amp; board directory with officer roles</li>
-                    <li>Activity log + audit trail</li>
-                    <li>Custom branding (logo, hero, color)</li>
-                    <li>1 GB storage free · $5/mo per extra GB</li>
+                    <li>📜 Rules &amp; bylaws · suggestions · category filter · print all / filtered</li>
+                    <li>📄 Documents (versioned, scoped per unit / per member, access-controlled)</li>
+                    <li>📣 Announcements with scheduling + auto-expiry</li>
+                    <li>📅 Events &amp; calendar (recurring, printable, public)</li>
+                    <li>🏗 Architectural Review requests with board decisions</li>
+                    <li>🛠 Work Orders (admin-only ops tickets, timeline + notes)</li>
+                    <li>💬 Concerns &amp; compliments with threaded replies</li>
+                    <li>🤝 Committees (chairs, members, printable flyers)</li>
+                    <li>👥 Resident &amp; board directory with officer titles</li>
+                    <li>🌐 Branded public landing page at <code>badasshoa.com/{slug}/</code></li>
+                    <li>📝 Forms library (14 types) with electronic signatures</li>
+                    <li>📋 Insurance &amp; COI tracker · 🅿️ parking · 💼 employees · ☎️ contacts · ❓ FAQ</li>
+                    <li>🔎 Global search · 🛡 audit log · 🎨 custom branding</li>
+                    <li>💾 1 GB of storage included — plenty to get started, add more only if needed</li>
                 </ul>
                 <a class="btn btn--primary" href="/signup.php?plan=growth">Start free trial</a>
-            </div>
-
-            <div class="price-card">
-                <div class="price-card__name">Professional</div>
-                <div class="price-card__price">$0.75<small>/unit/mo</small></div>
-                <div class="price-card__limit">101+ units</div>
-                <ul>
-                    <li>Every feature, every plan — rules, documents, work orders, ARC, events, committees</li>
-                    <li>Branded public landing page at <code>badasshoa.com/{your-slug}/</code></li>
-                    <li>Member &amp; board directory with officer roles</li>
-                    <li>Activity log + audit trail</li>
-                    <li>Custom branding (logo, hero, color)</li>
-                    <li>1 GB storage free · $5/mo per extra GB</li>
-                </ul>
-                <a class="btn btn--ghost" href="/signup.php?plan=professional">Start free trial</a>
             </div>
         </div>
 
@@ -249,7 +250,7 @@ require __DIR__ . '/includes/header.php';
                 </div>
                 <div>
                     <h4 style="color:#fff;">How do you handle storage?</h4>
-                    <p>1 GB free per association. A Drive-style breakdown shows exactly where it&rsquo;s going so you can clean up before paying for more. Extra GB is $5/mo each &mdash; no surprise bills.</p>
+                    <p>1 GB of storage included &mdash; plenty to get started. A Drive-style breakdown shows exactly where it&rsquo;s going, so you can clean up before adding more. Extra GB is available only if you need it &mdash; no surprise bills.</p>
                 </div>
                 <div>
                     <h4 style="color:#fff;">What about payments / dues?</h4>
