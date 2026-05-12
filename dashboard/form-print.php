@@ -69,7 +69,7 @@ $isExpired = !empty($f['ends_at']) && strtotime((string)$f['ends_at']) < strtoti
     }
     .code-label { font-size: 9pt; text-transform: uppercase; letter-spacing: 0.1em; color: #6b4a06; }
     .code { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 36pt; letter-spacing: 0.1em; color: #6b4a06; line-height: 1.1; margin-top: 4pt; }
-    .window { color: #555; font-size: 11pt; margin-top: 6pt; }
+    .window { color: #6b4a06; font-size: 17pt; font-weight: 700; margin-top: 10pt; letter-spacing: 0.02em; }
     .fields { display:grid; grid-template-columns: repeat(2, 1fr); gap: 14pt; margin-top: 16pt; }
     .fields .label { font-size: 9pt; text-transform: uppercase; letter-spacing: 0.06em; color: #888; }
     .fields .value { font-size: 12pt; font-weight: 600; margin-top: 2pt; }

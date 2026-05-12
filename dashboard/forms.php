@@ -299,7 +299,7 @@ require __DIR__ . '/../includes/header.php';
                     <?= e((string)$detail['confirmation_code']) ?>
                 </div>
                 <?php if (!empty($detail['starts_at']) || !empty($detail['ends_at'])): ?>
-                    <div class="muted" style="font-size: var(--fs-sm); margin-top: var(--sp-2);">
+                    <div style="font-size: var(--fs-lg); font-weight: 700; color: var(--color-warning); margin-top: var(--sp-3); letter-spacing: 0.02em;">
                         Valid
                         <?php if (!empty($detail['starts_at'])): ?><?= e(date('M j, Y', strtotime((string)$detail['starts_at']))) ?><?php endif; ?>
                         <?php if (!empty($detail['ends_at'])): ?> – <?= e(date('M j, Y', strtotime((string)$detail['ends_at']))) ?><?php endif; ?>
