@@ -67,6 +67,55 @@ function form_type_label(string $type): string
     return form_types()[$type]['label'] ?? ucfirst(str_replace('_', ' ', $type));
 }
 
+// Which form types carry a legal weight that warrants an electronic signature.
+// Driven by code (not DB) so we can tweak intentionally rather than per-tenant.
+// Forms NOT in this list still capture an audit trail when signed, but the
+// signature is optional.
+function forms_requiring_signature(): array
+{
+    return [
+        'guest_registration'  => true,  // rules acknowledgement
+        'amenity_reservation' => true,  // deposit acknowledgement
+        'estoppel_request'    => true,  // title-company-driven; legal weight
+        'hurricane_checklist' => true,  // attestation owner did the prep
+    ];
+}
+
+function form_requires_signature(string $type): bool
+{
+    return !empty(forms_requiring_signature()[$type] ?? false);
+}
+
+// Canonical hash of a payload for tamper-detection. Sorted keys so order
+// doesn't change the hash; null fields are treated as absent. Run on the
+// payload AT signing time and store; re-compute on display to flag tampering.
+function payload_hash(array $payload): string
+{
+    $clean = [];
+    foreach ($payload as $k => $v) {
+        if ($v === null || $v === '') continue;
+        $clean[$k] = $v;
+    }
+    ksort($clean);
+    return hash('sha256', json_encode($clean, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+}
+
+// Save a drawn-signature data URL (data:image/png;base64,…) to disk and
+// return the storage path. Returns null on failure.
+function save_signature_data_url(string $dataUrl, int $assocId): ?string
+{
+    if (!preg_match('#^data:image/(png|jpeg|jpg);base64,(.+)$#', $dataUrl, $m)) return null;
+    $bin = base64_decode($m[2], true);
+    if ($bin === false || strlen($bin) < 50 || strlen($bin) > 3 * 1024 * 1024) return null;
+    $ext = $m[1] === 'jpeg' ? 'jpg' : $m[1];
+    $relDir = "uploads/$assocId/signatures";
+    ensure_dir(storage_path($relDir));
+    $name = bin2hex(random_bytes(12)) . '.' . $ext;
+    $rel  = "$relDir/$name";
+    if (file_put_contents(storage_path($rel), $bin) === false) return null;
+    return $rel;
+}
+
 // Generate a friendly confirmation code — 8 chars, unambiguous alphabet.
 // Format: XXXX-XXXX. Pairs nicely with on-screen display + verbal sharing.
 function generate_form_code(): string

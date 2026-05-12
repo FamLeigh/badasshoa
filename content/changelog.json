@@ -1,5 +1,14 @@
 [
     {
+        "id": "cl-20260512-200000-esign",
+        "at": "2026-05-12T20:00:00-04:00",
+        "type": "feature",
+        "title": "Electronic signatures on forms — E-SIGN / Florida UETA compliant",
+        "description": "Every form that carries legal weight (guest registration, amenity reservation, estoppel request, hurricane prep) now requires an electronic signature before it can be submitted. Three sign methods are offered side-by-side: ✍️ type your name (rendered in a cursive font), draw with your finger or mouse on an HTML5 canvas, or upload a PNG/JPG of an existing signature. Required consent checkbox cites the federal E-SIGN Act and Florida's Uniform Electronic Transactions Act. Audit trail captured automatically on submit: IP address, timestamp, user agent, and a SHA-256 hash of the form payload — if anyone edits the form later, the hash mismatches and a tampering warning appears next to the signature. The signature renders both in the on-screen detail view and on the printable permit (drawn/uploaded images are embedded inline). Note: not legal advice — confirm with your counsel before relying on this for binding contracts.",
+        "author": "Reboooot",
+        "link": "/dashboard/forms.php?action=new&type=guest_registration"
+    },
+    {
         "id": "cl-20260512-180000-forms2",
         "at": "2026-05-12T18:00:00-04:00",
         "type": "feature",

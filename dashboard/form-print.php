@@ -233,6 +233,43 @@ $isExpired = !empty($f['ends_at']) && strtotime((string)$f['ends_at']) < strtoti
         </div>
     <?php endif; ?>
 
+    <?php if (!empty($f['signature_kind'])):
+        $tamperOk = empty($f['payload_hash']) || payload_hash($payload) === $f['payload_hash'];
+    ?>
+        <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&display=swap" rel="stylesheet">
+        <div style="margin-top: 20pt; padding-top: 14pt; border-top: 1px solid #ccc;">
+            <div style="font-size: 9pt; text-transform: uppercase; letter-spacing: 0.06em; color: #888; margin-bottom: 6pt;">Electronic signature</div>
+            <?php if ($f['signature_kind'] === 'typed'): ?>
+                <div style="font-family: 'Caveat', cursive; font-size: 28pt; color: #0f1f3d; border-bottom: 1px solid #888; padding: 4pt 2pt; max-width: 4in;"><?= e((string)$f['signature_typed_name']) ?></div>
+                <div style="font-size: 9pt; color: #888; margin-top: 4pt;">Typed signature</div>
+            <?php elseif (!empty($f['signature_image_path'])): ?>
+                <?php
+                // For print, embed the image inline as a data URL so it doesn't
+                // depend on a session-authenticated fetch from the print window.
+                $sigAbs = storage_path((string)$f['signature_image_path']);
+                if (is_file($sigAbs)) {
+                    $sigData = file_get_contents($sigAbs);
+                    $sigMime = function_exists('mime_content_type') ? mime_content_type($sigAbs) : 'image/png';
+                    echo '<img src="data:' . htmlspecialchars($sigMime, ENT_QUOTES, 'UTF-8') . ';base64,' . base64_encode($sigData) . '" style="max-width: 4in; max-height: 1.4in; border-bottom: 1px solid #888;" alt="Signature">';
+                }
+                ?>
+                <div style="font-size: 9pt; color: #888; margin-top: 4pt;"><?= $f['signature_kind'] === 'drawn' ? 'Drawn signature' : 'Uploaded signature' ?></div>
+            <?php endif; ?>
+
+            <div style="font-size: 8.5pt; color: #555; margin-top: 8pt; padding-top: 6pt; border-top: 1px dotted #ccc; line-height: 1.5;">
+                Signed by <strong><?= e(trim((string)$f['submitter_name']) ?: '—') ?></strong>
+                <?php if (!empty($f['signed_at'])): ?> on <?= e(date('M j, Y g:i:s A', strtotime((string)$f['signed_at']))) ?><?php endif; ?>
+                <?php if (!empty($f['signed_ip'])): ?> · IP <?= e((string)$f['signed_ip']) ?><?php endif; ?>
+                · Consent to electronic records: <strong><?= (int)$f['consent_given'] === 1 ? 'Yes' : 'No' ?></strong>
+                <?php if (!empty($f['payload_hash'])): ?> · Record hash <code><?= e(substr((string)$f['payload_hash'], 0, 16)) ?>…</code><?php endif; ?>
+                <br><em>Signed electronically under the E-SIGN Act + Florida UETA. This has the same legal effect as a handwritten signature.</em>
+                <?php if (!$tamperOk): ?>
+                    <br><strong style="color: #a8322a;">⚠ Record was edited after signing — signature may not apply to current values.</strong>
+                <?php endif; ?>
+            </div>
+        </div>
+    <?php endif; ?>
+
     <div class="footer-note">
         This permit was issued by <?= e((string)$association['name']) ?>. Present it (or the confirmation code above) to staff or board members if asked. Any of the rules referenced in your association documents still apply.
         <?php if ($isRevoked): ?>

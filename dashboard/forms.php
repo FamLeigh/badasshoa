@@ -251,6 +251,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'submit'
             break;
     }
 
+    // --- Signature capture ---
+    // Required for forms with legal weight (see forms_requiring_signature()).
+    // Captures intent (typed/drawn/uploaded sig), explicit consent to
+    // electronic records (ESIGN), and audit trail (IP, UA, timestamp,
+    // payload hash). Optional for other form types — if any signature
+    // fields are present we still record them, just not required.
+    $sigKind = $_POST['signature_kind'] ?? '';
+    if (!in_array($sigKind, ['typed','drawn','uploaded'], true)) $sigKind = '';
+    $sigTyped     = trim((string)($_POST['signature_typed_name'] ?? ''));
+    $sigDataUrl   = (string)($_POST['signature_drawn_data'] ?? '');
+    $consentGiven = isset($_POST['consent_given']) ? 1 : 0;
+
+    $sigImagePath = null;
+    if ($sigKind === 'drawn' && $sigDataUrl !== '') {
+        $sigImagePath = save_signature_data_url($sigDataUrl, $assocId);
+        if (!$sigImagePath) { $flashError = $flashError ?: 'We could not save your drawn signature — try again or pick a different method.'; }
+    }
+    if ($sigKind === 'uploaded' && isset($_FILES['signature_upload']) && $_FILES['signature_upload']['error'] === UPLOAD_ERR_OK) {
+        $sz = (int)$_FILES['signature_upload']['size'];
+        if ($sz > 3 * 1024 * 1024) {
+            $flashError = $flashError ?: 'Signature image must be 3 MB or smaller.';
+        } else {
+            $ext = strtolower(pathinfo((string)$_FILES['signature_upload']['name'], PATHINFO_EXTENSION));
+            $allowed = ['png','jpg','jpeg','webp'];
+            if (!in_array($ext, $allowed, true)) {
+                $flashError = $flashError ?: 'Signature must be PNG, JPG, or WEBP.';
+            } else {
+                $relDir = "uploads/$assocId/signatures";
+                ensure_dir(storage_path($relDir));
+                $name = bin2hex(random_bytes(12)) . '.' . ($ext === 'jpeg' ? 'jpg' : $ext);
+                $rel  = "$relDir/$name";
+                if (!move_uploaded_file($_FILES['signature_upload']['tmp_name'], storage_path($rel))) {
+                    $flashError = $flashError ?: 'Could not save the signature file.';
+                } else {
+                    $sigImagePath = $rel;
+                }
+            }
+        }
+    }
+
+    // Validation for signature-required forms
+    if (!$flashError && form_requires_signature($type)) {
+        if ($sigKind === '')          $flashError = 'Please sign before submitting (type, draw, or upload).';
+        elseif ($sigKind === 'typed' && $sigTyped === '') $flashError = 'Type your full name to sign.';
+        elseif ($sigKind === 'drawn' && !$sigImagePath)   $flashError = 'Draw your signature before submitting.';
+        elseif ($sigKind === 'uploaded' && !$sigImagePath) $flashError = 'Upload a signature image before submitting.';
+        elseif (!$consentGiven)       $flashError = 'You must consent to sign electronically.';
+    }
+
     if (!$flashError) {
         // Generate a unique-per-association confirmation code (retry on collision)
         $code = generate_form_code();
@@ -261,18 +310,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'submit'
             $code = generate_form_code();
         }
 
+        // Compute payload hash + capture audit trail at signing time.
+        $hash      = payload_hash($payload);
+        $signedAt  = $sigKind !== '' ? date('Y-m-d H:i:s') : null;
+        $signedIp  = $sigKind !== '' ? (string)($_SERVER['REMOTE_ADDR'] ?? '') : null;
+        $signedUa  = $sigKind !== '' ? mb_substr((string)($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 255) : null;
+
         db()->prepare(
             'INSERT INTO form_submissions
                (association_id, form_type, unit_id, submitter_user_id, title,
-                starts_at, ends_at, confirmation_code, payload, notes)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                starts_at, ends_at, confirmation_code, payload, notes,
+                signature_kind, signature_typed_name, signature_image_path,
+                consent_given, signed_at, signed_ip, signed_user_agent, payload_hash)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         )->execute([
             $assocId, $type, $unitId ?: null, (int)$user['id'], $title,
             $starts ?: null, $ends ?: null, $code, json_encode($payload, JSON_UNESCAPED_SLASHES),
             trim((string)($_POST['notes'] ?? '')) ?: null,
+            $sigKind ?: null,
+            $sigKind === 'typed' ? $sigTyped : null,
+            $sigImagePath,
+            $consentGiven,
+            $signedAt, $signedIp, $signedUa, $hash,
         ]);
         $newId = (int)db()->lastInsertId();
-        audit('form.submitted', ['type' => $type, 'code' => $code], $newId, 'form_submission');
+        audit('form.submitted', [
+            'type' => $type, 'code' => $code,
+            'signed' => $sigKind !== '', 'sig_kind' => $sigKind ?: null,
+        ], $newId, 'form_submission');
 
         // Notify the board — heads-up not approval-required.
         notify_association_managers(
@@ -552,6 +617,36 @@ require __DIR__ . '/../includes/header.php';
                 </div>
             <?php endif; ?>
 
+            <?php if (!empty($detail['signature_kind'])):
+                $tamperOk = empty($detail['payload_hash']) || payload_hash($payload) === $detail['payload_hash'];
+            ?>
+                <div style="margin-top: var(--sp-5); padding: var(--sp-4); background: #fff; border: 1px solid var(--color-border); border-radius: var(--r-md);">
+                    <div class="muted" style="font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: var(--sp-2);">Electronic signature</div>
+                    <?php if ($detail['signature_kind'] === 'typed'): ?>
+                        <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&display=swap" rel="stylesheet">
+                        <div style="font-family: 'Caveat', cursive; font-size: 32pt; color: var(--color-navy); border-bottom: 1px solid #888; padding: 8px 4px; max-width: 480px;"><?= e((string)$detail['signature_typed_name']) ?></div>
+                        <div class="muted" style="font-size: var(--fs-xs); margin-top: 4px;">Typed signature</div>
+                    <?php elseif (!empty($detail['signature_image_path'])): ?>
+                        <img src="/dashboard/signature-image.php?id=<?= (int)$detail['id'] ?>" alt="Signature" style="max-width: 480px; max-height: 160px; border-bottom: 1px solid #888;">
+                        <div class="muted" style="font-size: var(--fs-xs); margin-top: 4px;"><?= $detail['signature_kind'] === 'drawn' ? 'Drawn signature' : 'Uploaded signature' ?></div>
+                    <?php endif; ?>
+
+                    <div class="muted" style="font-size: var(--fs-xs); margin-top: var(--sp-3); padding-top: var(--sp-2); border-top: 1px dotted #ccc; line-height: 1.6;">
+                        Signed by <strong><?= e(trim((string)$detail['submitter_name']) ?: '—') ?></strong>
+                        <?php if (!empty($detail['signed_at'])): ?> on <?= e(date('M j, Y g:i:s A', strtotime((string)$detail['signed_at']))) ?><?php endif; ?>
+                        <?php if (!empty($detail['signed_ip'])): ?> · IP <?= e((string)$detail['signed_ip']) ?><?php endif; ?>
+                        <br>
+                        Consent to electronic records: <strong><?= (int)$detail['consent_given'] === 1 ? 'Yes' : 'No' ?></strong>
+                        <?php if (!empty($detail['payload_hash'])): ?>
+                            · Record hash <code style="font-size: var(--fs-xs);"><?= e(substr((string)$detail['payload_hash'], 0, 12)) ?>…</code>
+                            <?php if (!$tamperOk): ?>
+                                <span class="badge badge--error" style="font-size: var(--fs-xs);">⚠ Record edited after signing — signature may not apply to current values</span>
+                            <?php endif; ?>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            <?php endif; ?>
+
             <?php if ($isRevoked): ?>
                 <div style="margin-top: var(--sp-4); padding: var(--sp-3); background: #fff; border-radius: var(--r-md);">
                     <strong style="color: var(--color-error);">Revoked</strong>
@@ -580,7 +675,7 @@ require __DIR__ . '/../includes/header.php';
                 <p class="muted">No unit on file for your account — ask the board to attach your unit before filing forms.</p>
             </div>
         <?php else: ?>
-        <form method="post" class="form card card--padded">
+        <form method="post" enctype="multipart/form-data" class="form card card--padded" data-form-with-sig>
             <?= csrf_field() ?>
             <input type="hidden" name="form" value="submit">
             <input type="hidden" name="type" value="<?= e($newType) ?>">
@@ -894,11 +989,129 @@ require __DIR__ . '/../includes/header.php';
                 <textarea class="textarea" id="fn" name="notes" rows="2"></textarea>
             </div>
 
+            <?php $requiresSig = form_requires_signature($newType); ?>
+            <fieldset style="border: 2px solid var(--color-navy); border-radius: var(--r-md); padding: var(--sp-4); margin-bottom: var(--sp-4); background: #fafaf6;" data-sig-pad>
+                <legend style="padding: 0 var(--sp-2); color: var(--color-navy); font-weight: 700;">✍️ Electronic signature <?= $requiresSig ? '<span style="color: var(--color-error);">(required)</span>' : '(optional)' ?></legend>
+
+                <!-- Method tabs -->
+                <div class="row" style="gap: 0; margin-bottom: var(--sp-3); border-bottom: 1px solid var(--color-border);">
+                    <button type="button" class="sig-tab is-active" data-sig-tab="typed">Type</button>
+                    <button type="button" class="sig-tab"           data-sig-tab="drawn">Draw</button>
+                    <button type="button" class="sig-tab"           data-sig-tab="uploaded">Upload</button>
+                </div>
+                <input type="hidden" name="signature_kind" value="typed" data-sig-kind-input>
+
+                <!-- Typed -->
+                <div data-sig-panel="typed">
+                    <label class="field__label" for="sig-name">Type your full name</label>
+                    <input class="input" id="sig-name" name="signature_typed_name" placeholder="John Q. Resident"
+                           style="font-family: 'Caveat', 'Brush Script MT', cursive; font-size: 28pt; padding: 8pt 12pt; height: auto;">
+                    <div class="muted" style="font-size: var(--fs-xs); margin-top: 6px;">By typing your name, you intend it as your signature.</div>
+                </div>
+
+                <!-- Drawn -->
+                <div data-sig-panel="drawn" hidden>
+                    <label class="field__label">Draw your signature</label>
+                    <div style="border: 1px dashed var(--color-border); border-radius: var(--r-md); background: #fff; padding: 4px;">
+                        <canvas data-sig-canvas width="700" height="180" style="display:block; width: 100%; height: 180px; cursor: crosshair; touch-action: none;"></canvas>
+                    </div>
+                    <div class="row" style="justify-content: space-between; margin-top: 6px;">
+                        <span class="muted" style="font-size: var(--fs-xs);">Use your finger on touch, mouse on desktop.</span>
+                        <button type="button" class="btn btn--ghost" style="padding: 0.3rem 0.7rem; font-size: var(--fs-xs);" data-sig-clear>Clear</button>
+                    </div>
+                    <input type="hidden" name="signature_drawn_data" data-sig-drawn-input>
+                </div>
+
+                <!-- Uploaded -->
+                <div data-sig-panel="uploaded" hidden>
+                    <label class="field__label" for="sig-up">Upload a signature image (PNG / JPG / WEBP · 3 MB max)</label>
+                    <input class="input" type="file" id="sig-up" name="signature_upload" accept="image/png,image/jpeg,image/webp">
+                </div>
+
+                <!-- Consent -->
+                <label style="display:flex; align-items:flex-start; gap: var(--sp-2); margin-top: var(--sp-4); padding: var(--sp-3); background: var(--color-warning-bg); border-radius: var(--r-md);">
+                    <input type="checkbox" name="consent_given" <?= $requiresSig ? 'required' : '' ?> style="margin-top: 4px;">
+                    <span style="font-size: var(--fs-sm);">
+                        I consent to sign and receive records electronically. This electronic signature has the same legal effect as a handwritten signature under the federal <strong>E-SIGN Act</strong> and Florida's <strong>Uniform Electronic Transactions Act</strong>. I understand my IP address, timestamp, and device info will be recorded as part of the audit trail.
+                    </span>
+                </label>
+            </fieldset>
+
             <div class="row" style="justify-content: flex-end;">
                 <a class="btn btn--ghost" href="/dashboard/forms.php">Cancel</a>
                 <button class="btn btn--primary" type="submit">Submit + get confirmation code</button>
             </div>
         </form>
+
+        <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&display=swap" rel="stylesheet">
+        <style>
+            .sig-tab {
+                background: transparent; border: 0; border-bottom: 3px solid transparent;
+                padding: 8px 16px; font: inherit; font-size: var(--fs-sm); color: var(--color-text-soft);
+                cursor: pointer; transition: all 120ms ease;
+            }
+            .sig-tab:hover { color: var(--color-navy); }
+            .sig-tab.is-active { color: var(--color-navy); border-bottom-color: var(--color-orange); font-weight: 600; }
+        </style>
+        <script>
+        (function () {
+            var pad = document.querySelector('[data-sig-pad]');
+            if (!pad) return;
+            var tabs    = pad.querySelectorAll('[data-sig-tab]');
+            var panels  = pad.querySelectorAll('[data-sig-panel]');
+            var kindIn  = pad.querySelector('[data-sig-kind-input]');
+            var canvas  = pad.querySelector('[data-sig-canvas]');
+            var drawnIn = pad.querySelector('[data-sig-drawn-input]');
+            var clearBtn= pad.querySelector('[data-sig-clear]');
+
+            function switchTo(kind) {
+                tabs.forEach(function (t) { t.classList.toggle('is-active', t.dataset.sigTab === kind); });
+                panels.forEach(function (p) { p.hidden = p.dataset.sigPanel !== kind; });
+                kindIn.value = kind;
+                if (kind === 'drawn') initCanvas();
+            }
+            tabs.forEach(function (t) { t.addEventListener('click', function () { switchTo(t.dataset.sigTab); }); });
+
+            // Canvas setup is lazy — only when the Draw tab is opened
+            var initialized = false;
+            function initCanvas() {
+                if (initialized || !canvas) return;
+                initialized = true;
+                var ctx = canvas.getContext('2d');
+                // Scale to device pixel ratio for crisp lines
+                var dpr = Math.max(1, window.devicePixelRatio || 1);
+                var rect = canvas.getBoundingClientRect();
+                canvas.width  = rect.width  * dpr;
+                canvas.height = rect.height * dpr;
+                ctx.scale(dpr, dpr);
+                ctx.lineWidth = 2.2; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+                ctx.strokeStyle = '#0f1f3d';
+                var drawing = false, last = null;
+                function pt(e) {
+                    var r = canvas.getBoundingClientRect();
+                    var t = e.touches ? e.touches[0] : e;
+                    return { x: t.clientX - r.left, y: t.clientY - r.top };
+                }
+                function start(e) { e.preventDefault(); drawing = true; last = pt(e); }
+                function move(e)  { if (!drawing) return; e.preventDefault();
+                    var p = pt(e); ctx.beginPath(); ctx.moveTo(last.x, last.y); ctx.lineTo(p.x, p.y); ctx.stroke(); last = p; }
+                function end()    { drawing = false; last = null;
+                    drawnIn.value = canvas.toDataURL('image/png'); }
+                canvas.addEventListener('mousedown', start);
+                canvas.addEventListener('mousemove', move);
+                window.addEventListener('mouseup', end);
+                canvas.addEventListener('touchstart', start, { passive: false });
+                canvas.addEventListener('touchmove',  move,  { passive: false });
+                canvas.addEventListener('touchend',   end);
+            }
+            if (clearBtn) clearBtn.addEventListener('click', function () {
+                if (!canvas) return;
+                var ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                drawnIn.value = '';
+            });
+        })();
+        </script>
         <?php endif; ?>
 
     <?php else: /* ---------- LIST ---------- */ ?>
