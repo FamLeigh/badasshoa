@@ -453,6 +453,56 @@ if (($_GET['action'] ?? '') === 'edit' && $canManage) {
     }
 }
 
+// Activity stats — board_admin only
+$activityStats = null;
+if (viewing_role() === 'board_admin' || viewing_role() === 'super_admin') {
+    $aStmt = db()->prepare(
+        "SELECT
+             COUNT(*) AS total_active,
+             SUM(CASE WHEN last_login_at IS NOT NULL THEN 1 ELSE 0 END) AS ever_logged_in,
+             SUM(CASE WHEN last_login_at IS NULL THEN 1 ELSE 0 END) AS never_logged_in,
+             SUM(CASE WHEN email LIKE 'noemail.%@badasshoa.placeholder' THEN 1 ELSE 0 END) AS no_email
+           FROM users
+          WHERE association_id = ? AND status = 'active' AND role NOT IN ('super_admin')"
+    );
+    $aStmt->execute([$assocId]);
+    $activityStats = $aStmt->fetch();
+
+    // Members with no real email (placeholder)
+    $noEmailStmt = db()->prepare(
+        "SELECT id, first_name, last_name, unit_number, role
+           FROM users
+          WHERE association_id = ? AND status = 'active'
+            AND email LIKE 'noemail.%@badasshoa.placeholder'
+          ORDER BY last_name, first_name LIMIT 50"
+    );
+    $noEmailStmt->execute([$assocId]);
+    $noEmailMembers = $noEmailStmt->fetchAll();
+
+    // Members who have never logged in (have a real email but never authenticated)
+    $neverStmt = db()->prepare(
+        "SELECT id, first_name, last_name, email, unit_number, role, created_at
+           FROM users
+          WHERE association_id = ? AND status = 'active'
+            AND last_login_at IS NULL
+            AND email NOT LIKE 'noemail.%@badasshoa.placeholder'
+          ORDER BY created_at DESC LIMIT 50"
+    );
+    $neverStmt->execute([$assocId]);
+    $neverLoggedIn = $neverStmt->fetchAll();
+
+    // Recently active (last 30 days)
+    $recentStmt = db()->prepare(
+        "SELECT id, first_name, last_name, email, unit_number, role, last_login_at
+           FROM users
+          WHERE association_id = ? AND status = 'active'
+            AND last_login_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+          ORDER BY last_login_at DESC LIMIT 20"
+    );
+    $recentStmt->execute([$assocId]);
+    $recentlyActive = $recentStmt->fetchAll();
+}
+
 $page_title = 'Directory — ' . $association['name'];
 require __DIR__ . '/../includes/header.php';
 ?>
@@ -819,21 +869,118 @@ B2,Sam,Garcia,sam@example.com,,,,0</pre>
 
     <?php if (!$editUser && !$showInvite && !$showImport): /* hide the full directory while editing a single member */ ?>
 
+    <?php if ($activityStats): ?>
+    <div class="card card--padded" style="margin-bottom: var(--sp-6); background: var(--color-surface-2);">
+        <div class="row row--between" style="align-items: center; margin-bottom: var(--sp-4);">
+            <h3 style="margin: 0; font-size: var(--fs-lg);">Member activity</h3>
+            <div class="row" style="gap: var(--sp-4); font-size: var(--fs-sm);">
+                <span class="muted"><?= (int)$activityStats['total_active'] ?> active members</span>
+                <span style="color: var(--color-success);"><?= (int)$activityStats['ever_logged_in'] ?> have logged in</span>
+                <?php if ($activityStats['never_logged_in'] > 0): ?>
+                    <span style="color: var(--color-warning);"><?= (int)$activityStats['never_logged_in'] ?> never logged in</span>
+                <?php endif; ?>
+                <?php if ($activityStats['no_email'] > 0): ?>
+                    <span style="color: var(--color-error);"><?= (int)$activityStats['no_email'] ?> no email on file</span>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <?php if ($noEmailMembers): ?>
+        <details style="margin-bottom: var(--sp-3);">
+            <summary style="cursor: pointer; font-weight: 600; font-size: var(--fs-sm); color: var(--color-error); margin-bottom: var(--sp-2);">
+                ⚠ <?= count($noEmailMembers) ?> member<?= count($noEmailMembers) === 1 ? '' : 's' ?> with no email — cannot log in
+            </summary>
+            <div style="margin-top: var(--sp-2); overflow-x: auto;">
+            <table class="table" style="font-size: var(--fs-sm);">
+                <thead><tr><th>Name</th><th>Unit</th><th>Role</th><th></th></tr></thead>
+                <tbody>
+                <?php foreach ($noEmailMembers as $m): ?>
+                    <tr>
+                        <td><?= e(trim($m['first_name'] . ' ' . $m['last_name']) ?: '—') ?></td>
+                        <td><?= e($m['unit_number'] ?: '—') ?></td>
+                        <td><?= e(str_replace('_', ' ', (string)$m['role'])) ?></td>
+                        <td style="text-align:right;"><a class="btn btn--ghost" style="padding: 0.3rem 0.6rem; font-size: var(--fs-xs);" href="?action=edit&id=<?= (int)$m['id'] ?>">Add email</a></td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+            </div>
+        </details>
+        <?php endif; ?>
+
+        <?php if ($neverLoggedIn): ?>
+        <details style="margin-bottom: var(--sp-3);">
+            <summary style="cursor: pointer; font-weight: 600; font-size: var(--fs-sm); color: var(--color-warning); margin-bottom: var(--sp-2);">
+                👋 <?= count($neverLoggedIn) ?> member<?= count($neverLoggedIn) === 1 ? '' : 's' ?> have never logged in
+            </summary>
+            <div style="margin-top: var(--sp-2); overflow-x: auto;">
+            <table class="table" style="font-size: var(--fs-sm);">
+                <thead><tr><th>Name</th><th>Unit</th><th>Email</th><th>Added</th><th></th></tr></thead>
+                <tbody>
+                <?php foreach ($neverLoggedIn as $m): ?>
+                    <tr>
+                        <td><?= e(trim($m['first_name'] . ' ' . $m['last_name']) ?: '—') ?></td>
+                        <td><?= e($m['unit_number'] ?: '—') ?></td>
+                        <td><?= e((string)$m['email']) ?></td>
+                        <td class="muted"><?= e(date('M j, Y', strtotime((string)$m['created_at']))) ?></td>
+                        <td style="text-align:right;"><a class="btn btn--ghost" style="padding: 0.3rem 0.6rem; font-size: var(--fs-xs);" href="?action=edit&id=<?= (int)$m['id'] ?>">Edit</a></td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+            </div>
+        </details>
+        <?php endif; ?>
+
+        <?php if ($recentlyActive): ?>
+        <details>
+            <summary style="cursor: pointer; font-weight: 600; font-size: var(--fs-sm); color: var(--color-success); margin-bottom: var(--sp-2);">
+                ✓ <?= count($recentlyActive) ?> active in the last 30 days
+            </summary>
+            <div style="margin-top: var(--sp-2); overflow-x: auto;">
+            <table class="table" style="font-size: var(--fs-sm);">
+                <thead><tr><th>Name</th><th>Unit</th><th>Role</th><th>Last login</th></tr></thead>
+                <tbody>
+                <?php foreach ($recentlyActive as $m): ?>
+                    <tr>
+                        <td><?= e(trim($m['first_name'] . ' ' . $m['last_name']) ?: '—') ?></td>
+                        <td><?= e($m['unit_number'] ?: '—') ?></td>
+                        <td><?= e(str_replace('_', ' ', (string)$m['role'])) ?></td>
+                        <td class="muted"><?= e(date('M j, Y g:i a', strtotime((string)$m['last_login_at']))) ?></td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+            </div>
+        </details>
+        <?php endif; ?>
+    </div>
+    <?php endif; ?>
+
     <h2 id="board" style="font-size: var(--fs-xl); margin-top: var(--sp-2); scroll-margin-top: 80px;">Board</h2>
     <?php if (!$board): ?>
         <p class="muted">No board members on file yet.</p>
     <?php else: ?>
     <div class="grid grid--3" style="margin-bottom: var(--sp-8);">
         <?php foreach ($board as $b): $officeLbl = board_office_label((string)($b['board_office'] ?? '')); ?>
-            <div class="card">
-                <div class="row" style="margin-bottom: var(--sp-2); gap: var(--sp-2); flex-wrap: wrap;">
+            <div class="card" style="text-align: center; padding: var(--sp-5);">
+                <?php if (!empty($b['avatar_path'])): ?>
+                    <img src="/user-avatar.php?id=<?= (int)$b['id'] ?>"
+                         alt="<?= e(trim((string)$b['first_name'] . ' ' . (string)$b['last_name'])) ?>"
+                         style="width: 88px; height: 88px; border-radius: 50%; object-fit: cover; margin: 0 auto var(--sp-3); display: block; border: 3px solid var(--color-border);">
+                <?php else: ?>
+                    <div style="width: 88px; height: 88px; border-radius: 50%; background: var(--color-navy); color: #fff; display: flex; align-items: center; justify-content: center; font-size: var(--fs-2xl); font-weight: 700; margin: 0 auto var(--sp-3);">
+                        <?= e(strtoupper(mb_substr((string)($b['first_name'] ?? '?'), 0, 1))) ?>
+                    </div>
+                <?php endif; ?>
+                <div class="row" style="justify-content: center; margin-bottom: var(--sp-2); gap: var(--sp-2); flex-wrap: wrap;">
                     <?php if ($officeLbl !== ''): ?>
                         <span class="badge badge--orange"><?= e($officeLbl) ?></span>
                     <?php endif; ?>
                     <span class="badge badge--navy"><?= e(str_replace('_',' ',$b['role'])) ?></span>
                 </div>
                 <strong><?= e(trim($b['first_name'] . ' ' . $b['last_name']) ?: $b['email']) ?></strong>
-                <div class="muted" style="font-size: var(--fs-sm);">
+                <div class="muted" style="font-size: var(--fs-sm); margin-top: var(--sp-1);">
                     <?= is_placeholder_email((string)$b['email']) ? '<em class="muted">— no email on file —</em>' : e((string)$b['email']) ?><?php if ($b['phone']): ?> &middot; <?= e($b['phone']) ?><?php endif; ?>
                 </div>
             </div>

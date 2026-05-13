@@ -134,38 +134,6 @@ require __DIR__ . '/../includes/header.php';
 
 <div class="container" style="padding-top: var(--sp-8); padding-bottom: var(--sp-12); max-width: 1280px;">
 
-    <?php if ($canManage):
-        $barColor = $storagePct < 75 ? 'var(--color-success)' : ($storagePct < 95 ? 'var(--color-warning)' : 'var(--color-error)');
-        $over     = $storageUsed > $storageQuota;
-    ?>
-    <a href="/dashboard/storage.php" class="card card--padded" style="margin-bottom: var(--sp-4); display:flex; gap: var(--sp-4); align-items:center; flex-wrap: wrap; padding: var(--sp-3) var(--sp-4); text-decoration: none; color: inherit;" title="See where your storage is being used">
-        <div style="font-size: 22px; line-height: 1;">💾</div>
-        <div style="flex: 1; min-width: 200px;">
-            <div class="row" style="justify-content: space-between; gap: var(--sp-3); align-items: baseline; flex-wrap: wrap;">
-                <strong style="font-size: var(--fs-sm);">
-                    Storage:
-                    <?= e(format_bytes($storageUsed)) ?> of <?= e(format_bytes($storageQuota)) ?>
-                    <span class="muted" style="font-weight: normal;">(<?= number_format($storagePct, 1) ?>%)</span>
-                </strong>
-                <span class="muted" style="font-size: var(--fs-xs);">
-                    <?php if ((int)($association['storage_paid_extra_gb'] ?? 0) > 0): ?>
-                        Includes <?= (int)$association['storage_paid_extra_gb'] ?> GB paid add-on ·
-                    <?php endif; ?>
-                    Breakdown →
-                </span>
-            </div>
-            <div style="margin-top: 4px; height: 8px; background: var(--color-surface); border-radius: 999px; overflow: hidden;">
-                <div style="height: 100%; width: <?= number_format($storagePct, 2) ?>%; background: <?= $barColor ?>; transition: width 200ms ease;"></div>
-            </div>
-            <?php if ($over): ?>
-                <div class="muted" style="font-size: var(--fs-xs); color: var(--color-error); margin-top: 4px;">⚠ Over quota — new uploads will be blocked until you delete or upgrade.</div>
-            <?php elseif ($storagePct >= 90): ?>
-                <div class="muted" style="font-size: var(--fs-xs); color: var(--color-warning); margin-top: 4px;">Approaching your limit. New uploads will start failing soon.</div>
-            <?php endif; ?>
-        </div>
-    </a>
-    <?php endif; ?>
-
     <div class="row row--between" style="margin-bottom: var(--sp-6); align-items: flex-start; gap: var(--sp-4); flex-wrap: wrap;">
         <div>
             <span class="badge badge--orange"><?= e($association['name']) ?></span>
@@ -173,12 +141,21 @@ require __DIR__ . '/../includes/header.php';
             <p class="muted" style="margin: 0;">Here&rsquo;s what&rsquo;s happening at <?= e($association['name']) ?> today.</p>
         </div>
         <div style="text-align: right;">
-            <div data-now-time style="font-size: var(--fs-2xl); font-weight: 700; color: var(--color-navy); line-height: 1.1; font-variant-numeric: tabular-nums;">—</div>
-            <div data-now-date class="muted" style="font-size: var(--fs-sm); margin-top: 2px;">—</div>
-            <div class="row" style="gap: var(--sp-2); margin-top: var(--sp-3); justify-content: flex-end;">
-                <a class="btn btn--ghost"   href="/dashboard/communications.php?action=new">Post announcement</a>
-                <a class="btn btn--primary" href="/dashboard/documents.php?action=new">Upload document</a>
+            <div style="display:flex; align-items:baseline; justify-content:flex-end; gap: var(--sp-4);">
+                <div data-now-time style="font-size: var(--fs-2xl); font-weight: 700; color: var(--color-navy); line-height: 1.1; font-variant-numeric: tabular-nums;">—</div>
+                <?php if (!empty($association['latitude']) && !empty($association['longitude'])): ?>
+                <button id="weather-btn"
+                        data-lat="<?= e((string)$association['latitude']) ?>"
+                        data-lon="<?= e((string)$association['longitude']) ?>"
+                        title="Get current weather"
+                        style="background:none; border:none; cursor:pointer; font-size: var(--fs-xl); font-weight:700; color:var(--color-navy); padding:0; line-height:1.1; display:flex; align-items:center; gap:6px;">
+                    <span style="font-size:1.4em; line-height:1;">🌤️</span>
+                    <span id="weather-val" style="font-variant-numeric:tabular-nums;">—°</span>
+                </button>
+                <?php endif; ?>
             </div>
+            <div data-now-date class="muted" style="font-size: var(--fs-sm); margin-top: 3px;">—</div>
+            <div id="weather-desc" style="font-size: var(--fs-sm); color: var(--color-text-soft); margin-top: 2px; min-height: 1.3em;"></div>
         </div>
     </div>
     <script>
@@ -201,20 +178,95 @@ require __DIR__ . '/../includes/header.php';
             tick();
             setInterval(tick, 30000);
         })();
+
+        // Weather widget — click to fetch. Open-Meteo (free, no key).
+        // Result cached 30 min in sessionStorage; re-clicking within TTL skips the fetch.
+        (function () {
+            var btn  = document.getElementById('weather-btn');
+            var val  = document.getElementById('weather-val');
+            var desc = document.getElementById('weather-desc');
+            if (!btn || !val) return;
+
+            var STORE = 'bhoa_weather', TTL = 30 * 60 * 1000;
+            var loaded = false;
+
+            var WMO_ICON = {
+                0:'☀️', 1:'🌤️', 2:'⛅', 3:'🌥️',
+                45:'🌫️', 48:'🌫️',
+                51:'🌦️', 53:'🌦️', 55:'🌧️',
+                61:'🌧️', 63:'🌧️', 65:'🌧️',
+                71:'🌨️', 73:'🌨️', 75:'❄️', 77:'🌨️',
+                80:'🌦️', 81:'🌧️', 82:'⛈️',
+                95:'⛈️', 96:'⛈️', 99:'⛈️'
+            };
+            var WMO_LABEL = {
+                0:'Clear', 1:'Mostly clear', 2:'Partly cloudy', 3:'Overcast',
+                45:'Fog', 48:'Icy fog',
+                51:'Light drizzle', 53:'Drizzle', 55:'Heavy drizzle',
+                61:'Light rain', 63:'Rain', 65:'Heavy rain',
+                71:'Light snow', 73:'Snow', 75:'Heavy snow', 77:'Snow grains',
+                80:'Showers', 81:'Heavy showers', 82:'Violent showers',
+                95:'Thunderstorm', 96:'Thunderstorm + hail', 99:'Thunderstorm + hail'
+            };
+
+            function render(d) {
+                var cur  = d.current;
+                var code = cur.weather_code;
+                var ico  = WMO_ICON[code]  || '🌡️';
+                var lbl  = WMO_LABEL[code] || 'Unknown';
+                // Update the button: swap emoji + temperature
+                btn.querySelector('span').textContent = ico;
+                val.textContent = Math.round(cur.temperature_2m) + '°F';
+                if (desc) desc.textContent = lbl;
+                btn.title = lbl;
+                loaded = true;
+            }
+
+            // On load: check cache and silently pre-fill if fresh
+            try {
+                var hit = JSON.parse(sessionStorage.getItem(STORE) || 'null');
+                if (hit && (Date.now() - hit.ts) < TTL) {
+                    render(hit.data);
+                    btn.title = 'Click for full forecast';
+                }
+            } catch (_) {}
+
+            btn.addEventListener('click', function () {
+                var lat = btn.dataset.lat, lon = btn.dataset.lon;
+                if (loaded) {
+                    // Weather already showing — open forecast
+                    window.open('https://forecast.weather.gov/MapClick.php?lat=' + encodeURIComponent(lat) + '&lon=' + encodeURIComponent(lon), '_blank', 'noopener');
+                    return;
+                }
+                val.textContent = '…';
+                fetch('https://api.open-meteo.com/v1/forecast?latitude=' + encodeURIComponent(lat)
+                    + '&longitude=' + encodeURIComponent(lon)
+                    + '&current=temperature_2m,weather_code&temperature_unit=fahrenheit&forecast_days=1')
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) {
+                        render(d);
+                        try { sessionStorage.setItem(STORE, JSON.stringify({ ts: Date.now(), data: d })); } catch (_) {}
+                        // Update tooltip to indicate second click opens forecast
+                        btn.title = (btn.querySelector('span').textContent || '') + ' — click for full forecast';
+                    })
+                    .catch(function () { val.textContent = '—°'; });
+            });
+        })();
     </script>
 
     <style>
-        /* 4-up tile grid that collapses gracefully on narrow viewports. */
-        .dashboard-stats { display:grid; grid-template-columns: repeat(4, 1fr); gap: var(--sp-3); margin-bottom: var(--sp-8); }
-        @media (max-width: 900px) { .dashboard-stats { grid-template-columns: repeat(2, 1fr); } }
-        @media (max-width: 500px) { .dashboard-stats { grid-template-columns: 1fr; } }
+        /* 6-up tile grid that steps down gracefully on narrower viewports. */
+        .dashboard-stats { display:grid; grid-template-columns: repeat(6, 1fr); gap: var(--sp-2); margin-bottom: var(--sp-8); }
+        @media (max-width: 1100px) { .dashboard-stats { grid-template-columns: repeat(4, 1fr); } }
+        @media (max-width: 680px)  { .dashboard-stats { grid-template-columns: repeat(3, 1fr); } }
+        @media (max-width: 420px)  { .dashboard-stats { grid-template-columns: repeat(2, 1fr); } }
         /* Tile internals — icon left, label + value right. Hover gets a subtle lift. */
-        .stat { position: relative; display:flex; align-items:center; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); transition: transform 120ms ease, box-shadow 120ms ease; }
+        .stat { position: relative; display:flex; align-items:center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); transition: transform 120ms ease, box-shadow 120ms ease; }
         .stat:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(15,31,61,0.10); }
-        .stat__icon { font-size: 28px; line-height: 1; flex: 0 0 36px; }
+        .stat__icon { font-size: 20px; line-height: 1; flex: 0 0 24px; }
         .stat__body { display:flex; flex-direction: column; min-width: 0; }
-        .stat__label { font-size: var(--fs-xs); color: var(--color-text-soft); text-transform: uppercase; letter-spacing: 0.06em; }
-        .stat__value { font-size: var(--fs-xl); font-weight: 800; color: var(--color-navy); line-height: 1.1; font-variant-numeric: tabular-nums; }
+        .stat__label { font-size: 10px; color: var(--color-text-soft); text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .stat__value { font-size: var(--fs-lg); font-weight: 800; color: var(--color-navy); line-height: 1.1; font-variant-numeric: tabular-nums; }
         .stat__hint  { font-size: var(--fs-xs); color: var(--color-text-soft); margin-top: 2px; }
         .stat--alert { border-left: 3px solid var(--color-orange); }
     </style>
@@ -235,33 +287,20 @@ require __DIR__ . '/../includes/header.php';
             </div>
         </a>
         <?php endif; ?>
-        <a class="stat" href="/dashboard/directory.php#board" title="Board members + property manager">
+        <a class="stat" href="/dashboard/directory.php#board">
             <div class="stat__icon">🎩</div>
             <div class="stat__body">
                 <div class="stat__label">Board &amp; mgmt</div>
                 <div class="stat__value"><?= (int)$stats['board'] ?></div>
-                <div class="stat__hint">incl. PM</div>
             </div>
         </a>
-        <a class="stat" href="/dashboard/search.php">
+        <a class="stat<?= ($canManage && $stats['rule_changes_pending'] > 0) ? ' stat--alert' : '' ?>" href="/dashboard/search.php">
             <div class="stat__icon">📜</div>
             <div class="stat__body">
-                <div class="stat__label">Rules</div>
+                <div class="stat__label">Rules <?php if ($canManage && $stats['rule_changes_pending'] > 0): ?><span class="badge badge--warning" style="font-size: 10px; vertical-align: middle; margin-left: 4px;"><?= (int)$stats['rule_changes_pending'] ?> pending</span><?php endif; ?></div>
                 <div class="stat__value"><?= (int)$stats['rules'] ?></div>
             </div>
         </a>
-        <?php if ($canManage): ?>
-        <a class="stat<?= $stats['rule_changes_pending'] > 0 ? ' stat--alert' : '' ?>" href="/dashboard/search.php?action=suggestions" title="Pending rule suggestions + flagged-for-review">
-            <div class="stat__icon">🚩</div>
-            <div class="stat__body">
-                <div class="stat__label">Pending rules</div>
-                <div class="stat__value"><?= (int)$stats['rule_changes_pending'] ?></div>
-                <?php if ($stats['rule_changes_pending'] > 0): ?>
-                    <div class="stat__hint">awaiting review</div>
-                <?php endif; ?>
-            </div>
-        </a>
-        <?php endif; ?>
         <?php if (can_do('read_documents')): ?>
         <a class="stat" href="/dashboard/documents.php">
             <div class="stat__icon">📄</div>
@@ -304,21 +343,20 @@ require __DIR__ . '/../includes/header.php';
         <a class="stat" href="/dashboard/events.php">
             <div class="stat__icon">📅</div>
             <div class="stat__body">
-                <div class="stat__label">Events</div>
+                <div class="stat__label">Upcoming events</div>
                 <div class="stat__value"><?= (int)$stats['events'] ?></div>
-                <?php if ($stats['events'] > 0): ?>
-                    <div class="stat__hint">upcoming</div>
-                <?php endif; ?>
             </div>
         </a>
         <a class="stat<?= $stats['concerns_open'] > 0 ? ' stat--alert' : '' ?>" href="/dashboard/concerns.php">
             <div class="stat__icon">💬</div>
             <div class="stat__body">
-                <div class="stat__label">Concerns</div>
-                <div class="stat__value"><?= (int)$stats['concerns'] ?></div>
-                <?php if ($stats['concerns_open'] > 0): ?>
-                    <div class="stat__hint"><?= (int)$stats['concerns_open'] ?> open</div>
-                <?php endif; ?>
+                <div class="stat__label">Feedback pending</div>
+                <div class="stat__value">
+                    <?= (int)$stats['concerns_open'] ?>
+                    <?php if ($stats['concerns'] > $stats['concerns_open']): ?>
+                        <span style="font-size: var(--fs-sm); font-weight: 400; color: var(--color-text-soft); margin-left: 4px;">/ <?= (int)$stats['concerns'] ?> total</span>
+                    <?php endif; ?>
+                </div>
             </div>
         </a>
         <a class="stat" href="/dashboard/faq.php">
@@ -415,6 +453,38 @@ require __DIR__ . '/../includes/header.php';
         </div>
 
     </div>
+
+    <?php if ($canManage):
+        $barColor = $storagePct < 75 ? 'var(--color-success)' : ($storagePct < 95 ? 'var(--color-warning)' : 'var(--color-error)');
+        $over     = $storageUsed > $storageQuota;
+    ?>
+    <a href="/dashboard/storage.php" class="card card--padded" style="margin-top: var(--sp-6); display:flex; gap: var(--sp-4); align-items:center; flex-wrap: wrap; padding: var(--sp-3) var(--sp-4); text-decoration: none; color: inherit;" title="See where your storage is being used">
+        <div style="font-size: 22px; line-height: 1;">💾</div>
+        <div style="flex: 1; min-width: 200px;">
+            <div class="row" style="justify-content: space-between; gap: var(--sp-3); align-items: baseline; flex-wrap: wrap;">
+                <strong style="font-size: var(--fs-sm);">
+                    Storage:
+                    <?= e(format_bytes($storageUsed)) ?> of <?= e(format_bytes($storageQuota)) ?>
+                    <span class="muted" style="font-weight: normal;">(<?= number_format($storagePct, 1) ?>%)</span>
+                </strong>
+                <span class="muted" style="font-size: var(--fs-xs);">
+                    <?php if ((int)($association['storage_paid_extra_gb'] ?? 0) > 0): ?>
+                        Includes <?= (int)$association['storage_paid_extra_gb'] ?> GB paid add-on ·
+                    <?php endif; ?>
+                    Breakdown →
+                </span>
+            </div>
+            <div style="margin-top: 4px; height: 8px; background: var(--color-surface); border-radius: 999px; overflow: hidden;">
+                <div style="height: 100%; width: <?= number_format($storagePct, 2) ?>%; background: <?= $barColor ?>; transition: width 200ms ease;"></div>
+            </div>
+            <?php if ($over): ?>
+                <div class="muted" style="font-size: var(--fs-xs); color: var(--color-error); margin-top: 4px;">⚠ Over quota — new uploads will be blocked until you delete or upgrade.</div>
+            <?php elseif ($storagePct >= 90): ?>
+                <div class="muted" style="font-size: var(--fs-xs); color: var(--color-warning); margin-top: 4px;">Approaching your limit. New uploads will start failing soon.</div>
+            <?php endif; ?>
+        </div>
+    </a>
+    <?php endif; ?>
 
 </div>
 

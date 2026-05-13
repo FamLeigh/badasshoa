@@ -53,7 +53,7 @@ function permission_defaults(): array
 // stay hardcoded in require_management() so a misconfiguration can't expose them.
 function can_do(string $permission): bool
 {
-    $role = (string)($_SESSION['role'] ?? '');
+    $role = viewing_role();
     if ($role === 'super_admin') return true;
 
     $aid      = (int)($_SESSION['association_id'] ?? 0);

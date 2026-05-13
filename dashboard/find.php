@@ -18,8 +18,12 @@ $results = [
     'announcements' => [],
     'events'        => [],
     'concerns'      => [],
-    'members'       => [],
     'arc'           => [],
+    'work_orders'   => [],
+    'violations'    => [],
+    'minutes'       => [],
+    'members'       => [],
+    'faqs'          => [],
 ];
 
 if ($q !== '' && strlen($q) >= 2) {
@@ -110,6 +114,45 @@ if ($q !== '' && strlen($q) >= 2) {
     $arcs->execute($arcParams);
     $results['arc'] = $arcs->fetchAll();
 
+    // Work orders — management only
+    if ($canManage) {
+        $ws = db()->prepare(
+            'SELECT id, title, status, priority, created_at
+               FROM work_orders
+              WHERE association_id = ?
+                AND (title LIKE ? OR body LIKE ?)
+              ORDER BY created_at DESC LIMIT 15'
+        );
+        $ws->execute([$assocId, $like, $like]);
+        $results['work_orders'] = $ws->fetchAll();
+    }
+
+    // Violations — management only
+    if ($canManage) {
+        $vs = db()->prepare(
+            'SELECT id, violation_type, description, status, created_at
+               FROM violations
+              WHERE association_id = ?
+                AND description LIKE ?
+              ORDER BY created_at DESC LIMIT 15'
+        );
+        $vs->execute([$assocId, $like]);
+        $results['violations'] = $vs->fetchAll();
+    }
+
+    // Meeting minutes — management or members who have access via can_do()
+    if ($canManage || can_do('board_meeting_minutes')) {
+        $mnStmt = db()->prepare(
+            'SELECT id, title, meeting_date, meeting_type
+               FROM meeting_minutes
+              WHERE association_id = ?
+                AND (title LIKE ? OR body_html LIKE ?)
+              ORDER BY meeting_date DESC LIMIT 15'
+        );
+        $mnStmt->execute([$assocId, $like, $like]);
+        $results['minutes'] = $mnStmt->fetchAll();
+    }
+
     // Members — name / email / unit. Renters see only the board; managers
     // see everyone. Other residents see active members.
     if (viewing_role() === 'renter') {
@@ -128,6 +171,17 @@ if ($q !== '' && strlen($q) >= 2) {
     $ms = db()->prepare($mSql);
     $ms->execute([$assocId, $like, $like, $like, $like]);
     $results['members'] = $ms->fetchAll();
+
+    // FAQs — visible to anyone who can read documents (i.e., renters and up)
+    $fStmt = db()->prepare(
+        'SELECT id, question
+           FROM faqs
+          WHERE association_id = ?
+            AND (question LIKE ? OR answer LIKE ?)
+          ORDER BY sort_order, id LIMIT 15'
+    );
+    $fStmt->execute([$assocId, $like, $like]);
+    $results['faqs'] = $fStmt->fetchAll();
 }
 
 $totalHits = array_sum(array_map('count', $results));
@@ -162,13 +216,17 @@ require __DIR__ . '/../includes/header.php';
 
         <?php
         $sections = [
-            'rules'         => ['label' => '📜 Rules',         'icon' => '📜', 'href' => fn($r) => '/dashboard/rule.php?id=' . (int)$r['id']],
-            'documents'     => ['label' => '📄 Documents',     'icon' => '📄', 'href' => fn($r) => !empty($r['file_path']) ? '/dashboard/file.php?type=document&id=' . (int)$r['id'] : '/dashboard/document.php?id=' . (int)$r['id']],
-            'announcements' => ['label' => '📣 Announcements', 'icon' => '📣', 'href' => fn($r) => '/dashboard/communications.php?id=' . (int)$r['id']],
-            'events'        => ['label' => '📅 Events',        'icon' => '📅', 'href' => fn($r) => '/dashboard/event.php?id=' . (int)$r['id']],
-            'concerns'      => ['label' => '💬 Concerns',      'icon' => '💬', 'href' => fn($r) => '/dashboard/concerns.php?id=' . (int)$r['id']],
-            'arc'           => ['label' => '🏗 ARC requests',  'icon' => '🏗', 'href' => fn($r) => '/dashboard/arc.php?id=' . (int)$r['id']],
-            'members'       => ['label' => '👥 Members',       'icon' => '👥', 'href' => fn($r) => '/dashboard/directory.php?action=edit&id=' . (int)$r['id']],
+            'rules'         => ['label' => '📜 Rules',           'href' => fn($r) => '/dashboard/rule.php?id=' . (int)$r['id']],
+            'documents'     => ['label' => '📄 Documents',       'href' => fn($r) => !empty($r['file_path']) ? '/dashboard/file.php?type=document&id=' . (int)$r['id'] : '/dashboard/document.php?id=' . (int)$r['id']],
+            'announcements' => ['label' => '📣 Announcements',   'href' => fn($r) => '/dashboard/communications.php?id=' . (int)$r['id']],
+            'events'        => ['label' => '📅 Events',          'href' => fn($r) => '/dashboard/event.php?id=' . (int)$r['id']],
+            'concerns'      => ['label' => '💬 Feedback',        'href' => fn($r) => '/dashboard/concerns.php?id=' . (int)$r['id']],
+            'arc'           => ['label' => '🏗 ARC requests',    'href' => fn($r) => '/dashboard/arc.php?id=' . (int)$r['id']],
+            'work_orders'   => ['label' => '🔧 Work orders',     'href' => fn($r) => '/dashboard/work-orders.php?id=' . (int)$r['id']],
+            'violations'    => ['label' => '⚠️ Violations',      'href' => fn($r) => '/dashboard/violations.php?id=' . (int)$r['id']],
+            'minutes'       => ['label' => '📋 Meeting minutes', 'href' => fn($r) => '/dashboard/minutes.php?id=' . (int)$r['id']],
+            'members'       => ['label' => '👥 Members',         'href' => fn($r) => '/dashboard/directory.php?action=edit&id=' . (int)$r['id']],
+            'faqs'          => ['label' => '❓ FAQs',             'href' => fn($r) => '/dashboard/faq.php#faq-' . (int)$r['id']],
         ];
         ?>
 
@@ -204,6 +262,16 @@ require __DIR__ . '/../includes/header.php';
                         <?php elseif ($key === 'arc'): ?>
                             <a href="<?= e($href) ?>"><strong><?= e((string)$r['title']) ?></strong></a>
                             <div class="muted" style="font-size: var(--fs-xs);"><?= e((string)$r['category']) ?> · <?= e(str_replace('_',' ', (string)$r['status'])) ?> · <?= e(date('M j, Y', strtotime((string)$r['created_at']))) ?></div>
+                        <?php elseif ($key === 'work_orders'): ?>
+                            <a href="<?= e($href) ?>"><strong><?= e((string)$r['title']) ?></strong></a>
+                            <div class="muted" style="font-size: var(--fs-xs);"><?= e(str_replace('_',' ', (string)$r['status'])) ?> · <?= e((string)$r['priority']) ?> priority · <?= e(date('M j, Y', strtotime((string)$r['created_at']))) ?></div>
+                        <?php elseif ($key === 'violations'): ?>
+                            <a href="<?= e($href) ?>"><strong><?= e(str_replace('_',' ', ucwords((string)$r['violation_type']))) ?></strong></a>
+                            <div class="muted" style="font-size: var(--fs-xs);"><?= e(str_replace('_',' ', (string)$r['status'])) ?> · <?= e(date('M j, Y', strtotime((string)$r['created_at']))) ?></div>
+                            <div class="muted" style="font-size: var(--fs-sm); margin-top: 2px;"><?= e(mb_strimwidth((string)$r['description'], 0, 140, '…')) ?></div>
+                        <?php elseif ($key === 'minutes'): ?>
+                            <a href="<?= e($href) ?>"><strong><?= e((string)$r['title']) ?></strong></a>
+                            <div class="muted" style="font-size: var(--fs-xs);"><?= e(str_replace('_',' ', (string)$r['meeting_type'])) ?> · <?= e(date('M j, Y', strtotime((string)$r['meeting_date']))) ?></div>
                         <?php elseif ($key === 'members'): ?>
                             <a href="<?= e($href) ?>"><strong><?= e(trim($r['first_name'] . ' ' . $r['last_name']) ?: $r['email']) ?></strong></a>
                             <div class="muted" style="font-size: var(--fs-xs);">
@@ -212,6 +280,8 @@ require __DIR__ . '/../includes/header.php';
                                 <?php if (!empty($r['unit_number'])): ?> · Unit <?= e((string)$r['unit_number']) ?><?php endif; ?>
                                 <?php if (!is_placeholder_email((string)$r['email'])): ?> · <?= e((string)$r['email']) ?><?php endif; ?>
                             </div>
+                        <?php elseif ($key === 'faqs'): ?>
+                            <a href="<?= e($href) ?>"><strong><?= e((string)$r['question']) ?></strong></a>
                         <?php endif; ?>
                     </li>
                 <?php endforeach; ?>

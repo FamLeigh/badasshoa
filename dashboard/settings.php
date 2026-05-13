@@ -102,6 +102,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'update'
     $instagramUrl = $normalizeUrl((string)($_POST['instagram_url'] ?? ''));
     $twitterUrl   = $normalizeUrl((string)($_POST['twitter_url']   ?? ''));
     $nextdoorUrl  = $normalizeUrl((string)($_POST['nextdoor_url']  ?? ''));
+    $youtubeUrl   = $normalizeUrl((string)($_POST['youtube_url']   ?? ''));
 
     // Which section of the page submitted? Either form posts here, but each
     // edits a disjoint slice of the row. Without this, posting the Profile
@@ -175,13 +176,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'update'
                 "UPDATE associations
                  SET vision_statement = ?, about_text = ?, amenities_text = ?,
                      contact_email = ?, contact_phone = ?,
-                     website_url = ?, facebook_url = ?, instagram_url = ?, twitter_url = ?, nextdoor_url = ?,
+                     website_url = ?, facebook_url = ?, instagram_url = ?, twitter_url = ?, nextdoor_url = ?, youtube_url = ?,
                      public_landing_enabled = ?
                  WHERE id = ?"
             )->execute([
                 $vision ?: null, $aboutText ?: null, $amenitiesText ?: null,
                 $contactEmail ?: null, $contactPhone ?: null,
-                $websiteUrl, $facebookUrl, $instagramUrl, $twitterUrl, $nextdoorUrl,
+                $websiteUrl, $facebookUrl, $instagramUrl, $twitterUrl, $nextdoorUrl, $youtubeUrl,
                 $publicLanding, $assocId,
             ]);
             audit('association.content_updated', ['has_about' => $aboutText !== '', 'has_vision' => $vision !== '', 'public_landing_enabled' => (bool)$publicLanding]);
@@ -409,7 +410,10 @@ require __DIR__ . '/../includes/header.php';
                     <label class="field__label" for="and">Nextdoor</label>
                     <input class="input" type="url" id="and" name="nextdoor_url" value="<?= e((string)($association['nextdoor_url'] ?? '')) ?>" placeholder="https://nextdoor.com/neighborhood/...">
                 </div>
-                <div class="field"><!-- spacer --></div>
+                <div class="field">
+                    <label class="field__label" for="ayt">YouTube</label>
+                    <input class="input" type="url" id="ayt" name="youtube_url" value="<?= e((string)($association['youtube_url'] ?? '')) ?>" placeholder="https://youtube.com/@your-channel">
+                </div>
             </div>
 
             <div class="row" style="justify-content: space-between; align-items:center; margin-top: var(--sp-5);">

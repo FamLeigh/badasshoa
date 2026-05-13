@@ -327,9 +327,16 @@ if ($showSubmit) {
 }
 
 $active = 'concerns';
-$page_title = 'Concerns — ' . $association['name'];
+$page_title = 'Feedback — ' . $association['name'];
 require __DIR__ . '/../includes/header.php';
 
+function concern_type_label(string $t): string {
+    return match ($t) {
+        'compliment' => 'Complement',
+        'suggestion' => 'Suggestion',
+        default      => 'Concern',
+    };
+}
 function concern_type_badge(string $t): string {
     return match ($t) {
         'compliment' => 'badge--success',
@@ -356,7 +363,7 @@ function concern_status_badge(string $s): string {
             <a class="muted" style="font-size: var(--fs-sm);" href="/dashboard/concerns.php">← Back</a>
             <h1 style="font-size: var(--fs-2xl); margin: var(--sp-2) 0 0;"><?= e((string)$detail['subject']) ?></h1>
             <div class="row" style="gap: var(--sp-2); margin-top: var(--sp-2); flex-wrap: wrap;">
-                <span class="badge <?= concern_type_badge((string)$detail['type']) ?>"><?= e((string)$detail['type']) ?></span>
+                <span class="badge <?= concern_type_badge((string)$detail['type']) ?>"><?= e(concern_type_label((string)$detail['type'])) ?></span>
                 <span class="badge <?= concern_status_badge((string)$detail['status']) ?>"><?= e(str_replace('_',' ',(string)$detail['status'])) ?></span>
                 <?php if (!empty($detail['category'])): ?><span class="muted" style="font-size: var(--fs-sm);">· <?= e((string)$detail['category']) ?></span><?php endif; ?>
                 <span class="muted" style="font-size: var(--fs-sm);">
@@ -516,7 +523,7 @@ function concern_status_badge(string $s): string {
     <?php elseif ($showSubmit): ?>
 
     <div class="row row--between" style="margin-bottom: var(--sp-3);">
-        <h1 style="font-size: var(--fs-2xl); margin: 0;">Submit a concern</h1>
+        <h1 style="font-size: var(--fs-2xl); margin: 0;">Complement &middot; Concern &middot; Suggestion</h1>
         <a class="muted" style="font-size: var(--fs-sm);" href="/dashboard/concerns.php">← Back</a>
     </div>
     <p class="muted" style="margin-bottom: var(--sp-4);">
@@ -532,8 +539,8 @@ function concern_status_badge(string $s): string {
             <div class="field">
                 <label class="field__label" for="ct">Type</label>
                 <select class="select" id="ct" name="type">
-                    <option value="complaint">Complaint</option>
-                    <option value="compliment">Compliment</option>
+                    <option value="complaint">Concern</option>
+                    <option value="compliment">Complement</option>
                     <option value="suggestion">Suggestion</option>
                 </select>
             </div>
@@ -621,21 +628,21 @@ function concern_status_badge(string $s): string {
 
     <div class="row row--between" style="margin-bottom: var(--sp-4);">
         <div>
-            <h1 style="font-size: var(--fs-3xl); margin: 0;">Concerns</h1>
+            <h1 style="font-size: var(--fs-3xl); margin: 0;">All Concerns, Complements and Suggestions Welcome</h1>
             <p class="muted">
                 <?php if ($canManage): ?>
-                    Complaints, compliments, and suggestions from members. Click any row to read and respond.
+                    Complements, concerns, and suggestions from members. Click any row to read and respond.
                 <?php else: ?>
                     Your submissions to the board. The board sees everything except items you mark anonymous.
                 <?php endif; ?>
             </p>
         </div>
-        <a class="btn btn--primary" href="?action=submit">+ Submit a concern</a>
+        <a class="btn btn--primary" href="?action=submit">+ Submit feedback</a>
     </div>
 
     <?php if ($canManage && $pendingCount > 0): ?>
     <div class="flash flash--warning" style="margin-bottom: var(--sp-4);">
-        <strong><?= (int)$pendingCount ?> open concern<?= $pendingCount===1?'':'s' ?></strong> awaiting board attention.
+        <strong><?= (int)$pendingCount ?> open item<?= $pendingCount===1?'':'s' ?></strong> awaiting board attention.
     </div>
     <?php endif; ?>
 
@@ -651,7 +658,7 @@ function concern_status_badge(string $s): string {
                style="text-decoration:none; <?= $statusFilter!==$val?'opacity:0.6;':'' ?>"><?= e($lbl) ?></a>
         <?php endforeach; ?>
         <span class="muted" style="font-size: var(--fs-xs); align-self:center; margin-left: var(--sp-3);">Type:</span>
-        <?php foreach (['complaint'=>'Complaint','compliment'=>'Compliment','suggestion'=>'Suggestion'] as $val=>$lbl): ?>
+        <?php foreach (['complaint'=>'Concern','compliment'=>'Complement','suggestion'=>'Suggestion'] as $val=>$lbl): ?>
             <a class="badge <?= $typeFilter===$val?'badge--info':'' ?>"
                href="?<?= http_build_query(array_filter(['status'=>$statusFilter,'type'=>$val])) ?>"
                style="text-decoration:none; <?= $typeFilter!==$val?'opacity:0.6;':'' ?>"><?= e($lbl) ?></a>
@@ -665,7 +672,7 @@ function concern_status_badge(string $s): string {
     <?php if (!$listing): ?>
         <div class="card card--padded center" style="padding: var(--sp-12) var(--sp-6);">
             <p class="muted">
-                <?php if ($canManage): ?>No concerns yet matching that filter.<?php else: ?>You haven't filed any concerns yet.<?php endif; ?>
+                <?php if ($canManage): ?>No feedback yet matching that filter.<?php else: ?>You haven't submitted any feedback yet.<?php endif; ?>
             </p>
         </div>
     <?php else: ?>
@@ -687,7 +694,7 @@ function concern_status_badge(string $s): string {
                         <div class="muted" style="font-size: var(--fs-xs);"><?= e((string)$row['category']) ?></div>
                     <?php endif; ?>
                 </td>
-                <td><span class="badge <?= concern_type_badge((string)$row['type']) ?>"><?= e((string)$row['type']) ?></span></td>
+                <td><span class="badge <?= concern_type_badge((string)$row['type']) ?>"><?= e(concern_type_label((string)$row['type'])) ?></span></td>
                 <td><span class="badge <?= concern_status_badge((string)$row['status']) ?>"><?= e(str_replace('_',' ',(string)$row['status'])) ?></span></td>
                 <?php if ($canManage): ?>
                 <td>

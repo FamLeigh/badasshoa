@@ -260,26 +260,25 @@ This file (CLAUDE.md) keeps an internal-only summary in the section below for cr
 
 ## Where we left off (resume here next session)
 
-**Last session ended:** 2026-05-12 (session 3) — **permissions + role cleanup sprint shipped to prod**. Migrations 042–045 applied. Working tree has untracked new files (violations, minutes, violation-notice-print) plus modified files. Last commit was `ba0b3e7`.
+**Last session ended:** 2026-05-12 (session 4) — **UI polish + global search sprint**. No new migrations. All changes are PHP/CSS only. Last commit is session-4 commit (see git log).
 
 **What got built this session:**
-- **Employee financial gate** — pay type/rate/salary hidden from board_member + property_manager; only board_admin and super_admin can see or edit pay details
-- **Employee documents** — W-9s, contracts, background checks attached directly in employee edit view (board_admin only; board-only access_level; quota-tracked)
-- **Insurance documents** — policy PDFs, COIs, endorsements attached directly in insurance edit view (same pattern)
-- **Work order employee assignment** — "Assigned to" dropdown now includes active employees (shows employee title if set), not just board/management users
-- **Work order → announcement** — when changing WO status, optional checkbox expands title + audience + body; auto-fills title prefix based on status
-- **Role renamed: resident → owner** — DB ENUM migration (045, 3-step safe rename), 191 users migrated; all PHP files swept; ROLE_RANK updated
-- **Staff role fully wired** — added to ROLE_RANK, both allowedRoles arrays in directory.php, both role selects, role filter dropdown on residents search
-- **Configurable permissions dashboard** — `/dashboard/permissions.php` (board_admin only to edit); `association_permissions` DB table; `can_do()` helper in auth.php with static cache; `permission_defaults()` with 9 configurable features; minutes/work-orders/violations now use `can_do()` for view gating with hard management checks on all write actions
-- **Board meeting minutes** — `/dashboard/minutes.php`, Quill WYSIWYG, attendee list, meeting types, read-only for members
-- **Violation workflow** — `/dashboard/violations.php`, formal notices (warning/cure/fine/hearing), print-ready letters, Concern → Violation conversion
-- **Forgot-password IP rate limiting** — `login_attempts` table reused with `kind='password_reset'`; 5 req/IP/hour
-- **Changelog + CLAUDE.md** — updated with all 7 session-3 features (this entry)
+- **Dashboard tile grid** — 6-across (was 4), tighter padding/icons; breakpoints 4@≤1100px, 3@≤680px, 2@≤420px
+- **Dashboard cleanup** — removed "incl. PM" hint on board tile, "upcoming" hint on events tile; feedback value now shows pending count + inline "/ N total" on same line; removed "Post announcement" and "Upload document" quick-action buttons
+- **Sidebar nav tightened** — link padding reduced to 5px vertical; group-label font bumped to 11px at 45% opacity; group-label top padding removed
+- **Collapse toggle redesign** — floating `position: fixed` circular button (28px, navy border + shadow) pinned at `left: calc(--side-nav-w - 14px)`, outside the sidebar so `overflow: hidden` doesn't clip it; slides with the sidebar via CSS variable; chevron rotates 180° when collapsed
+- **Sign-out button** — added text label "Sign out" next to icon; hidden at ≤860px
+- **Scroll hint** — changed from non-interactive `<div>` to a `<button>`; click scrolls the nav list down 120px smoothly
+- **Weather tile** — second click (when forecast is loaded) opens the NWS forecast page for the association's lat/lon in a new tab
+- **Board member headshots** — 88px centered avatars (photo or navy initial fallback) on directory board-member cards
+- **Directory activity stats** — collapsible `<details>` panel (board_admin/super_admin only) showing count of: members with no real email, members who've never logged in, members active in last 30 days
+- **`can_do()` bug fix** — was reading `$_SESSION['role']` directly; now correctly calls `viewing_role()` so view-as-renter/owner actually hides board-only nav links and pages
+- **Global search expanded** — `dashboard/find.php` now covers: work orders (management), violations (management), meeting minutes (via `can_do()`), members, and FAQs (all roles)
 
 **Production state in DB:**
-- Migrations through 045 applied to `u535581001_badassHOA`
-- 191 users with `role='owner'` (was `resident`); 2 staff; 4 board_member; 1 property_manager; 1 board_admin; 2 super_admin
-- `association_permissions` table created (no custom overrides yet — all defaults in effect)
+- Migrations through 045 applied to `u535581001_badassHOA` — no new migrations this session
+- 191 users with `role='owner'`; 2 staff; 4 board_member; 1 property_manager; 1 board_admin; 2 super_admin
+- `association_permissions` table exists; no custom overrides (all defaults in effect)
 - Email driver still `log` (paused since 2026-05-10)
 
 **Logins:**
@@ -290,23 +289,26 @@ This file (CLAUDE.md) keeps an internal-only summary in the section below for cr
 - Marketing home: https://badasshoa.com/
 - Public landing: https://badasshoa.com/bellair/
 - Dashboard: https://badasshoa.com/dashboard/
+- Global search: https://badasshoa.com/dashboard/find.php?q=pool
 - Permissions: https://badasshoa.com/dashboard/permissions.php
-- Latest changelog entry visible at the top of https://badasshoa.com/changelog.php
 
 **Known gotchas to not regress:**
-- `can_do()` static cache is per-request (keyed by `$aid`). If you test permissions in the same PHP process with two different associations, flush the static manually or use a fresh request.
-- Every write POST handler in work-orders.php and violations.php has an explicit `if (!$canManageWO/Vio) { 403; die }` guard — removing the top-level `require_management()` means those individual guards are load-bearing.
-- `documents` table now has `employee_id` and `insurance_id` nullable FKs (migration 044). Any query that lists "all docs for an association" that doesn't filter by these columns will now include employee/insurance docs. The file gatekeeper checks `access_level='board_only'` so renters can't reach them, but be aware.
-- The pool FAQ (id 8) still has `[VERIFY]` markers — Kevin didn't finish the rewrite from the paper sign.
+- `can_do()` now calls `viewing_role()` — this is intentional and load-bearing for the view-as feature. Do not revert to `$_SESSION['role']`.
+- `can_do()` static cache is per-request (keyed by `$aid`). Two associations in the same PHP process will need a fresh request to clear it.
+- Every write POST handler in work-orders.php and violations.php has an explicit `if (!$canManageWO/Vio) { 403; die }` guard — the individual guards are load-bearing (no top-level `require_management()`).
+- `documents` table has `employee_id` and `insurance_id` nullable FKs (migration 044). Queries that list "all docs for an association" will include employee/insurance docs unless filtered. The file gatekeeper blocks renters via `access_level='board_only'`.
+- The pool FAQ (id 8) still has `[VERIFY]` markers in the answer text — Kevin's rewrite from the paper sign was never finalized.
+- The first Bellair user form (temp parking pass) was never test-filed to validate the flow end-to-end.
 
 **Candidates for next session** (queued + roughly prioritized):
-1. **Lobby-TV digital signage / community board** — rotating-content TV mode, auto-refresh, no-login URL with a token.
-2. **Maintenance request → Work Order conversion** — maintenance form submissions should land in the WO queue (same pattern as Concern → WO and ARC → WO).
-3. **Turn email back on** — flip prod `config.mail.driver` from `log` to `msmtp` (one line in server config.php whenever Kevin says).
-4. **Service animal registration form** — requested in a prior session; never addressed.
-5. **Newsletter signup** on the public landing.
-6. **Per-user TZ preference** — server-rendered timestamps are still UTC everywhere.
-7. **Per-association logo upload** — use in dashboard nav.
+1. **Board voting module** — Kevin said "next up voting." Board creates a ballot with options + deadline; members cast one vote; results reveal after deadline. New table `votes` (id, association_id, title, description, options JSON, deadline, status) + `vote_responses` (vote_id, user_id, choice, cast_at) + `/dashboard/voting.php`.
+2. **Lobby-TV digital signage** — rotating-content TV mode, auto-refresh, no-login URL with a time-limited token.
+3. **Maintenance request → Work Order conversion** — form submission lands in the WO queue (same Concern→WO / ARC→WO pattern already in place).
+4. **Turn email back on** — flip prod `config.mail.driver` from `log` to `msmtp` (one line in server config.php whenever Kevin says go).
+5. **Service animal registration form** — queued from a prior session; never shipped.
+6. **Newsletter signup** on the public landing.
+7. **Per-user TZ preference** — all server-rendered timestamps are UTC right now; add a TZ field to user settings and wrap display formatters.
+8. **Per-association logo upload** — use it in the dashboard nav instead of the text name.
 
 **Big-ticket comms / outreach features (queued — likely a Phase 3 batch):**
 
@@ -368,6 +370,16 @@ All four share a `broadcasts` table (kind / audience / subject / body / schedule
 ---
 
 ## Changelog
+
+- **2026-05-12 (session 4) — UI polish + global search sprint.**
+    - Dashboard: 6-across tile grid, tighter padding/icons, removed "incl. PM" / "upcoming" hints, feedback shows pending + inline total, removed quick-action buttons at top.
+    - Sidebar collapse toggle: redesigned as floating `position: fixed` circular edge button (no longer clipped by sidebar overflow). Slides with sidebar via CSS variable.
+    - Sign-out button: added visible text label. Scroll hint: now a clickable button that scrolls nav down.
+    - Weather tile: second click opens NWS forecast for association's lat/lon.
+    - Board member headshots in directory (88px avatar or navy-initial fallback).
+    - Directory activity stats panel (board_admin only): no-real-email count, never-logged-in count, active-last-30-days count.
+    - Bug fix: `can_do()` was reading `$_SESSION['role']` instead of `viewing_role()` — view-as simulation was broken for permission checks.
+    - Global search now covers: work orders, violations, meeting minutes, members, and FAQs.
 
 - **2026-05-12 (session 3) — Permissions, role cleanup, and ops polish sprint.**
     - Migrations 042–045 applied to prod. Working tree has untracked new files (violations.php, minutes.php, violation-notice-print.php, migrations 042–045).

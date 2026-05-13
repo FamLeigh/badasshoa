@@ -81,9 +81,22 @@ function nav_link(string $href, string $iconKey, string $label, string $key, str
          . '</a>';
 }
 
-$active     = active_nav_key();
-$shellClass = $page_layout === 'app' || $page_layout === 'admin' ? 'app-shell' : '';
+$active      = active_nav_key();
+$shellClass  = $page_layout === 'app' || $page_layout === 'admin' ? 'app-shell' : '';
 $userInitial = strtoupper(substr(trim((string)($_SESSION['name'] ?? $_SESSION['email'] ?? '?')), 0, 1) ?: '?');
+
+// Map active page key → group id, so JS can force that group open even if the
+// user previously collapsed it.
+$_groupForActive = [
+    'home' => 'community', 'communications' => 'community', 'events' => 'community', 'faq' => 'community',
+    'documents' => 'resources', 'forms' => 'resources', 'rules' => 'resources',
+    'minutes' => 'resources', 'media' => 'resources', 'directory' => 'resources', 'contacts' => 'resources',
+    'committees' => 'governance', 'concerns' => 'governance', 'arc' => 'governance',
+    'violations' => 'governance', 'work-orders' => 'governance',
+    'units' => 'operations', 'parking' => 'operations', 'employees' => 'operations', 'insurance' => 'operations',
+    'locations' => 'configuration', 'permissions' => 'configuration',
+    'activity' => 'configuration', 'settings' => 'configuration',
+][$active] ?? '';
 ?><!doctype html>
 <html lang="en">
 <head>
@@ -242,6 +255,42 @@ if ($page_layout === 'app' && isset($association) && $association):
     $assocLogoSrc = !empty($association['logo_path'])
         ? '/branding.php?id=' . (int)$association['id']
         : null;
+
+    // Alert counts — management only; skip for owners/renters.
+    $_alerts = [];
+    if (isset($assocId) && role_can_manage(viewing_role())) {
+        $_q = function(string $sql, array $params) { $s = db()->prepare($sql); $s->execute($params); return (int)$s->fetchColumn(); };
+        $_aid = $assocId;
+
+        $_pending_rules = $_q(
+            "SELECT COUNT(*) FROM rule_suggestions WHERE association_id=? AND status='pending'",
+            [$_aid]
+        ) + $_q("SELECT COUNT(*) FROM rules WHERE association_id=? AND review_flag=1", [$_aid]);
+
+        $_open_concerns = $_q(
+            "SELECT COUNT(*) FROM concerns WHERE association_id=? AND status NOT IN ('closed','resolved')",
+            [$_aid]
+        );
+        $_open_wo = $_q(
+            "SELECT COUNT(*) FROM work_orders WHERE association_id=? AND status IN ('open','in_progress','blocked')",
+            [$_aid]
+        );
+        $_pending_arc = $_q(
+            "SELECT COUNT(*) FROM arc_requests WHERE association_id=? AND status IN ('submitted','under_review')",
+            [$_aid]
+        );
+        $_open_vio = $_q(
+            "SELECT COUNT(*) FROM violations WHERE association_id=? AND status NOT IN ('cured','closed')",
+            [$_aid]
+        );
+
+        if ($_pending_rules) $_alerts[] = ['label' => 'Pending rule changes', 'count' => $_pending_rules, 'href' => '/dashboard/search.php'];
+        if ($_open_concerns)  $_alerts[] = ['label' => 'Open concerns',        'count' => $_open_concerns,  'href' => '/dashboard/concerns.php'];
+        if ($_open_wo)        $_alerts[] = ['label' => 'Open work orders',     'count' => $_open_wo,        'href' => '/dashboard/work-orders.php'];
+        if ($_pending_arc)    $_alerts[] = ['label' => 'ARC requests',         'count' => $_pending_arc,    'href' => '/dashboard/arc.php'];
+        if ($_open_vio)       $_alerts[] = ['label' => 'Open violations',      'count' => $_open_vio,       'href' => '/dashboard/violations.php'];
+    }
+    $_alertTotal = array_sum(array_column($_alerts, 'count'));
 ?>
 <header class="app-topbar" role="banner">
     <a href="/dashboard/" class="app-topbar__brand" aria-label="<?= e((string)$association['name']) ?> dashboard home">
@@ -272,12 +321,85 @@ if ($page_layout === 'app' && isset($association) && $association):
         <input type="search" name="q" placeholder="Search everything…" autocomplete="off" minlength="2" required value="<?= e((string)($_GET['q'] ?? '')) ?>">
     </form>
     <?php endif; ?>
-    <button type="button" class="app-topbar__toggle side-nav__toggle" id="side-nav-toggle" aria-label="Collapse sidebar" title="Collapse sidebar">
-        <?= nav_icon('collapse') ?>
-    </button>
+
+    <?php
+    // Avatar for the topbar user cluster.
+    $_tbAvatar = null;
+    if (!empty($_SESSION['user_id'])) {
+        $_chk2 = db()->prepare('SELECT avatar_path FROM users WHERE id = ?');
+        $_chk2->execute([(int)$_SESSION['user_id']]);
+        $_p2 = (string)($_chk2->fetchColumn() ?: '');
+        if ($_p2 !== '') $_tbAvatar = '/user-avatar.php?id=' . (int)$_SESSION['user_id'] . '&v=' . substr(md5($_p2), 0, 8);
+    }
+    ?>
+
+    <?php if ($_alerts): ?>
+    <div class="topbar-alerts" id="topbar-alerts">
+        <button class="topbar-alerts__btn" type="button" id="topbar-alerts-btn" aria-label="<?= (int)$_alertTotal ?> pending items" aria-expanded="false" aria-controls="topbar-alerts-dropdown">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            <span class="topbar-alerts__badge"><?= (int)$_alertTotal ?></span>
+        </button>
+        <div class="topbar-alerts__dropdown" id="topbar-alerts-dropdown" role="menu" hidden>
+            <div class="topbar-alerts__head">Needs attention</div>
+            <?php foreach ($_alerts as $_a): ?>
+            <a class="topbar-alerts__item" href="<?= e($_a['href']) ?>" role="menuitem">
+                <span class="topbar-alerts__item-label"><?= e($_a['label']) ?></span>
+                <span class="topbar-alerts__item-count"><?= (int)$_a['count'] ?></span>
+            </a>
+            <?php endforeach; ?>
+        </div>
+    </div>
+    <script>
+    (function(){
+        var btn = document.getElementById('topbar-alerts-btn');
+        var drop = document.getElementById('topbar-alerts-dropdown');
+        if (!btn || !drop) return;
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            var open = !drop.hidden;
+            drop.hidden = open;
+            btn.setAttribute('aria-expanded', String(!open));
+        });
+        document.addEventListener('click', function() { drop.hidden = true; btn.setAttribute('aria-expanded','false'); });
+        drop.addEventListener('click', function(e) { e.stopPropagation(); });
+    })();
+    </script>
+    <?php endif; ?>
+
+    <div class="topbar-user">
+        <?php if (role_can_manage((string)($_SESSION['role'] ?? '')) && !is_viewing_as()): ?>
+        <form class="topbar-view-as" method="post" action="/dashboard/view-as.php">
+            <?= csrf_field() ?>
+            <input type="hidden" name="back" value="<?= e((string)($_SERVER['REQUEST_URI'] ?? '/dashboard/')) ?>">
+            <span class="topbar-view-as__label">View as</span>
+            <button class="topbar-view-as__btn" type="submit" name="role" value="owner">Owner</button>
+            <button class="topbar-view-as__btn" type="submit" name="role" value="renter">Renter</button>
+        </form>
+        <?php endif; ?>
+        <a class="topbar-user__profile" href="/dashboard/profile.php" title="Edit profile">
+            <span class="topbar-user__avatar">
+                <?php if ($_tbAvatar): ?>
+                    <img src="<?= e($_tbAvatar) ?>" alt="">
+                <?php else: ?>
+                    <?= e($userInitial) ?>
+                <?php endif; ?>
+            </span>
+            <span class="topbar-user__name"><?= e(trim(explode(' ', (string)($_SESSION['name'] ?? ''))[0])) ?: e($userInitial) ?></span>
+        </a>
+        <a class="topbar-user__signout" href="/logout.php" title="Sign out">
+            <?= nav_icon('logout') ?>
+            <span class="topbar-user__signout-label">Sign out</span>
+        </a>
+    </div>
+
 </header>
 <?php endif; ?>
 
+<?php if ($page_layout === 'app'): ?>
+<button type="button" class="side-nav__edge-toggle" id="side-nav-toggle" aria-label="Collapse sidebar" title="Collapse sidebar">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+</button>
+<?php endif; ?>
 <nav class="side-nav" id="side-nav" aria-label="<?= $page_layout === 'admin' ? 'Admin' : 'Dashboard' ?> navigation">
     <div class="side-nav__inner">
 
@@ -298,57 +420,85 @@ if ($page_layout === 'app' && isset($association) && $association):
 
         <div class="side-nav__links">
         <?php if ($page_layout === 'app'): ?>
-            <?= nav_link('/dashboard/',                'home',           'Home',           'home',           $active) ?>
-            <?= nav_link('/dashboard/communications.php', 'communications', 'Announcements', 'communications', $active) ?>
-            <?= nav_link('/dashboard/events.php',      'committees',     'Events',         'events',         $active) ?>
-            <?= nav_link('/dashboard/faq.php',         'rules',          'FAQ',            'faq',            $active) ?>
-            <?= nav_link('/dashboard/forms.php',       'documents',      'Forms',          'forms',          $active) ?>
-            <?= nav_link('/dashboard/documents.php',   'documents',      'Documents',      'documents',      $active) ?>
-            <?php if (can_do('read_minutes')): ?>
-                <?= nav_link('/dashboard/minutes.php',     'minutes',        'Minutes',        'minutes',        $active) ?>
-            <?php endif; ?>
-            <?= nav_link('/dashboard/search.php',      'rules',          'Rules',          'rules',          $active) ?>
-            <?= nav_link('/dashboard/directory.php',   'directory',      'Directory',      'directory',      $active) ?>
-            <?php if (can_do('read_contacts')): ?>
-                <?= nav_link('/dashboard/contacts.php',    'contacts',       'Contacts',       'contacts',       $active) ?>
-            <?php endif; ?>
+
+            <?php
+            // Tiny helper — emits an open/close-able group.
+            // Groups default OPEN; user can collapse, state saved in localStorage.
+            // The active page's group is always forced open regardless of saved state.
+            $navGroup = function(string $id, string $label, string $content) use ($_groupForActive): void {
+                $chevron = '<svg class="side-nav__group-chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>';
+                echo '<div class="side-nav__group" data-group="' . e($id) . '"' . ($id === $_groupForActive ? ' data-force-open' : '') . '>'
+                   . '<button class="side-nav__group-toggle" type="button" aria-expanded="true">'
+                   . '<span class="side-nav__group-label">' . e($label) . '</span>'
+                   . $chevron
+                   . '</button>'
+                   . '<div class="side-nav__group-links">' . $content . '</div>'
+                   . '</div>';
+            };
+            ob_start(); ?>
+                <?= nav_link('/dashboard/',                   'home',           'Home',          'home',           $active) ?>
+                <?= nav_link('/dashboard/communications.php', 'communications', 'Announcements', 'communications', $active) ?>
+                <?= nav_link('/dashboard/events.php',         'committees',     'Events',        'events',         $active) ?>
+                <?= nav_link('/dashboard/faq.php',            'rules',          'FAQ',           'faq',            $active) ?>
+            <?php $navGroup('community', 'Community', ob_get_clean()); ?>
+
+            <?php ob_start(); ?>
+                <?= nav_link('/dashboard/documents.php', 'documents', 'Documents', 'documents', $active) ?>
+                <?= nav_link('/dashboard/forms.php',     'documents', 'Forms',     'forms',     $active) ?>
+                <?= nav_link('/dashboard/search.php',    'rules',     'Rules',     'rules',     $active) ?>
+                <?php if (can_do('read_minutes')): ?>
+                    <?= nav_link('/dashboard/minutes.php', 'minutes', 'Minutes', 'minutes', $active) ?>
+                <?php endif; ?>
+                <?= nav_link('/dashboard/media.php',     'media',     'Media',     'media',     $active) ?>
+                <?= nav_link('/dashboard/directory.php', 'directory', 'Directory', 'directory', $active) ?>
+                <?php if (can_do('read_contacts')): ?>
+                    <?= nav_link('/dashboard/contacts.php', 'contacts', 'Contacts', 'contacts', $active) ?>
+                <?php endif; ?>
+            <?php $navGroup('resources', 'Resources', ob_get_clean()); ?>
+
+            <?php ob_start(); ?>
+                <?php if (viewing_role() !== 'renter'): ?>
+                    <?= nav_link('/dashboard/committees.php', 'committees', 'Committees', 'committees', $active) ?>
+                <?php endif; ?>
+                <?= nav_link('/dashboard/concerns.php', 'concerns', 'Feedback', 'concerns', $active) ?>
+                <?php if (viewing_role() !== 'renter'): ?>
+                    <?= nav_link('/dashboard/arc.php', 'documents', 'Arch. review', 'arc', $active) ?>
+                <?php endif; ?>
+                <?php if (role_can_manage(viewing_role()) || can_do('read_violations')): ?>
+                    <?= nav_link('/dashboard/violations.php', 'violations', 'Violations', 'violations', $active) ?>
+                <?php endif; ?>
+                <?php if (role_can_manage(viewing_role()) || can_do('read_work_orders')): ?>
+                    <?= nav_link('/dashboard/work-orders.php', 'concerns', 'Work orders', 'work-orders', $active) ?>
+                <?php endif; ?>
+            <?php $navGroup('governance', 'Governance', ob_get_clean()); ?>
+
             <?php if (role_can_manage(viewing_role())): ?>
-                <?= nav_link('/dashboard/units.php',       'units',          'Units',          'units',          $active) ?>
-                <?= nav_link('/dashboard/parking.php',     'parking',        'Parking',        'parking',        $active) ?>
-            <?php endif; ?>
-            <?php if (viewing_role() !== 'renter'): /* committees are owner/board territory */ ?>
-                <?= nav_link('/dashboard/committees.php', 'committees',  'Committees',     'committees',     $active) ?>
-            <?php endif; ?>
-            <?= nav_link('/dashboard/concerns.php',    'concerns',       'Concerns',       'concerns',       $active) ?>
-            <?= nav_link('/dashboard/arc.php',         'documents',      'Arch. review',   'arc',            $active) ?>
-            <?php if (role_can_manage(viewing_role()) || can_do('read_violations')): ?>
-                <?= nav_link('/dashboard/violations.php',  'violations',     'Violations',     'violations',     $active) ?>
-            <?php endif; ?>
-            <?php if (role_can_manage(viewing_role()) || can_do('read_work_orders')): ?>
-                <?= nav_link('/dashboard/work-orders.php', 'concerns',       'Work orders',    'work-orders',    $active) ?>
-            <?php endif; ?>
-            <?php if (role_can_manage(viewing_role())): ?>
-                <?= nav_link('/dashboard/employees.php',   'directory',      'Employees',      'employees',      $active) ?>
-                <?= nav_link('/dashboard/insurance.php',   'documents',      'Insurance',      'insurance',      $active) ?>
-            <?php endif; ?>
-            <?= nav_link('/dashboard/media.php',       'media',          'Media',          'media',          $active) ?>
-            <?php if (role_can_manage(viewing_role())): ?>
-                <?= nav_link('/dashboard/locations.php',   'locations',      'Locations',      'locations',      $active) ?>
-                <?= nav_link('/dashboard/permissions.php', 'permissions',    'Permissions',    'permissions',    $active) ?>
-                <?= nav_link('/dashboard/activity.php',    'activity',       'Activity',       'activity',       $active) ?>
-            <?php endif; ?>
-            <?php if (viewing_role() !== 'renter'): /* renters don't need to see the settings area */ ?>
-                <?= nav_link('/dashboard/settings.php', 'settings',     'Settings',       'settings',       $active) ?>
-            <?php endif; ?>
-            <?php if (!empty($association['subdomain'])): ?>
+            <?php ob_start(); ?>
+                <?= nav_link('/dashboard/units.php',     'units',     'Units',     'units',     $active) ?>
+                <?= nav_link('/dashboard/parking.php',   'parking',   'Parking',   'parking',   $active) ?>
+                <?= nav_link('/dashboard/employees.php', 'directory', 'Employees', 'employees', $active) ?>
+                <?= nav_link('/dashboard/insurance.php', 'documents', 'Insurance', 'insurance', $active) ?>
+            <?php $navGroup('operations', 'Operations', ob_get_clean()); ?>
+
+            <?php ob_start(); ?>
+                <?= nav_link('/dashboard/locations.php',   'locations',   'Locations',   'locations',   $active) ?>
+                <?= nav_link('/dashboard/permissions.php', 'permissions', 'Permissions', 'permissions', $active) ?>
+                <?= nav_link('/dashboard/activity.php',    'activity',    'Activity',    'activity',    $active) ?>
+                <?= nav_link('/dashboard/settings.php',    'settings',    'Settings',    'settings',    $active) ?>
+                <?php if (!empty($association['subdomain'])): ?>
                 <a class="side-nav__link" href="/<?= e((string)$association['subdomain']) ?>/" target="_blank" rel="noopener" title="Open the public community landing in a new tab">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <circle cx="12" cy="12" r="10"/>
-                        <line x1="2" y1="12" x2="22" y2="12"/>
-                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-                    </svg>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
                     <span class="side-nav__label">Public site ↗</span>
                 </a>
+                <?php endif; ?>
+            <?php $navGroup('configuration', 'Configuration', ob_get_clean()); ?>
+
+            <?php else: ?>
+            <?php if (viewing_role() !== 'renter'): ?>
+            <div class="side-nav__group">
+                <?= nav_link('/dashboard/settings.php', 'settings', 'Settings', 'settings', $active) ?>
+            </div>
+            <?php endif; ?>
             <?php endif; ?>
         <?php else: /* admin */ ?>
             <?= nav_link('/admin/',                    'overview',       'Overview',       'overview',       $active) ?>
@@ -359,47 +509,63 @@ if ($page_layout === 'app' && isset($association) && $association):
         <?php endif; ?>
         </div>
 
-        <div class="side-nav__bottom">
-            <?php
-            // Render headshot if user has uploaded one; otherwise the initial avatar.
-            $_sessAvatar = null;
-            if (!empty($_SESSION['user_id'])) {
-                $_chk = db()->prepare('SELECT avatar_path FROM users WHERE id = ?');
-                $_chk->execute([(int)$_SESSION['user_id']]);
-                $_path = (string)($_chk->fetchColumn() ?: '');
-                if ($_path !== '') $_sessAvatar = '/user-avatar.php?id=' . (int)$_SESSION['user_id'] . '&v=' . substr(md5($_path), 0, 8);
-            }
-            ?>
-            <a class="side-nav__user" href="<?= $page_layout === 'app' ? '/dashboard/profile.php' : '#' ?>" style="text-decoration: none; color: inherit;">
-                <?php if ($_sessAvatar): ?>
-                    <img class="side-nav__avatar" src="<?= e($_sessAvatar) ?>" alt="" style="object-fit: cover;">
-                <?php else: ?>
-                    <span class="side-nav__avatar"><?= e($userInitial) ?></span>
-                <?php endif; ?>
-                <div class="side-nav__user-text">
-                    <strong class="side-nav__name"><?= e($_SESSION['name'] ?? 'Account') ?></strong>
-                    <small class="side-nav__role"><?= e(str_replace('_', ' ', (string)($_SESSION['role'] ?? ''))) ?></small>
-                </div>
-            </a>
-            <?php if ($page_layout === 'app' && role_can_manage((string)($_SESSION['role'] ?? '')) && !is_viewing_as()): ?>
-                <div class="side-nav__view-as side-nav__hide-when-collapsed">
-                    <small style="display:block; opacity: 0.55; font-size: var(--fs-xs); margin-bottom: 4px; padding: 0 var(--sp-3);">View as</small>
-                    <form method="post" action="/dashboard/view-as.php" style="display:flex; gap: 4px; padding: 0 var(--sp-3);">
-                        <?= csrf_field() ?>
-                        <input type="hidden" name="back" value="<?= e((string)($_SERVER['REQUEST_URI'] ?? '/dashboard/')) ?>">
-                        <button class="side-nav__view-as-btn" type="submit" name="role" value="owner" title="View as an owner">Owner</button>
-                        <button class="side-nav__view-as-btn" type="submit" name="role" value="renter" title="View as a renter">Renter</button>
-                    </form>
-                </div>
-            <?php endif; ?>
-            <a class="side-nav__signout" href="/logout.php" title="Sign out">
-                <?= nav_icon('logout') ?><span class="side-nav__label">Sign out</span>
-            </a>
-        </div>
+        <!-- Scroll-fade hint — fades in when links overflow the sidebar; click scrolls down -->
+        <button type="button" class="side-nav__scroll-hint" id="side-nav-scroll-hint" aria-label="Scroll down for more">↓ more</button>
 
     </div>
 </nav>
 <div class="side-nav__overlay" id="side-nav-overlay"></div>
+<?php if ($page_layout === 'app'): ?>
+<script>
+(function () {
+    var STORE = 'bhoa_nav_groups_v2';
+    var nav   = document.getElementById('side-nav');
+    if (!nav) return;
+    // saved = map of groupId → false (user collapsed it). Absent = open (default).
+    var saved = {};
+    try { saved = JSON.parse(localStorage.getItem(STORE) || '{}'); } catch (_) {}
+
+    nav.querySelectorAll('.side-nav__group[data-group]').forEach(function (grp) {
+        var id      = grp.dataset.group;
+        var forced  = grp.hasAttribute('data-force-open');
+        var toggle  = grp.querySelector('.side-nav__group-toggle');
+        var links   = grp.querySelector('.side-nav__group-links');
+        if (!toggle || !links) return;
+
+        // Open unless user has explicitly collapsed it (and it's not the active group).
+        var collapsed = !forced && saved[id] === false;
+        if (collapsed) {
+            grp.classList.add('side-nav__group--collapsed');
+            toggle.setAttribute('aria-expanded', 'false');
+        }
+
+        toggle.addEventListener('click', function () {
+            var isCollapsed = grp.classList.toggle('side-nav__group--collapsed');
+            toggle.setAttribute('aria-expanded', String(!isCollapsed));
+            if (isCollapsed) { saved[id] = false; } else { delete saved[id]; }
+            try { localStorage.setItem(STORE, JSON.stringify(saved)); } catch (_) {}
+        });
+    });
+
+    // Scroll-fade hint: show/hide based on overflow; click scrolls the links panel down.
+    var links = nav.querySelector('.side-nav__links');
+    var hint  = document.getElementById('side-nav-scroll-hint');
+    if (links && hint) {
+        var update = function () {
+            var atBottom = links.scrollTop + links.clientHeight >= links.scrollHeight - 8;
+            hint.style.opacity = atBottom ? '0' : '1';
+        };
+        links.addEventListener('scroll', update, { passive: true });
+        nav.addEventListener('click', function () { setTimeout(update, 250); });
+        hint.addEventListener('click', function (e) {
+            e.stopPropagation();
+            links.scrollBy({ top: 120, behavior: 'smooth' });
+        });
+        update();
+    }
+})();
+</script>
+<?php endif; ?>
 <?php endif; ?>
 
 <?php
