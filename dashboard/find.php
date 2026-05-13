@@ -19,6 +19,8 @@ $results = [
     'events'        => [],
     'concerns'      => [],
     'arc'           => [],
+    'units'         => [],
+    'contacts'      => [],
     'work_orders'   => [],
     'violations'    => [],
     'minutes'       => [],
@@ -113,6 +115,33 @@ if ($q !== '' && strlen($q) >= 2) {
     $arcs = db()->prepare($arcSql);
     $arcs->execute($arcParams);
     $results['arc'] = $arcs->fetchAll();
+
+    // Units — management only
+    if ($canManage) {
+        $uStmt = db()->prepare(
+            'SELECT id, unit_number, type, bedrooms, baths,
+                    (SELECT COUNT(*) FROM unit_occupants WHERE unit_id = units.id) AS occupant_count
+               FROM units
+              WHERE association_id = ?
+                AND (unit_number LIKE ? OR notes LIKE ?)
+              ORDER BY CAST(unit_number AS UNSIGNED), unit_number LIMIT 15'
+        );
+        $uStmt->execute([$assocId, $like, $like]);
+        $results['units'] = $uStmt->fetchAll();
+    }
+
+    // Contacts — management only (non-public contacts are board-internal)
+    if ($canManage || can_do('read_contacts')) {
+        $coStmt = db()->prepare(
+            'SELECT id, kind, label, trade, phone, email
+               FROM association_contacts
+              WHERE association_id = ?
+                AND (label LIKE ? OR trade LIKE ? OR phone LIKE ? OR email LIKE ? OR notes LIKE ?)
+              ORDER BY sort_order, label LIMIT 15'
+        );
+        $coStmt->execute([$assocId, $like, $like, $like, $like, $like]);
+        $results['contacts'] = $coStmt->fetchAll();
+    }
 
     // Work orders — management only
     if ($canManage) {
@@ -225,6 +254,8 @@ require __DIR__ . '/../includes/header.php';
             'work_orders'   => ['label' => '🔧 Work orders',     'href' => fn($r) => '/dashboard/work-orders.php?id=' . (int)$r['id']],
             'violations'    => ['label' => '⚠️ Violations',      'href' => fn($r) => '/dashboard/violations.php?id=' . (int)$r['id']],
             'minutes'       => ['label' => '📋 Meeting minutes', 'href' => fn($r) => '/dashboard/minutes.php?id=' . (int)$r['id']],
+            'units'         => ['label' => '🏠 Units',            'href' => fn($r) => '/dashboard/unit.php?id=' . (int)$r['id']],
+            'contacts'      => ['label' => '📞 Contacts',         'href' => fn($r) => '/dashboard/contacts.php#contact-' . (int)$r['id']],
             'members'       => ['label' => '👥 Members',         'href' => fn($r) => '/dashboard/directory.php?action=edit&id=' . (int)$r['id']],
             'faqs'          => ['label' => '❓ FAQs',             'href' => fn($r) => '/dashboard/faq.php#faq-' . (int)$r['id']],
         ];
@@ -272,6 +303,22 @@ require __DIR__ . '/../includes/header.php';
                         <?php elseif ($key === 'minutes'): ?>
                             <a href="<?= e($href) ?>"><strong><?= e((string)$r['title']) ?></strong></a>
                             <div class="muted" style="font-size: var(--fs-xs);"><?= e(str_replace('_',' ', (string)$r['meeting_type'])) ?> · <?= e(date('M j, Y', strtotime((string)$r['meeting_date']))) ?></div>
+                        <?php elseif ($key === 'units'): ?>
+                            <a href="<?= e($href) ?>"><strong>Unit <?= e((string)$r['unit_number']) ?></strong></a>
+                            <div class="muted" style="font-size: var(--fs-xs);">
+                                <?= e(ucfirst(str_replace('_',' ',(string)$r['type']))) ?>
+                                <?php if (!empty($r['bedrooms'])): ?> · <?= (int)$r['bedrooms'] ?> bd<?php endif; ?>
+                                <?php if (!empty($r['baths'])): ?>/<?= rtrim(rtrim(number_format((float)$r['baths'],1),'0'),'.') ?> ba<?php endif; ?>
+                                · <?= (int)$r['occupant_count'] ?> occupant<?= $r['occupant_count'] != 1 ? 's' : '' ?>
+                            </div>
+                        <?php elseif ($key === 'contacts'): ?>
+                            <a href="<?= e($href) ?>"><strong><?= e((string)$r['label']) ?></strong></a>
+                            <div class="muted" style="font-size: var(--fs-xs);">
+                                <?= e(str_replace('_',' ', ucfirst((string)$r['kind']))) ?>
+                                <?php if (!empty($r['trade'])): ?> · <?= e((string)$r['trade']) ?><?php endif; ?>
+                                <?php if (!empty($r['phone'])): ?> · <?= e((string)$r['phone']) ?><?php endif; ?>
+                                <?php if (!empty($r['email'])): ?> · <?= e((string)$r['email']) ?><?php endif; ?>
+                            </div>
                         <?php elseif ($key === 'members'): ?>
                             <a href="<?= e($href) ?>"><strong><?= e(trim($r['first_name'] . ' ' . $r['last_name']) ?: $r['email']) ?></strong></a>
                             <div class="muted" style="font-size: var(--fs-xs);">
