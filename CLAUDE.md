@@ -309,6 +309,7 @@ This file (CLAUDE.md) keeps an internal-only summary in the section below for cr
 6. **Newsletter signup** on the public landing.
 7. **Per-user TZ preference** — all server-rendered timestamps are UTC right now; add a TZ field to user settings and wrap display formatters.
 8. **Per-association logo upload** — use it in the dashboard nav instead of the text name.
+9. **Rental agents as contacts** — add `rental_agent` to `association_contacts.kind` ENUM; add `rental_agent_contact_id` FK on `users`; show a "Rental agent" dropdown in the renter add/edit form (directory.php) so renters can be linked to their agent.
 
 **Big-ticket comms / outreach features (queued — likely a Phase 3 batch):**
 
