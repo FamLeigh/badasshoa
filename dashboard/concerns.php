@@ -366,10 +366,14 @@ function concern_status_badge(string $s): string {
             </div>
         </div>
         <?php if ($canManage): ?>
-        <div>
+        <div class="row" style="gap: var(--sp-2);">
             <a class="btn btn--primary" href="/dashboard/work-orders.php?action=new&from_concern=<?= (int)$detail['id'] ?>"
                title="Open a new Work Order pre-filled with this concern's subject + body">
                 🛠 Convert to Work Order
+            </a>
+            <a class="btn btn--ghost" href="/dashboard/violations.php?action=new&from_concern=<?= (int)$detail['id'] ?>"
+               title="Open a new Violation pre-filled from this concern">
+                ⚠ Convert to Violation
             </a>
         </div>
         <?php endif; ?>

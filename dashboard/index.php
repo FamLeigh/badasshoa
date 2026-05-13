@@ -40,6 +40,10 @@ $docs = db()->prepare('SELECT COUNT(*) FROM documents WHERE association_id = ?')
 $docs->execute([$assocId]);
 $stats['documents'] = (int)$docs->fetchColumn();
 
+$contsStmt = db()->prepare('SELECT COUNT(*) FROM association_contacts WHERE association_id = ?');
+$contsStmt->execute([$assocId]);
+$stats['contacts'] = (int)$contsStmt->fetchColumn();
+
 $comms = db()->prepare('SELECT COUNT(*) FROM committees WHERE association_id = ?');
 $comms->execute([$assocId]);
 $stats['committees'] = (int)$comms->fetchColumn();
@@ -222,6 +226,7 @@ require __DIR__ . '/../includes/header.php';
                 <div class="stat__value"><?= (int)$stats['members'] ?></div>
             </div>
         </a>
+        <?php if ($canManage): ?>
         <a class="stat" href="/dashboard/units.php">
             <div class="stat__icon">🏠</div>
             <div class="stat__body">
@@ -229,6 +234,7 @@ require __DIR__ . '/../includes/header.php';
                 <div class="stat__value"><?= (int)$stats['units'] ?></div>
             </div>
         </a>
+        <?php endif; ?>
         <a class="stat" href="/dashboard/directory.php#board" title="Board members + property manager">
             <div class="stat__icon">🎩</div>
             <div class="stat__body">
@@ -244,6 +250,7 @@ require __DIR__ . '/../includes/header.php';
                 <div class="stat__value"><?= (int)$stats['rules'] ?></div>
             </div>
         </a>
+        <?php if ($canManage): ?>
         <a class="stat<?= $stats['rule_changes_pending'] > 0 ? ' stat--alert' : '' ?>" href="/dashboard/search.php?action=suggestions" title="Pending rule suggestions + flagged-for-review">
             <div class="stat__icon">🚩</div>
             <div class="stat__body">
@@ -254,6 +261,8 @@ require __DIR__ . '/../includes/header.php';
                 <?php endif; ?>
             </div>
         </a>
+        <?php endif; ?>
+        <?php if (can_do('read_documents')): ?>
         <a class="stat" href="/dashboard/documents.php">
             <div class="stat__icon">📄</div>
             <div class="stat__body">
@@ -261,6 +270,7 @@ require __DIR__ . '/../includes/header.php';
                 <div class="stat__value"><?= (int)$stats['documents'] ?></div>
             </div>
         </a>
+        <?php endif; ?>
         <a class="stat" href="/dashboard/media.php">
             <div class="stat__icon">📷</div>
             <div class="stat__body">
@@ -282,6 +292,15 @@ require __DIR__ . '/../includes/header.php';
                 <div class="stat__value"><?= (int)$stats['committees'] ?></div>
             </div>
         </a>
+        <?php if (can_do('read_contacts')): ?>
+        <a class="stat" href="/dashboard/contacts.php">
+            <div class="stat__icon">📞</div>
+            <div class="stat__body">
+                <div class="stat__label">Contacts</div>
+                <div class="stat__value"><?= (int)$stats['contacts'] ?></div>
+            </div>
+        </a>
+        <?php endif; ?>
         <a class="stat" href="/dashboard/events.php">
             <div class="stat__icon">📅</div>
             <div class="stat__body">

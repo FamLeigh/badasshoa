@@ -260,55 +260,53 @@ This file (CLAUDE.md) keeps an internal-only summary in the section below for cr
 
 ## Where we left off (resume here next session)
 
-**Last session ended:** 2026-05-12 — **massive feature sprint shipped to prod**. Migrations through 041 (signatures library) all applied to `u535581001_badassHOA`. Bellair is now properly populated (196 active members, 128 units, 159 rules with 2022-12-01 effective date, 21 FAQs, 3 board officers including Scott Bender as Director). Last commit `a65d0fb`. Working tree clean.
+**Last session ended:** 2026-05-12 (session 3) — **permissions + role cleanup sprint shipped to prod**. Migrations 042–045 applied. Working tree has untracked new files (violations, minutes, violation-notice-print) plus modified files. Last commit was `ba0b3e7`.
 
-**What got built in this sprint** (in rough chronological order):
-- Concerns + parking + media metadata + units rebuild (parking_spots + primary owner + rental flag)
-- Phone2/email2 + headshots + bios on users
-- Committees: WYSIWYG, edit, join/leave, flyers, Make-Chair + Step-down buttons, collapsed descriptions
-- Recurring events + day/week/month/upcoming print + clickable date-tile cards
-- Public-landing fixes (board pending-status, geocode re-run)
-- Documents: per-unit + per-member scope + storage breakdown
-- Work Orders (admin-only ops tickets) + Concerns → WO conversion
-- Architectural Review (ARC) requests + ARC → WO conversion
-- Employees (orthogonal to role) with type-ahead picker
-- Insurance + COIs with expiry warnings
-- Storage quota tracking (1 GB free + $5/mo per extra GB)
-- Global search box (rules + docs + announcements + events + concerns + ARC + members)
-- Per-association branded landing + map + meet-your-board
-- Concerns with target person/unit + rule citations
-- Renters locked out of: ARC submit, committee join, Settings, Committees
-- Forms library: 14 form types (guest registration matching the actual Bellair card, parking pass, maintenance, pet reg, vehicle reg, contractor notice, amenity reservation, hurricane checklist, emergency contact, move-in/out, key request, estoppel, other)
-- Electronic signatures (E-SIGN / Florida UETA) with type/draw/upload + audit trail + SHA-256 tamper hash
-- Saved signatures: private per-user reusable library (managers can't see them)
-- Funny 404 page (HOA Violation Notice)
-- Marketing home refresh
+**What got built this session:**
+- **Employee financial gate** — pay type/rate/salary hidden from board_member + property_manager; only board_admin and super_admin can see or edit pay details
+- **Employee documents** — W-9s, contracts, background checks attached directly in employee edit view (board_admin only; board-only access_level; quota-tracked)
+- **Insurance documents** — policy PDFs, COIs, endorsements attached directly in insurance edit view (same pattern)
+- **Work order employee assignment** — "Assigned to" dropdown now includes active employees (shows employee title if set), not just board/management users
+- **Work order → announcement** — when changing WO status, optional checkbox expands title + audience + body; auto-fills title prefix based on status
+- **Role renamed: resident → owner** — DB ENUM migration (045, 3-step safe rename), 191 users migrated; all PHP files swept; ROLE_RANK updated
+- **Staff role fully wired** — added to ROLE_RANK, both allowedRoles arrays in directory.php, both role selects, role filter dropdown on residents search
+- **Configurable permissions dashboard** — `/dashboard/permissions.php` (board_admin only to edit); `association_permissions` DB table; `can_do()` helper in auth.php with static cache; `permission_defaults()` with 9 configurable features; minutes/work-orders/violations now use `can_do()` for view gating with hard management checks on all write actions
+- **Board meeting minutes** — `/dashboard/minutes.php`, Quill WYSIWYG, attendee list, meeting types, read-only for members
+- **Violation workflow** — `/dashboard/violations.php`, formal notices (warning/cure/fine/hearing), print-ready letters, Concern → Violation conversion
+- **Forgot-password IP rate limiting** — `login_attempts` table reused with `kind='password_reset'`; 5 req/IP/hour
+- **Changelog + CLAUDE.md** — updated with all 7 session-3 features (this entry)
 
 **Production state in DB:**
-- 1 association: Bellair Condo Association (slug=bellair) at 420 N Atlantic Ave, Daytona Beach FL
-- 196 active members; 128 units; 159 rules; 21 FAQs; 0 forms filed yet
-- Board officers: Kevin Leigh (board_admin), Wayne Dictor (board_member), Mark Applegate (property_manager), Scott Bender (board_member · Director)
-- Email driver still `log` (paused since 2026-05-10) — flip back to `msmtp` when ready
+- Migrations through 045 applied to `u535581001_badassHOA`
+- 191 users with `role='owner'` (was `resident`); 2 staff; 4 board_member; 1 property_manager; 1 board_admin; 2 super_admin
+- `association_permissions` table created (no custom overrides yet — all defaults in effect)
+- Email driver still `log` (paused since 2026-05-10)
 
 **Logins:**
 - **Prod** super admin: `me@kevinleigh.com / bhoaK0m3r2.6`
-- Local MAMP DB hasn't been touched in days — local schema is behind prod by migrations 014–041. If reviving local dev, run migrations 014 onward from `migrations/` in order.
+- Local MAMP DB is behind prod (migrations 014–045). If reviving local dev, run migrations 014 onward in order.
 
 **Quick visual check (prod):**
 - Marketing home: https://badasshoa.com/
 - Public landing: https://badasshoa.com/bellair/
 - Dashboard: https://badasshoa.com/dashboard/
-- Forms: https://badasshoa.com/dashboard/forms.php
+- Permissions: https://badasshoa.com/dashboard/permissions.php
 - Latest changelog entry visible at the top of https://badasshoa.com/changelog.php
 
-**Candidates for next session** (queued + roughly prioritized by where Kevin's headed):
-1. **Lobby-TV digital signage / community board** — long-standing queued item. Probably a rotating-content TV mode that auto-cycles recent announcements + upcoming events + photos + emergency info on a building-lobby display. Auto-refresh, no-login URL with a token.
-2. **Maintenance request → Work Order conversion** — same pattern as Concern → WO and ARC → WO, but on `maintenance_request` form submissions. Currently a maintenance form just sits as a submission; should land in the work orders queue.
-3. **Turn email back on** — flip prod `config.mail.driver` from `log` to `msmtp` whenever Kevin says. Already wired; one line change in `~/domains/badasshoa.com/public_html/config.php` on the server.
-4. **Board meeting minutes** — still a candidate from the earlier list; documents + announcements cover most of it but a dedicated minutes timeline view would be cleaner.
+**Known gotchas to not regress:**
+- `can_do()` static cache is per-request (keyed by `$aid`). If you test permissions in the same PHP process with two different associations, flush the static manually or use a fresh request.
+- Every write POST handler in work-orders.php and violations.php has an explicit `if (!$canManageWO/Vio) { 403; die }` guard — removing the top-level `require_management()` means those individual guards are load-bearing.
+- `documents` table now has `employee_id` and `insurance_id` nullable FKs (migration 044). Any query that lists "all docs for an association" that doesn't filter by these columns will now include employee/insurance docs. The file gatekeeper checks `access_level='board_only'` so renters can't reach them, but be aware.
+- The pool FAQ (id 8) still has `[VERIFY]` markers — Kevin didn't finish the rewrite from the paper sign.
+
+**Candidates for next session** (queued + roughly prioritized):
+1. **Lobby-TV digital signage / community board** — rotating-content TV mode, auto-refresh, no-login URL with a token.
+2. **Maintenance request → Work Order conversion** — maintenance form submissions should land in the WO queue (same pattern as Concern → WO and ARC → WO).
+3. **Turn email back on** — flip prod `config.mail.driver` from `log` to `msmtp` (one line in server config.php whenever Kevin says).
+4. **Service animal registration form** — requested in a prior session; never addressed.
 5. **Newsletter signup** on the public landing.
-6. **Per-user TZ preference** — dashboard greeting + clock already use browser local time; everywhere else still UTC. Adding a TZ pref on profile + a single `local_date()` helper would clean up server-rendered timestamps.
-7. **IP rate limiting on `/forgot.php`**.
+6. **Per-user TZ preference** — server-rendered timestamps are still UTC everywhere.
+7. **Per-association logo upload** — use in dashboard nav.
 
 **Big-ticket comms / outreach features (queued — likely a Phase 3 batch):**
 
@@ -370,6 +368,20 @@ All four share a `broadcasts` table (kind / audience / subject / body / schedule
 ---
 
 ## Changelog
+
+- **2026-05-12 (session 3) — Permissions, role cleanup, and ops polish sprint.**
+    - Migrations 042–045 applied to prod. Working tree has untracked new files (violations.php, minutes.php, violation-notice-print.php, migrations 042–045).
+    - Employee financial details (pay type/rate/salary) now hidden from board_member + property_manager; board_admin and super_admin only.
+    - Documents can now be attached directly to employee records and insurance records (board-only; quota-tracked).
+    - Work order "Assigned to" dropdown includes active employees (not just board/management roles).
+    - Work order status change optionally posts a resident announcement in one action.
+    - Role renamed from `resident` → `owner` across DB (3-step ENUM migration) and all PHP files. 191 accounts migrated.
+    - Staff role fully wired: ROLE_RANK, directory allowedRoles, role selects, role filter dropdown.
+    - Configurable permissions dashboard at `/dashboard/permissions.php`. `can_do()` helper in auth.php. 9 configurable features. Minutes, work orders, violations now use `can_do()` for view gating.
+    - Board meeting minutes page shipped (`/dashboard/minutes.php`).
+    - Formal violation workflow shipped (`/dashboard/violations.php`) with print-ready letters.
+    - Forgot-password IP rate limiting (5 req/IP/hour via `login_attempts` with `kind='password_reset'`).
+    - Changelog updated with 7 new entries.
 
 - **2026-05-11 to 2026-05-12 — Phase-2 feature sprint.**
     - Migrations 014 → 041 (28 migrations). Working tree clean at commit `a65d0fb`.

@@ -18,10 +18,10 @@ if ($role === '' || $role === 'exit') {
         unset($_SESSION['view_as_role']);
     }
     flash('success', 'Returned to your normal view.');
-} elseif (in_array($role, ['resident', 'renter'], true)) {
+} elseif (in_array($role, ['owner', 'renter'], true)) {
     $_SESSION['view_as_role'] = $role;
     audit('view_as.started', ['as' => $role]);
-    flash('success', 'Now viewing as ' . ($role === 'resident' ? 'a homeowner' : 'a renter') . '. Click "Exit view-as" in the banner when done.');
+    flash('success', 'Now viewing as ' . ($role === 'owner' ? 'an owner' : 'a renter') . '. Click "Exit view-as" in the banner when done.');
 } else {
     flash('error', 'Unknown view-as role.');
 }

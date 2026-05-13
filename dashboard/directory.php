@@ -108,7 +108,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'import'
 
                 $tempPass = bin2hex(random_bytes(6));
                 $hash     = password_hash($tempPass, PASSWORD_BCRYPT, ['cost' => 12]);
-                $role     = $isOwner ? 'resident' : 'renter';
+                $role     = $isOwner ? 'owner' : 'renter';
                 db()->prepare(
                     'INSERT INTO users (association_id, first_name, last_name, email, email2, phone, phone2,
                                         mailing_address, mailing_city, mailing_state_region, mailing_postal_code, mailing_country,
@@ -147,12 +147,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'invite'
     $last    = trim((string)($_POST['last_name'] ?? ''));
     $email   = trim((string)($_POST['email'] ?? ''));
     $phone   = trim((string)($_POST['phone'] ?? ''));
-    $role    = $_POST['role'] ?? 'resident';
+    $role    = $_POST['role'] ?? 'owner';
     $unit    = trim((string)($_POST['unit_number'] ?? ''));
     $isOwner = isset($_POST['is_owner']) ? 1 : 0;
 
-    $allowedRoles = ['resident','renter','board_member','board_admin','property_manager'];
-    if (!in_array($role, $allowedRoles, true)) $role = 'resident';
+    $allowedRoles = ['owner','renter','board_member','board_admin','property_manager','staff'];
+    if (!in_array($role, $allowedRoles, true)) $role = 'owner';
     $showOnLanding = isset($_POST['show_on_public_landing']) ? 1 : 0;
 
     $office = $_POST['board_office'] ?? '';
@@ -162,7 +162,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'invite'
     // this person is on the board. (Picking board_admin would over-grant
     // privileges, so we land on the least-privilege board role.) Property
     // managers keep their role.
-    if ($office !== '' && in_array($role, ['resident','renter'], true)) {
+    if ($office !== '' && in_array($role, ['owner','renter'], true)) {
         $role = 'board_member';
     }
     // Office only applies to board roles + PM. Clear it otherwise.
@@ -256,13 +256,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit') 
     $mCtry   = strtoupper(trim((string)($_POST['mailing_country'] ?? '')));
     if ($mCtry !== '' && !preg_match('/^[A-Z]{2}$/', $mCtry)) $mCtry = '';
     $unit   = trim((string)($_POST['unit_number'] ?? ''));
-    $role   = $_POST['role'] ?? 'resident';
+    $role   = $_POST['role'] ?? 'owner';
     $isOwner = isset($_POST['is_owner']) ? 1 : 0;
     $status  = $_POST['status'] ?? 'active';
 
-    $allowedRoles  = ['resident','renter','board_member','board_admin','property_manager'];
+    $allowedRoles  = ['owner','renter','board_member','board_admin','property_manager','staff'];
     $allowedStatus = ['active','pending','inactive'];
-    if (!in_array($role, $allowedRoles, true))   $role   = 'resident';
+    if (!in_array($role, $allowedRoles, true))   $role   = 'owner';
     if (!in_array($status, $allowedStatus, true)) $status = 'active';
     $showOnLanding = isset($_POST['show_on_public_landing']) ? 1 : 0;
 
@@ -272,7 +272,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit') 
     // If a board office is selected but the role is currently resident/renter,
     // auto-promote to board_member. Without this the silent strip-office
     // behavior catches admins by surprise (already happened twice).
-    if ($office !== '' && in_array($role, ['resident','renter'], true)) {
+    if ($office !== '' && in_array($role, ['owner','renter'], true)) {
         $role = 'board_member';
         $autoPromoted = true;
     }
@@ -394,6 +394,9 @@ $board = $boardStmt->fetchAll();
 // Residents
 $qSearch     = trim((string)($_GET['q'] ?? ''));
 $ownersOnly  = isset($_GET['owners_only']);
+$roleFilter  = $_GET['role'] ?? '';
+$validRoles  = ['owner','renter','staff','board_member','board_admin','property_manager'];
+if (!in_array($roleFilter, $validRoles, true)) $roleFilter = '';
 
 // Privacy: renters only see the Board section — not the full resident roster.
 // (Their landlord's contact info is the building's responsibility, not a
@@ -417,6 +420,10 @@ if ($rentersOnly) {
     }
     if ($ownersOnly) {
         $sql .= ' AND u.is_owner = 1';
+    }
+    if ($roleFilter !== '') {
+        $sql .= ' AND u.role = ?';
+        $params[] = $roleFilter;
     }
     // Natural alphanumeric sort: numeric prefix first (so "101" < "101A"), then full string lex,
     // then name. Letter-prefixed units (CAST = 0) bubble to the top — acceptable since most
@@ -565,7 +572,7 @@ require __DIR__ . '/../includes/header.php';
                 <div class="field">
                     <label class="field__label" for="er">Role</label>
                     <select class="select" id="er" name="role">
-                        <?php foreach (['resident'=>'Resident','renter'=>'Renter','board_member'=>'Board member','board_admin'=>'Board admin','property_manager'=>'Property manager'] as $val => $label): ?>
+                        <?php foreach (['owner'=>'Owner','renter'=>'Renter','staff'=>'Staff','board_member'=>'Board member','board_admin'=>'Board admin','property_manager'=>'Property manager'] as $val => $label): ?>
                             <option value="<?= e($val) ?>" <?= $editUser['role'] === $val ? 'selected' : '' ?>><?= e($label) ?></option>
                         <?php endforeach; ?>
                     </select>
@@ -738,8 +745,9 @@ B2,Sam,Garcia,sam@example.com,,,,0</pre>
                 <div class="field">
                     <label class="field__label" for="irole">Role</label>
                     <select class="select" id="irole" name="role">
-                        <option value="resident">Resident</option>
+                        <option value="owner">Owner</option>
                         <option value="renter">Renter</option>
+                        <option value="staff">Staff</option>
                         <option value="board_member">Board member</option>
                         <option value="board_admin">Board admin</option>
                         <option value="property_manager">Property manager</option>
@@ -839,12 +847,21 @@ B2,Sam,Garcia,sam@example.com,,,,0</pre>
         </div>
     <?php else: ?>
     <h2 style="font-size: var(--fs-xl);">Residents <span class="muted" style="font-size: var(--fs-sm); font-weight: 400;">— sorted by unit number</span></h2>
-    <form method="get" class="row" style="margin-bottom: var(--sp-4); gap: var(--sp-3);">
-        <input class="input" type="search" name="q" placeholder="Search name, email, unit" value="<?= e($qSearch) ?>" style="max-width: 320px;">
+    <form method="get" class="row" style="margin-bottom: var(--sp-4); gap: var(--sp-3); flex-wrap: wrap;">
+        <input class="input" type="search" name="q" placeholder="Search name, email, unit" value="<?= e($qSearch) ?>" style="max-width: 280px;">
+        <select class="select" name="role" style="max-width: 200px;">
+            <option value="">All roles</option>
+            <?php foreach (['owner'=>'Owner','renter'=>'Renter','staff'=>'Staff','board_member'=>'Board member','board_admin'=>'Board admin','property_manager'=>'Property manager'] as $rv => $rl): ?>
+                <option value="<?= e($rv) ?>" <?= $roleFilter === $rv ? 'selected' : '' ?>><?= e($rl) ?></option>
+            <?php endforeach; ?>
+        </select>
         <label style="display:inline-flex; align-items:center; gap: var(--sp-2); font-size: var(--fs-sm);">
             <input type="checkbox" name="owners_only" value="1" <?= $ownersOnly ? 'checked' : '' ?>> Owners only
         </label>
         <button class="btn btn--ghost" type="submit">Apply</button>
+        <?php if ($qSearch !== '' || $roleFilter !== '' || $ownersOnly): ?>
+            <a class="muted" href="/dashboard/directory.php" style="font-size: var(--fs-sm); align-self: center;">clear</a>
+        <?php endif; ?>
     </form>
     <?php endif; ?>
 

@@ -526,6 +526,9 @@ require __DIR__ . '/../includes/header.php';
             <a class="muted" style="font-size: var(--fs-sm);" href="/dashboard/forms.php">← Back to forms</a>
             <div class="row" style="gap: var(--sp-2);">
                 <a class="btn btn--ghost" href="/dashboard/form-print.php?id=<?= (int)$detail['id'] ?>" target="_blank" rel="noopener">🖨 Print permit</a>
+                <?php if ($canManage && $detail['form_type'] === 'maintenance_request'): ?>
+                    <a class="btn btn--ghost" href="/dashboard/work-orders.php?action=new&from_form=<?= (int)$detail['id'] ?>">🛠 Convert to Work Order</a>
+                <?php endif; ?>
                 <?php if ($canManage && !$isRevoked): ?>
                     <form method="post" style="display:inline;" onsubmit="var r = prompt('Reason (optional):'); if (r === null) return false; this.querySelector('[name=revoke_reason]').value = r; return confirm('Revoke this form?');">
                         <?= csrf_field() ?>

@@ -4,11 +4,30 @@ require_once __DIR__ . '/includes/auth.php';
 
 $email = trim((string)($_POST['email'] ?? ''));
 $submitted = $_SERVER['REQUEST_METHOD'] === 'POST';
+$rateLimited = false;
 
 if ($submitted) {
     csrf_check();
 
-    if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    $ip = (string)($_SERVER['REMOTE_ADDR'] ?? '');
+
+    // IP rate limit: 5 reset requests per IP per hour.
+    $rateCheck = db()->prepare(
+        "SELECT COUNT(*) FROM login_attempts
+          WHERE kind = 'password_reset' AND ip_address = ?
+            AND attempted_at > (NOW() - INTERVAL 1 HOUR)"
+    );
+    $rateCheck->execute([$ip]);
+    if ((int)$rateCheck->fetchColumn() >= 5) {
+        $rateLimited = true;
+    }
+
+    if (!$rateLimited) {
+        db()->prepare("INSERT INTO login_attempts (email, kind, ip_address, succeeded) VALUES (?, 'password_reset', ?, 1)")
+            ->execute([$email ?: 'unknown', $ip]);
+    }
+
+    if (!$rateLimited && filter_var($email, FILTER_VALIDATE_EMAIL)) {
         // Look up user — but always behave the same way externally (anti-enumeration).
         $stmt = db()->prepare('SELECT id, first_name, email, status FROM users WHERE email = ? LIMIT 1');
         $stmt->execute([$email]);
@@ -44,6 +63,11 @@ if ($submitted) {
 
             audit('password_reset.requested', ['email' => $email], (int)$user['id'], 'user');
         }
+    } // end !$rateLimited
+
+    if ($rateLimited) {
+        flash('error', 'Too many reset requests from your connection. Try again in an hour.');
+        redirect('/forgot.php');
     }
 
     // Same response regardless of whether the email exists or is valid.

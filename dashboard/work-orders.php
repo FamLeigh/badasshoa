@@ -10,9 +10,22 @@
 // detail page renders a full timeline (status changes + free-text notes
 // interleaved by created_at).
 require __DIR__ . '/_bootstrap.php';
-require_management();
+require_login();
 
 $user = current_user();
+$canManageWO = role_can_manage(viewing_role());
+
+// Gate the page: managers always in; others need can_do('read_work_orders').
+// Write actions have their own $canManageWO checks further down.
+if (!$canManageWO && !can_do('read_work_orders')) {
+    http_response_code(403);
+    $page_title = 'Work orders';
+    require __DIR__ . '/../includes/header.php';
+    echo '<div class="container" style="padding: var(--sp-8) var(--sp-6);"><div class="card card--padded center" style="padding: var(--sp-12) var(--sp-6);"><p class="muted">Work order access is restricted. Contact the board if you need access.</p></div></div>';
+    require __DIR__ . '/../includes/footer.php';
+    exit;
+}
+
 $flashError = null;
 
 $STATUSES = [
@@ -32,6 +45,7 @@ $PRIORITIES = [
 // --- Add / edit ---------------------------------------------------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array(($_POST['form'] ?? ''), ['add','edit'], true)) {
     csrf_check();
+    if (!$canManageWO) { http_response_code(403); die('Forbidden'); }
     $isEdit       = $_POST['form'] === 'edit';
     $woId         = (int)($_POST['id'] ?? 0);
     $title        = trim((string)($_POST['title'] ?? ''));
@@ -46,6 +60,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array(($_POST['form'] ?? ''), ['
     $dueDate      = trim((string)($_POST['due_date'] ?? ''));
     $sourceConcernId = ($_POST['source_concern_id'] ?? '') !== '' ? (int)$_POST['source_concern_id'] : null;
     $sourceArcId     = ($_POST['source_arc_id']     ?? '') !== '' ? (int)$_POST['source_arc_id']     : null;
+    $sourceFormId    = ($_POST['source_form_id']    ?? '') !== '' ? (int)$_POST['source_form_id']    : null;
     if (!array_key_exists($priority, $PRIORITIES)) $priority = 'normal';
     if ($dueDate !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dueDate)) $dueDate = '';
 
@@ -73,20 +88,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array(($_POST['form'] ?? ''), ['
             db()->prepare(
                 'INSERT INTO work_orders
                     (association_id, title, body, priority, location_id, unit_id, assigned_user_id,
-                     contractor_contact_id, cost_estimate, cost_actual, due_date, source_concern_id, source_arc_id, created_by)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                     contractor_contact_id, cost_estimate, cost_actual, due_date,
+                     source_concern_id, source_arc_id, source_form_id, created_by)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
             )->execute([
                 $assocId, $title, $body ?: null, $priority, $locationId, $unitId, $assignedId,
-                $contractorId, $estimate, $actual, $dueDate ?: null, $sourceConcernId, $sourceArcId, (int)$user['id'],
+                $contractorId, $estimate, $actual, $dueDate ?: null,
+                $sourceConcernId, $sourceArcId, $sourceFormId, (int)$user['id'],
             ]);
             $newId = (int)db()->lastInsertId();
-            audit('work_order.created', ['title' => $title, 'source_concern_id' => $sourceConcernId, 'source_arc_id' => $sourceArcId], $newId, 'work_order');
-            // Audit the conversion on the source side too so it shows in either timeline.
+            audit('work_order.created', ['title' => $title, 'source_concern_id' => $sourceConcernId, 'source_arc_id' => $sourceArcId, 'source_form_id' => $sourceFormId], $newId, 'work_order');
             if ($sourceConcernId !== null) {
                 audit('concern.converted_to_work_order', ['work_order_id' => $newId, 'title' => $title], $sourceConcernId, 'concern');
             }
             if ($sourceArcId !== null) {
                 audit('arc_request.converted_to_work_order', ['work_order_id' => $newId, 'title' => $title], $sourceArcId, 'arc_request');
+            }
+            if ($sourceFormId !== null) {
+                audit('form.converted_to_work_order', ['work_order_id' => $newId, 'title' => $title], $sourceFormId, 'form_submission');
             }
             flash('success', "Work order \"$title\" created.");
             redirect('/dashboard/work-orders.php?id=' . $newId);
@@ -97,6 +116,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array(($_POST['form'] ?? ''), ['
 // --- Status change ------------------------------------------------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'set_status') {
     csrf_check();
+    if (!$canManageWO) { http_response_code(403); die('Forbidden'); }
     $woId   = (int)($_POST['id'] ?? 0);
     $status = $_POST['status'] ?? 'open';
     $note   = trim((string)($_POST['note'] ?? ''));
@@ -122,6 +142,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'set_sta
     )->execute([$woId, (int)$user['id'], $note ?: null, $status]);
 
     audit('work_order.status_changed', ['status' => $status], $woId, 'work_order');
+
+    // Optional: post an announcement at the same time.
+    if (($_POST['post_announcement'] ?? '') === '1') {
+        $annTitle    = trim((string)($_POST['ann_title'] ?? ''));
+        $annBody     = trim((string)($_POST['ann_body'] ?? ''));
+        $annAudience = $_POST['ann_audience'] ?? 'all';
+        if (!in_array($annAudience, ['all','owners','renters','board'], true)) $annAudience = 'all';
+        if ($annTitle !== '' && $annBody !== '') {
+            db()->prepare(
+                'INSERT INTO announcements (association_id, author_id, title, body, type, audience)
+                 VALUES (?, ?, ?, ?, "maintenance", ?)'
+            )->execute([$assocId, (int)$user['id'], $annTitle, $annBody, $annAudience]);
+            audit('announcement.posted_from_work_order', ['wo_id' => $woId, 'title' => $annTitle]);
+        }
+    }
+
     flash('success', 'Status updated to ' . $STATUSES[$status]['label'] . '.');
     redirect('/dashboard/work-orders.php?id=' . $woId);
 }
@@ -129,6 +165,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'set_sta
 // --- Add a free-text note ----------------------------------------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'note') {
     csrf_check();
+    if (!$canManageWO) { http_response_code(403); die('Forbidden'); }
     $woId = (int)($_POST['id'] ?? 0);
     $body = trim((string)($_POST['body'] ?? ''));
 
@@ -149,6 +186,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'note') 
 // --- Delete -------------------------------------------------------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'delete') {
     csrf_check();
+    if (!$canManageWO) { http_response_code(403); die('Forbidden'); }
     $woId = (int)($_POST['id'] ?? 0);
     $row  = db()->prepare('SELECT title FROM work_orders WHERE id = ? AND association_id = ?');
     $row->execute([$woId, $assocId]);
@@ -183,14 +221,19 @@ $contractors->execute([$assocId]);
 $contractors = $contractors->fetchAll();
 
 $staff = db()->prepare(
-    "SELECT id, first_name, last_name, role, board_office
-       FROM users
-      WHERE association_id = ?
-        AND status = 'active'
-        AND role IN ('board_admin','board_member','property_manager')
-      ORDER BY FIELD(role,'property_manager','board_admin','board_member'), last_name, first_name"
+    "SELECT DISTINCT u.id, u.first_name, u.last_name, u.role, u.board_office,
+            e.job_title AS employee_title
+       FROM users u
+       LEFT JOIN employees e ON e.user_id = u.id AND e.association_id = ? AND e.status = 'active'
+      WHERE u.association_id = ?
+        AND u.status <> 'inactive'
+        AND (
+            u.role IN ('board_admin','board_member','property_manager','staff')
+            OR e.id IS NOT NULL
+        )
+      ORDER BY FIELD(u.role,'property_manager','board_admin','board_member','staff','owner','renter'), u.last_name, u.first_name"
 );
-$staff->execute([$assocId]);
+$staff->execute([$assocId, $assocId]);
 $staff = $staff->fetchAll();
 
 // Detail row + timeline
@@ -246,6 +289,22 @@ if ($action === 'new' && ($cid = (int)($_GET['from_concern'] ?? 0)) > 0) {
     $prefillFromConcern = $stmt->fetch() ?: null;
 }
 
+// Support ?from_form=N — preload from a maintenance_request form submission.
+$prefillFromForm = null;
+if ($action === 'new' && ($fmid = (int)($_GET['from_form'] ?? 0)) > 0) {
+    $stmt = db()->prepare(
+        'SELECT f.id, f.form_type, f.title, f.payload, f.unit_id, u.unit_number
+           FROM form_submissions f
+           LEFT JOIN units u ON u.id = f.unit_id
+          WHERE f.id = ? AND f.association_id = ? AND f.form_type = ?'
+    );
+    $stmt->execute([$fmid, $assocId, 'maintenance_request']);
+    $prefillFromForm = $stmt->fetch() ?: null;
+    if ($prefillFromForm) {
+        $prefillFromForm['payload_decoded'] = json_decode((string)($prefillFromForm['payload'] ?? '{}'), true) ?: [];
+    }
+}
+
 // Also support ?from_arc=N — preload from an Architectural Review request.
 $prefillFromArc = null;
 if ($action === 'new' && ($aid = (int)($_GET['from_arc'] ?? 0)) > 0) {
@@ -295,7 +354,7 @@ $active = 'work-orders';
 $page_title = 'Work orders — ' . $association['name'];
 require __DIR__ . '/../includes/header.php';
 
-function wo_form_card(?array $editing, ?array $prefill, ?array $arcPrefill, array $units, array $locations, array $contractors, array $staff, array $PRIORITIES): void {
+function wo_form_card(?array $editing, ?array $prefill, ?array $arcPrefill, array $units, array $locations, array $contractors, array $staff, array $PRIORITIES, ?array $formPrefill = null): void {
     $isEdit = $editing !== null;
     $vals = $editing ?? [
         'id' => 0, 'title' => '', 'body' => '', 'priority' => 'normal',
@@ -310,6 +369,20 @@ function wo_form_card(?array $editing, ?array $prefill, ?array $arcPrefill, arra
         $vals['title']   = 'ARC follow-up: ' . (string)$arcPrefill['title'];
         $vals['body']    = "From Architectural Review request #{$arcPrefill['id']} ({$arcPrefill['category']}):\n\n" . (string)$arcPrefill['description'];
         if (!empty($arcPrefill['unit_id'])) $vals['unit_id'] = (int)$arcPrefill['unit_id'];
+    } elseif (!$isEdit && $formPrefill) {
+        $p = $formPrefill['payload_decoded'] ?? [];
+        $kind = str_replace('_', ' ', (string)($p['issue_kind'] ?? 'maintenance'));
+        $vals['title']    = 'Maintenance: ' . ucwords($kind) . ($formPrefill['unit_number'] ? ' — Unit ' . $formPrefill['unit_number'] : '');
+        $vals['priority'] = match ($p['urgency'] ?? 'medium') { 'emergency' => 'urgent', 'high' => 'high', 'low' => 'low', default => 'normal' };
+        $body  = "From maintenance form #{$formPrefill['id']}";
+        $body .= $formPrefill['unit_number'] ? " (Unit {$formPrefill['unit_number']})" : '';
+        $body .= ":\n\nIssue: " . ucwords($kind);
+        if (!empty($p['description']))         $body .= "\nDescription: {$p['description']}";
+        if (!empty($p['location_in_unit']))    $body .= "\nLocation in unit: {$p['location_in_unit']}";
+        if (!empty($p['access_instructions'])) $body .= "\nAccess: {$p['access_instructions']}";
+        if (!empty($p['contact_phone']))       $body .= "\nContact phone: {$p['contact_phone']}";
+        $vals['body'] = $body;
+        if (!empty($formPrefill['unit_id'])) $vals['unit_id'] = (int)$formPrefill['unit_id'];
     }
     ?>
     <div class="card card--padded" style="margin-bottom: var(--sp-6);">
@@ -318,13 +391,16 @@ function wo_form_card(?array $editing, ?array $prefill, ?array $arcPrefill, arra
             <p class="muted" style="font-size: var(--fs-sm);">Pre-filled from <a href="/dashboard/concerns.php?id=<?= (int)$prefill['id'] ?>">concern #<?= (int)$prefill['id'] ?> · <?= e((string)$prefill['subject']) ?></a>.</p>
         <?php elseif (!$isEdit && $arcPrefill): ?>
             <p class="muted" style="font-size: var(--fs-sm);">Pre-filled from <a href="/dashboard/arc.php?id=<?= (int)$arcPrefill['id'] ?>">🏗 Architectural Review request #<?= (int)$arcPrefill['id'] ?> · <?= e((string)$arcPrefill['title']) ?></a><?php if (!empty($arcPrefill['unit_number'])): ?> · Unit <?= e((string)$arcPrefill['unit_number']) ?><?php endif; ?>.</p>
+        <?php elseif (!$isEdit && $formPrefill): ?>
+            <p class="muted" style="font-size: var(--fs-sm);">Pre-filled from <a href="/dashboard/forms.php?id=<?= (int)$formPrefill['id'] ?>">🔧 maintenance form #<?= (int)$formPrefill['id'] ?> · <?= e((string)$formPrefill['title']) ?></a><?php if (!empty($formPrefill['unit_number'])): ?> · Unit <?= e((string)$formPrefill['unit_number']) ?><?php endif; ?>.</p>
         <?php endif; ?>
         <form method="post" class="form">
             <?= csrf_field() ?>
             <input type="hidden" name="form" value="<?= $isEdit ? 'edit' : 'add' ?>">
             <?php if ($isEdit): ?><input type="hidden" name="id" value="<?= (int)$vals['id'] ?>"><?php endif; ?>
-            <?php if (!$isEdit && $prefill):   ?><input type="hidden" name="source_concern_id" value="<?= (int)$prefill['id'] ?>"><?php endif; ?>
+            <?php if (!$isEdit && $prefill):    ?><input type="hidden" name="source_concern_id" value="<?= (int)$prefill['id'] ?>"><?php endif; ?>
             <?php if (!$isEdit && $arcPrefill): ?><input type="hidden" name="source_arc_id"     value="<?= (int)$arcPrefill['id'] ?>"><?php endif; ?>
+            <?php if (!$isEdit && $formPrefill):?><input type="hidden" name="source_form_id"    value="<?= (int)$formPrefill['id'] ?>"><?php endif; ?>
 
             <div class="form-row form-row--2">
                 <div class="field">
@@ -368,8 +444,12 @@ function wo_form_card(?array $editing, ?array $prefill, ?array $arcPrefill, arra
                         <option value="">— unassigned —</option>
                         <?php foreach ($staff as $s):
                             $nm = trim($s['first_name'] . ' ' . $s['last_name']);
-                            $off = board_office_label((string)($s['board_office'] ?? ''));
-                            $tag = $off !== '' ? " · $off" : (' · ' . str_replace('_',' ',$s['role']));
+                            if (!empty($s['employee_title'])) {
+                                $tag = ' · ' . $s['employee_title'];
+                            } else {
+                                $off = board_office_label((string)($s['board_office'] ?? ''));
+                                $tag = $off !== '' ? " · $off" : (' · ' . str_replace('_',' ',$s['role']));
+                            }
                         ?>
                             <option value="<?= (int)$s['id'] ?>" <?= ((int)($vals['assigned_user_id'] ?? 0) === (int)$s['id']) ? 'selected' : '' ?>><?= e($nm . $tag) ?></option>
                         <?php endforeach; ?>
@@ -574,10 +654,59 @@ function wo_form_card(?array $editing, ?array $prefill, ?array $arcPrefill, arra
                 <label class="field__label" for="sn">Note (optional)</label>
                 <textarea class="textarea" id="sn" name="note" rows="2" placeholder="Closing — contractor confirmed done, signed off."></textarea>
             </div>
+
+            <div class="field" style="padding: var(--sp-3); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--r-md);">
+                <label style="display:flex; align-items:center; gap: var(--sp-2); cursor: pointer; font-weight: 600;">
+                    <input type="checkbox" name="post_announcement" value="1" id="wo-ann-toggle">
+                    Post an announcement to residents
+                </label>
+                <div id="wo-ann-fields" style="display:none; margin-top: var(--sp-3);">
+                    <div class="form-row form-row--2" style="margin-bottom: var(--sp-3);">
+                        <div class="field">
+                            <label class="field__label" for="ann-title">Announcement title</label>
+                            <input class="input" id="ann-title" name="ann_title" value="<?= e((string)$detail['title']) ?>">
+                        </div>
+                        <div class="field">
+                            <label class="field__label" for="ann-aud">Audience</label>
+                            <select class="select" id="ann-aud" name="ann_audience">
+                                <option value="all">All residents</option>
+                                <option value="owners">Owners only</option>
+                                <option value="renters">Renters only</option>
+                                <option value="board">Board only</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label class="field__label" for="ann-body">Message</label>
+                        <textarea class="textarea" id="ann-body" name="ann_body" rows="3" placeholder="Brief description of what was done or is in progress…"></textarea>
+                    </div>
+                </div>
+            </div>
+
             <div class="row" style="justify-content: flex-end;">
                 <button class="btn btn--primary" type="submit">Update status</button>
             </div>
         </form>
+        <script>
+        (function () {
+            var toggle = document.getElementById('wo-ann-toggle');
+            var fields = document.getElementById('wo-ann-fields');
+            var ss     = document.getElementById('ss');
+            if (!toggle || !fields) return;
+            toggle.addEventListener('change', function () {
+                fields.style.display = this.checked ? '' : 'none';
+            });
+            // Pre-fill title when status changes.
+            if (ss) ss.addEventListener('change', function () {
+                var titleEl = document.getElementById('ann-title');
+                if (!titleEl) return;
+                var base = <?= json_encode((string)$detail['title']) ?>;
+                if (ss.value === 'completed') titleEl.value = 'Work completed: ' + base;
+                else if (ss.value === 'in_progress') titleEl.value = 'Work in progress: ' + base;
+                else titleEl.value = base;
+            });
+        })();
+        </script>
 
         <?php endif; /* editWo */ ?>
 
@@ -588,7 +717,7 @@ function wo_form_card(?array $editing, ?array $prefill, ?array $arcPrefill, arra
             <a class="muted" style="font-size: var(--fs-sm);" href="/dashboard/work-orders.php">← Back to list</a>
         </div>
         <?php if ($flashError): ?><div class="flash flash--error"><?= e($flashError) ?></div><?php endif; ?>
-        <?php wo_form_card($editWo, $prefillFromConcern, $prefillFromArc, $units, $locations, $contractors, $staff, $PRIORITIES); ?>
+        <?php wo_form_card($editWo, $prefillFromConcern, $prefillFromArc, $units, $locations, $contractors, $staff, $PRIORITIES, $prefillFromForm); ?>
 
     <?php else: ?>
         <!-- LIST VIEW -->

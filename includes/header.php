@@ -27,6 +27,9 @@ function nav_icon(string $name): string
         case 'locations':      return "<svg $base><path d='M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z'/><circle cx='12' cy='10' r='3'/></svg>";
         case 'units':          return "<svg $base><rect x='3' y='3' width='7' height='7'/><rect x='14' y='3' width='7' height='7'/><rect x='3' y='14' width='7' height='7'/><rect x='14' y='14' width='7' height='7'/></svg>";
         case 'concerns':       return "<svg $base><path d='M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'/></svg>";
+        case 'violations':     return "<svg $base><path d='M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z'/><line x1='12' y1='9' x2='12' y2='13'/><line x1='12' y1='17' x2='12.01' y2='17'/></svg>";
+        case 'minutes':        return "<svg $base><path d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'/><polyline points='14 2 14 8 20 8'/><line x1='16' y1='13' x2='8' y2='13'/><line x1='16' y1='17' x2='8' y2='17'/><line x1='10' y1='9' x2='8' y2='9'/></svg>";
+        case 'permissions':    return "<svg $base><rect x='3' y='11' width='18' height='11' rx='2' ry='2'/><path d='M7 11V7a5 5 0 0 1 10 0v4'/></svg>";
         case 'contacts':       return "<svg $base><path d='M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z'/></svg>";
         case 'parking':        return "<svg $base><rect x='3' y='3' width='18' height='18' rx='2' ry='2'/><path d='M9 17V7h4a3 3 0 0 1 0 6H9'/></svg>";
         case 'menu':           return "<svg $base><line x1='3' y1='12' x2='21' y2='12'/><line x1='3' y1='6' x2='21' y2='6'/><line x1='3' y1='18' x2='21' y2='18'/></svg>";
@@ -55,6 +58,9 @@ function active_nav_key(): string
         '/dashboard/media.php'          => 'media',
         '/dashboard/faq.php'            => 'faq',
         '/dashboard/settings.php'       => 'settings',
+        '/dashboard/violations.php'     => 'violations',
+        '/dashboard/minutes.php'        => 'minutes',
+        '/dashboard/permissions.php'    => 'permissions',
         '/admin'                        => 'overview',
         '/admin/index.php'              => 'overview',
         '/admin/associations.php'       => 'associations',
@@ -132,7 +138,7 @@ if ($_envProd && $_mailDriver === 'log' && ($_SESSION['role'] ?? '') === 'super_
 <div class="view-as-banner" role="status">
     <div class="container row row--between" style="gap: var(--sp-3); flex-wrap: wrap; align-items: center;">
         <div>
-            <strong>👁 Viewing as <?= e($_SESSION['view_as_role'] === 'resident' ? 'a homeowner' : 'a renter') ?></strong>
+            <strong>👁 Viewing as <?= e($_SESSION['view_as_role'] === 'owner' ? 'an owner' : 'a renter') ?></strong>
             <span style="opacity: 0.85; font-size: var(--fs-sm);">
                 ·  manage controls hidden ·  your real role is <?= e(str_replace('_', ' ', (string)($_SESSION['role'] ?? ''))) ?>
             </span>
@@ -298,11 +304,16 @@ if ($page_layout === 'app' && isset($association) && $association):
             <?= nav_link('/dashboard/faq.php',         'rules',          'FAQ',            'faq',            $active) ?>
             <?= nav_link('/dashboard/forms.php',       'documents',      'Forms',          'forms',          $active) ?>
             <?= nav_link('/dashboard/documents.php',   'documents',      'Documents',      'documents',      $active) ?>
+            <?php if (can_do('read_minutes')): ?>
+                <?= nav_link('/dashboard/minutes.php',     'minutes',        'Minutes',        'minutes',        $active) ?>
+            <?php endif; ?>
             <?= nav_link('/dashboard/search.php',      'rules',          'Rules',          'rules',          $active) ?>
             <?= nav_link('/dashboard/directory.php',   'directory',      'Directory',      'directory',      $active) ?>
+            <?php if (can_do('read_contacts')): ?>
+                <?= nav_link('/dashboard/contacts.php',    'contacts',       'Contacts',       'contacts',       $active) ?>
+            <?php endif; ?>
             <?php if (role_can_manage(viewing_role())): ?>
                 <?= nav_link('/dashboard/units.php',       'units',          'Units',          'units',          $active) ?>
-                <?= nav_link('/dashboard/contacts.php',    'contacts',       'Contacts',       'contacts',       $active) ?>
                 <?= nav_link('/dashboard/parking.php',     'parking',        'Parking',        'parking',        $active) ?>
             <?php endif; ?>
             <?php if (viewing_role() !== 'renter'): /* committees are owner/board territory */ ?>
@@ -310,14 +321,20 @@ if ($page_layout === 'app' && isset($association) && $association):
             <?php endif; ?>
             <?= nav_link('/dashboard/concerns.php',    'concerns',       'Concerns',       'concerns',       $active) ?>
             <?= nav_link('/dashboard/arc.php',         'documents',      'Arch. review',   'arc',            $active) ?>
-            <?php if (role_can_manage(viewing_role())): ?>
+            <?php if (role_can_manage(viewing_role()) || can_do('read_violations')): ?>
+                <?= nav_link('/dashboard/violations.php',  'violations',     'Violations',     'violations',     $active) ?>
+            <?php endif; ?>
+            <?php if (role_can_manage(viewing_role()) || can_do('read_work_orders')): ?>
                 <?= nav_link('/dashboard/work-orders.php', 'concerns',       'Work orders',    'work-orders',    $active) ?>
+            <?php endif; ?>
+            <?php if (role_can_manage(viewing_role())): ?>
                 <?= nav_link('/dashboard/employees.php',   'directory',      'Employees',      'employees',      $active) ?>
                 <?= nav_link('/dashboard/insurance.php',   'documents',      'Insurance',      'insurance',      $active) ?>
             <?php endif; ?>
             <?= nav_link('/dashboard/media.php',       'media',          'Media',          'media',          $active) ?>
             <?php if (role_can_manage(viewing_role())): ?>
                 <?= nav_link('/dashboard/locations.php',   'locations',      'Locations',      'locations',      $active) ?>
+                <?= nav_link('/dashboard/permissions.php', 'permissions',    'Permissions',    'permissions',    $active) ?>
                 <?= nav_link('/dashboard/activity.php',    'activity',       'Activity',       'activity',       $active) ?>
             <?php endif; ?>
             <?php if (viewing_role() !== 'renter'): /* renters don't need to see the settings area */ ?>
@@ -370,7 +387,7 @@ if ($page_layout === 'app' && isset($association) && $association):
                     <form method="post" action="/dashboard/view-as.php" style="display:flex; gap: 4px; padding: 0 var(--sp-3);">
                         <?= csrf_field() ?>
                         <input type="hidden" name="back" value="<?= e((string)($_SERVER['REQUEST_URI'] ?? '/dashboard/')) ?>">
-                        <button class="side-nav__view-as-btn" type="submit" name="role" value="resident" title="View as a homeowner">Homeowner</button>
+                        <button class="side-nav__view-as-btn" type="submit" name="role" value="owner" title="View as an owner">Owner</button>
                         <button class="side-nav__view-as-btn" type="submit" name="role" value="renter" title="View as a renter">Renter</button>
                     </form>
                 </div>

@@ -102,6 +102,74 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'delete'
     redirect('/dashboard/insurance.php');
 }
 
+// --- Insurance document upload ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'upload_doc') {
+    csrf_check();
+    $pid = (int)($_POST['insurance_id'] ?? 0);
+    $chk = db()->prepare('SELECT 1 FROM insurance_policies WHERE id = ? AND association_id = ?');
+    $chk->execute([$pid, $assocId]);
+    if (!$chk->fetchColumn()) { http_response_code(404); die('Not found'); }
+
+    $docTitle = trim((string)($_POST['title'] ?? ''));
+    if ($docTitle === '') $docTitle = (string)($_FILES['file']['name'] ?? 'Document');
+
+    if (!isset($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
+        flash('error', 'Upload failed.');
+    } elseif ($_FILES['file']['size'] > 25 * 1024 * 1024) {
+        flash('error', 'Max file size is 25 MB.');
+    } elseif (storage_over_quota_by($association, (int)$_FILES['file']['size'])) {
+        flash('error', 'Storage quota exceeded.');
+    } else {
+        $allowed = [
+            'pdf'=>'application/pdf','doc'=>'application/msword',
+            'docx'=>'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'xls'=>'application/vnd.ms-excel',
+            'xlsx'=>'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'png'=>'image/png','jpg'=>'image/jpeg','jpeg'=>'image/jpeg','txt'=>'text/plain',
+        ];
+        $origName = (string)($_FILES['file']['name'] ?? '');
+        $ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
+        $ext = preg_replace('/[^a-z0-9]/', '', $ext);
+        if (!isset($allowed[$ext])) {
+            flash('error', 'File type not allowed.');
+        } else {
+            $relDir = "uploads/$assocId/insurance";
+            $absDir = storage_path($relDir);
+            if (!is_dir($absDir)) mkdir($absDir, 0755, true);
+            $relPath = "$relDir/" . bin2hex(random_bytes(12)) . ".$ext";
+            $absPath = storage_path($relPath);
+            if (!move_uploaded_file($_FILES['file']['tmp_name'], $absPath)) {
+                flash('error', 'Could not save file.');
+            } else {
+                db()->prepare(
+                    'INSERT INTO documents (association_id, insurance_id, title, file_path, file_type, access_level, uploaded_by, category, version)
+                     VALUES (?, ?, ?, ?, ?, "board_only", ?, "Insurance", "1.0")'
+                )->execute([$assocId, $pid, $docTitle, $relPath, $allowed[$ext], (int)$user['id']]);
+                audit('insurance.doc_uploaded', ['title' => $docTitle], $pid, 'insurance');
+                flash('success', "\"$docTitle\" attached.");
+            }
+        }
+    }
+    redirect("/dashboard/insurance.php?action=edit&id=$pid");
+}
+
+// --- Insurance document delete ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'delete_doc') {
+    csrf_check();
+    $docId = (int)($_POST['doc_id'] ?? 0);
+    $pid   = (int)($_POST['insurance_id'] ?? 0);
+    $row = db()->prepare('SELECT file_path FROM documents WHERE id = ? AND association_id = ? AND insurance_id = ?');
+    $row->execute([$docId, $assocId, $pid]);
+    if ($r = $row->fetch()) {
+        $abs = storage_path((string)$r['file_path']);
+        if ($abs && file_exists($abs)) @unlink($abs);
+        db()->prepare('DELETE FROM documents WHERE id = ?')->execute([$docId]);
+        audit('insurance.doc_deleted', ['doc_id' => $docId], $pid, 'insurance');
+        flash('success', 'Document removed.');
+    }
+    redirect("/dashboard/insurance.php?action=edit&id=$pid");
+}
+
 // --- List ---
 $kindFilter = $_GET['kind'] ?? 'all';
 $sql = "SELECT p.*,
@@ -147,6 +215,13 @@ if (($_GET['action'] ?? '') === 'edit') {
     $editPolicy = $stmt->fetch() ?: null;
 }
 $showAdd = ($_GET['action'] ?? '') === 'new';
+
+$insDocs = [];
+if ($editPolicy) {
+    $ds = db()->prepare('SELECT * FROM documents WHERE insurance_id = ? AND association_id = ? ORDER BY created_at DESC');
+    $ds->execute([(int)$editPolicy['id'], $assocId]);
+    $insDocs = $ds->fetchAll();
+}
 
 // Renewal-warning helper
 function expiry_status(?string $expires_at): array
@@ -310,6 +385,58 @@ require __DIR__ . '/../includes/header.php';
             })();
         </script>
     </div>
+
+    <?php if ($editPolicy): ?>
+    <!-- ===== INSURANCE DOCUMENTS ===== -->
+    <div class="card card--padded" style="margin-bottom: var(--sp-6);">
+        <div class="card__head" style="margin-bottom: var(--sp-3);">
+            <h3 class="card__title">Attached documents</h3>
+            <span class="muted" style="font-size: var(--fs-xs);">Policy declarations, certificates, endorsements — board only.</span>
+        </div>
+
+        <?php if ($insDocs): ?>
+        <div class="stack-sm" style="margin-bottom: var(--sp-4);">
+        <?php foreach ($insDocs as $d): ?>
+            <div class="row row--between" style="align-items: center; padding: var(--sp-2) var(--sp-3); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--r-md);">
+                <div>
+                    <a href="/dashboard/file.php?doc=<?= (int)$d['id'] ?>" target="_blank" style="font-weight: 600;"><?= e((string)$d['title']) ?></a>
+                    <div class="muted" style="font-size: var(--fs-xs);"><?= e(strtoupper((string)($d['file_type'] ?? ''))) ?> · <?= e(date('M j, Y', strtotime((string)$d['created_at']))) ?></div>
+                </div>
+                <form method="post" style="display:inline;" onsubmit="return confirm('Remove this document?');">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="form" value="delete_doc">
+                    <input type="hidden" name="insurance_id" value="<?= (int)$editPolicy['id'] ?>">
+                    <input type="hidden" name="doc_id" value="<?= (int)$d['id'] ?>">
+                    <button class="btn btn--ghost" type="submit" style="font-size: var(--fs-xs); padding: 0.3rem 0.6rem; color: var(--color-error);">Remove</button>
+                </form>
+            </div>
+        <?php endforeach; ?>
+        </div>
+        <?php else: ?>
+        <p class="muted" style="font-size: var(--fs-sm); margin-bottom: var(--sp-4);">No documents attached yet.</p>
+        <?php endif; ?>
+
+        <form method="post" enctype="multipart/form-data" class="form" style="border-top: 1px solid var(--color-border); padding-top: var(--sp-4);">
+            <?= csrf_field() ?>
+            <input type="hidden" name="form" value="upload_doc">
+            <input type="hidden" name="insurance_id" value="<?= (int)$editPolicy['id'] ?>">
+            <div class="form-row form-row--2">
+                <div class="field">
+                    <label class="field__label" for="ins-doc-title">Document title</label>
+                    <input class="input" id="ins-doc-title" name="title" placeholder="Policy dec, Certificate, Endorsement…">
+                </div>
+                <div class="field">
+                    <label class="field__label" for="ins-doc-file">File <span class="muted" style="font-weight:400;">(PDF, Word, Excel, image — max 25 MB)</span></label>
+                    <input class="input" type="file" id="ins-doc-file" name="file" required accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.txt">
+                </div>
+            </div>
+            <div class="row" style="justify-content: flex-end;">
+                <button class="btn btn--primary" type="submit">Attach file</button>
+            </div>
+        </form>
+    </div>
+    <?php endif; ?>
+
     <?php endif; ?>
 
     <div class="row" style="gap: var(--sp-2); margin-bottom: var(--sp-4); flex-wrap: wrap;">

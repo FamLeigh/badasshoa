@@ -1,5 +1,86 @@
 [
     {
+        "id": "cl-20260512-290000-permissions",
+        "at": "2026-05-12T29:00:00-04:00",
+        "type": "feature",
+        "title": "Configurable permissions dashboard — board sets who sees what",
+        "description": "Board admins can now configure exactly which role is required to access each feature. A new Permissions page (board-admin only) shows a matrix: rows are features, columns are roles. Pick the minimum role for each feature and save. Features you can configure include: viewing meeting minutes, viewing work orders (read-only), viewing violations (read-only), viewing the employee roster, viewing insurance records, the full resident directory, submitting concerns, and submitting ARC requests. Management-write actions (creating work orders, issuing violation notices, editing employees) are always restricted to board/management roles and are not configurable. Changes take effect immediately and are per-association — you're not changing settings for any other community. If you haven't customized a feature, it falls back to a sensible default. Custom overrides are labeled 'custom' in the matrix so you always know what you've changed.",
+        "author": "Reboooot",
+        "link": "/dashboard/permissions.php"
+    },
+    {
+        "id": "cl-20260512-285000-owner-rename",
+        "at": "2026-05-12T28:50:00-04:00",
+        "type": "improvement",
+        "title": "Role renamed: 'Resident' is now 'Owner'",
+        "description": "The resident role has been renamed to 'Owner' throughout the app and database. This better reflects what the role actually represents — a unit owner, not just any resident. Existing accounts are migrated automatically; nothing changes for current users except the label. The 'Renter' role remains separate (renters have narrower access than owners — they can't file ARC requests, join committees, or access settings). If you were filtering by 'Resident' anywhere, you'll now see 'Owner' in its place.",
+        "author": "Reboooot",
+        "link": "/dashboard/directory.php"
+    },
+    {
+        "id": "cl-20260512-280000-wo-announcement",
+        "at": "2026-05-12T28:00:00-04:00",
+        "type": "feature",
+        "title": "Work orders — post a resident announcement when status changes",
+        "description": "When a board admin updates a work order status, an optional 'Post an announcement' section now appears in the status form. Tick the checkbox to expand it, pick the audience (All residents, Owners only, Renters only, or Board only), and write the announcement body. The title auto-fills based on the new status — 'Work completed: [title]' when marking done, 'In progress: [title]' when starting work — but you can change it to anything. Handy for closing the loop with residents: when the pool pump is finally fixed or the elevator comes back online, one status change both updates the work order and notifies residents without a second trip to the announcements page.",
+        "author": "Reboooot",
+        "link": "/dashboard/work-orders.php"
+    },
+    {
+        "id": "cl-20260512-275000-wo-employees",
+        "at": "2026-05-12T27:50:00-04:00",
+        "type": "improvement",
+        "title": "Work orders — assign to employees, not just board members",
+        "description": "The 'Assigned to' dropdown on work orders now includes all active employees (contractors, vendors, maintenance staff) alongside board and management roles. If an employee has a title on file (e.g., 'HVAC Technician', 'Pool Service'), that title shows in the dropdown. This means you no longer need to create a board-role account just to route a work order to your plumber or landscaper.",
+        "author": "Reboooot",
+        "link": "/dashboard/work-orders.php"
+    },
+    {
+        "id": "cl-20260512-270000-insurance-docs",
+        "at": "2026-05-12T27:00:00-04:00",
+        "type": "improvement",
+        "title": "Insurance — attach policy documents directly to each record",
+        "description": "The insurance record edit view now includes an attached documents section. Board admins can upload PDFs, Word docs, or images (up to 25 MB each) directly from the insurance page and they're stored with the policy record — no more uploading to the documents library and hunting for them later. Attached files are board-only and pull from the same storage quota. You can also delete individual attachments from the same view.",
+        "author": "Reboooot",
+        "link": "/dashboard/insurance.php"
+    },
+    {
+        "id": "cl-20260512-265000-employee-docs",
+        "at": "2026-05-12T26:50:00-04:00",
+        "type": "improvement",
+        "title": "Employees — attach W-9s, contracts, and background checks to employee records",
+        "description": "Board admins can now attach documents directly to an employee record — W-9s, signed contracts, background-check reports, certifications, anything relevant to that person. The upload section appears in the employee edit form (board admin only). Attached files are board-only access, stored in the same upload quota, and can be individually deleted from the same view.",
+        "author": "Reboooot",
+        "link": "/dashboard/employees.php"
+    },
+    {
+        "id": "cl-20260512-260000-employee-financials",
+        "at": "2026-05-12T26:00:00-04:00",
+        "type": "improvement",
+        "title": "Employee financial details gated to board admins only",
+        "description": "Pay type, pay rate, and salary information on employee records is now visible and editable only by board admins and super admins. Board members and property managers can still view and update everything else on an employee record (name, title, contact, status, notes) but pay details are hidden. This separates the operational view from the financial one without splitting the page into two separate access tiers.",
+        "author": "Reboooot",
+        "link": "/dashboard/employees.php"
+    },
+    {
+        "id": "cl-20260512-240000-batch",
+        "at": "2026-05-12T24:00:00-04:00",
+        "type": "feature",
+        "title": "Meeting minutes, maintenance-to-WO, and forgot-password rate limiting",
+        "description": "Three things shipped together. (1) Board meeting minutes: a new Minutes page in the dashboard lets the board record official meeting minutes with a rich-text editor (Quill), attendee list, meeting type (Regular / Special / Annual / Executive Session), and date. All members can read; only board admins and property managers can create or edit. (2) Maintenance request → Work Order: when a member files a maintenance request form, board admins now see a 'Convert to Work Order' button on the submission detail that pre-fills the work order title, priority, description, location, and access instructions from the form payload. (3) IP rate limiting on the forgot-password page: the page now caps at 5 reset-link requests per IP address per hour and returns a clear error if exceeded. Previously there was no per-IP cap — an attacker could spam unlimited reset emails from a single connection.",
+        "author": "Reboooot",
+        "link": "/dashboard/minutes.php"
+    },
+    {
+        "id": "cl-20260512-230000-violations",
+        "at": "2026-05-12T23:00:00-04:00",
+        "type": "feature",
+        "title": "Formal violation workflow — issue notices, track cures, print official letters",
+        "description": "Board admins and property managers can now record formal violations (noise, parking, pets, unauthorized modifications, and more), cite the specific governing-document rule, and link the violating unit and resident. From the violation detail page, issue any of four notice types: Warning, Cure Notice (with a deadline), Fine Notice (with a dollar amount), or Hearing Notice. Each notice pre-populates a legally-shaped letter body that you can edit freely before saving. Every saved notice appears in a timeline and generates a print-ready letter: association letterhead (logo + address), recipient, rule citation, due date or fine amount callout, body text, and a signature block. The print page auto-fires the browser print dialog. Violations also integrate into the Concerns workflow — a new 'Convert to Violation' button on any concern detail page pre-fills the violation form. Fine amounts are captured for the record; fine payment tracking is wired in once the billing module ships.",
+        "author": "Reboooot",
+        "link": "/dashboard/violations.php"
+    },
+    {
         "id": "cl-20260512-220000-savedsig",
         "at": "2026-05-12T22:00:00-04:00",
         "type": "feature",

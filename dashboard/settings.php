@@ -149,21 +149,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'update'
             db()->prepare(
                 "UPDATE associations
                  SET name = ?, subdomain = ?, address = ?, city = ?, state_region = ?, postal_code = ?, country = ?,
-                     unit_count = ?, primary_color = ?, public_landing_enabled = ?
+                     unit_count = ?, primary_color = ?
                      $extraSql
                  WHERE id = ?"
             )->execute(array_merge(
                 [
                     $name, $subdomain,
                     $address ?: null, $city ?: null, $stateReg ?: null, $postal ?: null, $country,
-                    $units, $primary, $publicLanding,
+                    $units, $primary,
                 ],
                 $extraArgs,
                 [$assocId]
             ));
             audit('association.profile_updated', [
                 'name' => $name,
-                'public_landing_enabled' => $publicLanding,
                 'logo_changed' => $newLogoPath !== null || $removeLogo,
                 'hero_changed' => $newHeroPath !== null || $removeHero,
                 'slug_changed' => $slugChanged,
@@ -176,15 +175,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'update'
                 "UPDATE associations
                  SET vision_statement = ?, about_text = ?, amenities_text = ?,
                      contact_email = ?, contact_phone = ?,
-                     website_url = ?, facebook_url = ?, instagram_url = ?, twitter_url = ?, nextdoor_url = ?
+                     website_url = ?, facebook_url = ?, instagram_url = ?, twitter_url = ?, nextdoor_url = ?,
+                     public_landing_enabled = ?
                  WHERE id = ?"
             )->execute([
                 $vision ?: null, $aboutText ?: null, $amenitiesText ?: null,
                 $contactEmail ?: null, $contactPhone ?: null,
                 $websiteUrl, $facebookUrl, $instagramUrl, $twitterUrl, $nextdoorUrl,
-                $assocId,
+                $publicLanding, $assocId,
             ]);
-            audit('association.content_updated', ['has_about' => $aboutText !== '', 'has_vision' => $vision !== '']);
+            audit('association.content_updated', ['has_about' => $aboutText !== '', 'has_vision' => $vision !== '', 'public_landing_enabled' => (bool)$publicLanding]);
             flash('success', 'Landing content saved.');
         }
         redirect('/dashboard/settings.php');

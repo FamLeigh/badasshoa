@@ -1,9 +1,20 @@
 <?php
 // Per-association contact directory — emergency lines, non-emergency lines,
-// recommended contractors, utility providers. Manager-only CRUD. Items
-// flagged is_public also show on the public community landing.
+// recommended contractors, utility providers. CRUD requires management role;
+// viewing is configurable via the permissions dashboard (default: all roles).
 require __DIR__ . '/_bootstrap.php';
-require_management();
+require_login();
+
+$canManageContacts = role_can_manage(viewing_role());
+
+if (!$canManageContacts && !can_do('read_contacts')) {
+    $active     = 'contacts';
+    $page_title = 'Contacts — ' . $association['name'];
+    require __DIR__ . '/../includes/header.php';
+    echo '<div class="container" style="padding: var(--sp-8) var(--sp-6);"><div class="flash flash--info">Your current role doesn\'t have access to the contacts directory. Contact your board admin if you think that\'s wrong.</div></div>';
+    require __DIR__ . '/../includes/footer.php';
+    exit;
+}
 
 $user = current_user();
 $flashError = null;
@@ -19,6 +30,7 @@ $KINDS = [
 // --- Add ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'add') {
     csrf_check();
+    if (!$canManageContacts) { http_response_code(403); die('Forbidden'); }
     $kind     = $_POST['kind'] ?? 'other';
     $label    = trim((string)($_POST['label'] ?? ''));
     $trade    = trim((string)($_POST['trade'] ?? ''));
@@ -53,6 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'add') {
 // --- Edit ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit') {
     csrf_check();
+    if (!$canManageContacts) { http_response_code(403); die('Forbidden'); }
     $cid    = (int)($_POST['id'] ?? 0);
     $kind   = $_POST['kind'] ?? 'other';
     $label  = trim((string)($_POST['label'] ?? ''));
@@ -84,6 +97,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit') 
 // --- Delete ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'delete') {
     csrf_check();
+    if (!$canManageContacts) { http_response_code(403); die('Forbidden'); }
     $cid = (int)($_POST['id'] ?? 0);
     db()->prepare('DELETE FROM association_contacts WHERE id = ? AND association_id = ?')->execute([$cid, $assocId]);
     audit('contact.deleted', [], $cid, 'contact');
@@ -101,9 +115,9 @@ $rows = db()->prepare(
 $rows->execute([$assocId]);
 $all = $rows->fetchAll();
 
-$showAdd = ($_GET['action'] ?? '') === 'new';
+$showAdd = $canManageContacts && ($_GET['action'] ?? '') === 'new';
 $editContact = null;
-if (($_GET['action'] ?? '') === 'edit') {
+if ($canManageContacts && ($_GET['action'] ?? '') === 'edit') {
     $eid = (int)($_GET['id'] ?? 0);
     $stmt = db()->prepare('SELECT * FROM association_contacts WHERE id = ? AND association_id = ?');
     $stmt->execute([$eid, $assocId]);
@@ -125,8 +139,10 @@ require __DIR__ . '/../includes/header.php';
         <?php if (!$showAdd && !$editContact): ?>
             <div class="row" style="gap: var(--sp-2); flex-wrap: wrap;">
                 <a class="btn btn--ghost" href="/dashboard/contacts-print.php" target="_blank" rel="noopener" title="Printable list of contacts">🖨 Print contacts</a>
-                <a class="btn btn--ghost" href="/dashboard/contacts-print.php?include_board=1" target="_blank" rel="noopener" title="Printable list — contacts plus board members & property managers">🖨 Print + board</a>
-                <a class="btn btn--primary" href="?action=new">+ New contact</a>
+                <?php if ($canManageContacts): ?>
+                    <a class="btn btn--ghost" href="/dashboard/contacts-print.php?include_board=1" target="_blank" rel="noopener" title="Printable list — contacts plus board members & property managers">🖨 Print + board</a>
+                    <a class="btn btn--primary" href="?action=new">+ New contact</a>
+                <?php endif; ?>
             </div>
         <?php endif; ?>
     </div>
@@ -239,8 +255,7 @@ require __DIR__ . '/../includes/header.php';
                 <th>Trade</th>
                 <th>Phone</th>
                 <th>Email / Web</th>
-                <th>Public?</th>
-                <th></th>
+                <?php if ($canManageContacts): ?><th>Public?</th><th></th><?php endif; ?>
             </tr>
         </thead>
         <tbody>
@@ -262,6 +277,7 @@ require __DIR__ . '/../includes/header.php';
                     <?php if (!empty($r['url'])): ?><a href="<?= e((string)$r['url']) ?>" target="_blank" rel="noopener"><?= e(parse_url((string)$r['url'], PHP_URL_HOST) ?: $r['url']) ?></a><?php endif; ?>
                     <?php if (empty($r['email']) && empty($r['url'])): ?><span class="muted">—</span><?php endif; ?>
                 </td>
+                <?php if ($canManageContacts): ?>
                 <td><?= (int)$r['is_public'] === 1 ? '<span class="badge badge--success">yes</span>' : '<span class="muted">no</span>' ?></td>
                 <td style="text-align:right; white-space: nowrap;">
                     <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="?action=edit&id=<?= (int)$r['id'] ?>">Edit</a>
@@ -272,6 +288,7 @@ require __DIR__ . '/../includes/header.php';
                         <button class="btn btn--ghost" type="submit" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs); color: var(--color-error);">Delete</button>
                     </form>
                 </td>
+                <?php endif; ?>
             </tr>
         <?php endforeach; ?>
         </tbody>

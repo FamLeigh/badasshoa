@@ -4,7 +4,7 @@ require_once __DIR__ . '/includes/auth.php';
 
 // Already logged in? Bounce to landing.
 if (!empty($_SESSION['user_id'])) {
-    redirect(landing_for($_SESSION['role'] ?? 'resident'));
+    redirect(landing_for($_SESSION['role'] ?? 'owner'));
 }
 
 $email  = $_POST['email']  ?? '';

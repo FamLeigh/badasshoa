@@ -20,12 +20,83 @@ if (session_status() === PHP_SESSION_NONE) {
 // Strict role hierarchy; default-deny on missing/typo'd roles.
 const ROLE_RANK = [
     'renter'           => 1,
-    'resident'         => 2,
-    'property_manager' => 3,
-    'board_member'     => 4,
-    'board_admin'      => 5,
-    'super_admin'      => 6,
+    'staff'            => 2,
+    'owner'            => 3,
+    'property_manager' => 4,
+    'board_member'     => 5,
+    'board_admin'      => 6,
+    'super_admin'      => 7,
 ];
+
+// --- Configurable permissions -------------------------------------------
+
+// Default minimum role for each feature. Board admins can override per-association
+// via /dashboard/permissions.php. Defaults apply when no DB row exists.
+function permission_defaults(): array
+{
+    return [
+        'read_minutes'        => 'owner',
+        'read_contacts'       => 'renter',
+        'read_work_orders'    => 'board_member',
+        'read_violations'     => 'board_member',
+        'read_insurance'      => 'board_member',
+        'read_employees'      => 'board_member',
+        'submit_concerns'     => 'renter',
+        'submit_arc'          => 'owner',
+        'read_full_directory' => 'owner',
+        'read_documents'      => 'renter',
+    ];
+}
+
+// Check whether the current user's role meets the minimum for $permission.
+// Super admins always pass. Management actions are NOT in this table — those
+// stay hardcoded in require_management() so a misconfiguration can't expose them.
+function can_do(string $permission): bool
+{
+    $role = (string)($_SESSION['role'] ?? '');
+    if ($role === 'super_admin') return true;
+
+    $aid      = (int)($_SESSION['association_id'] ?? 0);
+    $defaults = permission_defaults();
+
+    static $cache = [];
+    if (!isset($cache[$aid])) {
+        $cache[$aid] = [];
+        if ($aid > 0) {
+            try {
+                $stmt = db()->prepare(
+                    'SELECT permission_key, min_role FROM association_permissions WHERE association_id = ?'
+                );
+                $stmt->execute([$aid]);
+                foreach ($stmt->fetchAll() as $r) {
+                    $cache[$aid][$r['permission_key']] = $r['min_role'];
+                }
+            } catch (Throwable) {
+                // Table may not exist in dev env yet — fall back to defaults silently.
+            }
+        }
+    }
+
+    $minRole  = $cache[$aid][$permission] ?? $defaults[$permission] ?? 'board_member';
+    $userRank = ROLE_RANK[$role]    ?? 0;
+    $minRank  = ROLE_RANK[$minRole] ?? PHP_INT_MAX;
+    return $userRank >= $minRank;
+}
+
+// Label helper used in the permissions UI.
+function role_label(string $role): string
+{
+    return match ($role) {
+        'renter'           => 'Renter',
+        'staff'            => 'Staff',
+        'owner'            => 'Owner',
+        'property_manager' => 'Property manager',
+        'board_member'     => 'Board member',
+        'board_admin'      => 'Board admin',
+        'super_admin'      => 'Super admin',
+        default            => ucfirst(str_replace('_', ' ', $role)),
+    };
+}
 
 // --- CSRF ---------------------------------------------------------------
 function csrf_token(): string
@@ -127,10 +198,10 @@ function is_viewing_as(): bool
 function login_attempt_blocked(string $email, string $ip): bool
 {
     $stmt = db()->prepare(
-        'SELECT COUNT(*) FROM login_attempts
-         WHERE succeeded = 0
-           AND attempted_at > (NOW() - INTERVAL 15 MINUTE)
-           AND (ip_address = ? OR email = ?)'
+        "SELECT COUNT(*) FROM login_attempts
+          WHERE kind = 'login' AND succeeded = 0
+            AND attempted_at > (NOW() - INTERVAL 15 MINUTE)
+            AND (ip_address = ? OR email = ?)"
     );
     $stmt->execute([$ip, $email]);
     return ((int)$stmt->fetchColumn()) >= 5;
@@ -138,7 +209,7 @@ function login_attempt_blocked(string $email, string $ip): bool
 
 function record_login_attempt(string $email, string $ip, bool $ok): void
 {
-    db()->prepare('INSERT INTO login_attempts (email, ip_address, succeeded) VALUES (?, ?, ?)')
+    db()->prepare("INSERT INTO login_attempts (email, kind, ip_address, succeeded) VALUES (?, 'login', ?, ?)")
         ->execute([$email, $ip, $ok ? 1 : 0]);
 }
 

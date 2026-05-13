@@ -35,7 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'send_re
 $createError = null;
 $createDefaults = [
     'first_name' => '', 'last_name' => '', 'email' => '', 'phone' => '',
-    'role' => 'resident', 'status' => 'active', 'unit_number' => '',
+    'role' => 'owner', 'status' => 'active', 'unit_number' => '',
     'association_id' => '', 'is_owner' => 1, 'send_welcome' => 1,
 ];
 // If linked from /admin/associations.php (Invite a user), prefill association.
@@ -49,7 +49,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'create_
     $last    = trim((string)($_POST['last_name'] ?? ''));
     $email   = trim((string)($_POST['email'] ?? ''));
     $phone   = trim((string)($_POST['phone'] ?? ''));
-    $role    = $_POST['role'] ?? 'resident';
+    $role    = $_POST['role'] ?? 'owner';
     $status  = $_POST['status'] ?? 'active';
     $unit    = trim((string)($_POST['unit_number'] ?? ''));
     $assocIdRaw = $_POST['association_id'] ?? '';
@@ -59,9 +59,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'create_
     $pw1 = (string)($_POST['new_password'] ?? '');
     $pw2 = (string)($_POST['new_password_confirm'] ?? '');
 
-    $allowedRoles  = ['super_admin','board_admin','board_member','property_manager','resident','renter'];
+    $allowedRoles  = ['super_admin','board_admin','board_member','property_manager','owner','renter'];
     $allowedStatus = ['active','pending','inactive'];
-    if (!in_array($role, $allowedRoles, true))   $role   = 'resident';
+    if (!in_array($role, $allowedRoles, true))   $role   = 'owner';
     if (!in_array($status, $allowedStatus, true)) $status = 'active';
     if ($role === 'super_admin') $assocId = null;
 
@@ -166,15 +166,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit_us
     $mPostal = trim((string)($_POST['mailing_postal_code'] ?? ''));
     $mCtry   = strtoupper(trim((string)($_POST['mailing_country'] ?? '')));
     if ($mCtry !== '' && !preg_match('/^[A-Z]{2}$/', $mCtry)) $mCtry = '';
-    $role    = $_POST['role'] ?? 'resident';
+    $role    = $_POST['role'] ?? 'owner';
     $status  = $_POST['status'] ?? 'active';
     $unit    = trim((string)($_POST['unit_number'] ?? ''));
     $assocId = ($_POST['association_id'] ?? '') === '' ? null : (int)$_POST['association_id'];
     $isOwner = isset($_POST['is_owner']) ? 1 : 0;
 
-    $allowedRoles  = ['super_admin','board_admin','board_member','property_manager','resident','renter'];
+    $allowedRoles  = ['super_admin','board_admin','board_member','property_manager','owner','renter'];
     $allowedStatus = ['active','pending','inactive'];
-    if (!in_array($role, $allowedRoles, true))   $role   = 'resident';
+    if (!in_array($role, $allowedRoles, true))   $role   = 'owner';
     if (!in_array($status, $allowedStatus, true)) $status = 'active';
 
     // super_admin role implies no association; everything else needs one
@@ -267,7 +267,7 @@ $qSearch = trim((string)($_GET['q'] ?? ''));
 $qAssoc  = (int)($_GET['association_id'] ?? 0);
 $qRole   = trim((string)($_GET['role'] ?? ''));
 
-$allowedRoleFilters = ['super_admin','board_admin','board_member','property_manager','resident','renter'];
+$allowedRoleFilters = ['super_admin','board_admin','board_member','property_manager','owner','renter'];
 if ($qRole !== '' && !in_array($qRole, $allowedRoleFilters, true)) $qRole = '';
 
 $sql = 'SELECT u.*, a.name AS assoc_name
@@ -372,7 +372,7 @@ require __DIR__ . '/../includes/header.php';
                 <div class="field">
                     <label class="field__label" for="nu-role">Role</label>
                     <select class="select" id="nu-role" name="role">
-                        <?php foreach (['board_admin'=>'Board admin','board_member'=>'Board member','property_manager'=>'Property manager','resident'=>'Resident','renter'=>'Renter','super_admin'=>'Super admin'] as $val => $lbl): ?>
+                        <?php foreach (['board_admin'=>'Board admin','board_member'=>'Board member','property_manager'=>'Property manager','owner'=>'Owner','renter'=>'Renter','super_admin'=>'Super admin'] as $val => $lbl): ?>
                             <option value="<?= e($val) ?>" <?= $createDefaults['role'] === $val ? 'selected' : '' ?>><?= e($lbl) ?></option>
                         <?php endforeach; ?>
                     </select>
@@ -544,7 +544,7 @@ require __DIR__ . '/../includes/header.php';
                     <label class="field__label" for="eu-role">Role</label>
                     <?php $isSelf = (int)$editUser['id'] === (int)$_SESSION['user_id']; ?>
                     <select class="select" id="eu-role" name="role" <?= $isSelf ? 'disabled' : '' ?>>
-                        <?php foreach (['super_admin'=>'Super admin','board_admin'=>'Board admin','board_member'=>'Board member','property_manager'=>'Property manager','resident'=>'Resident','renter'=>'Renter'] as $val => $lbl): ?>
+                        <?php foreach (['super_admin'=>'Super admin','board_admin'=>'Board admin','board_member'=>'Board member','property_manager'=>'Property manager','owner'=>'Owner','renter'=>'Renter'] as $val => $lbl): ?>
                             <option value="<?= e($val) ?>" <?= $editUser['role'] === $val ? 'selected' : '' ?>><?= e($lbl) ?></option>
                         <?php endforeach; ?>
                     </select>
@@ -626,7 +626,7 @@ require __DIR__ . '/../includes/header.php';
             <option value="board_admin"      <?= $qRole==='board_admin'?'selected':'' ?>>Board admin</option>
             <option value="board_member"     <?= $qRole==='board_member'?'selected':'' ?>>Board member</option>
             <option value="property_manager" <?= $qRole==='property_manager'?'selected':'' ?>>Property manager</option>
-            <option value="resident"         <?= $qRole==='resident'?'selected':'' ?>>Resident</option>
+            <option value="owner"         <?= $qRole==='owner'?'selected':'' ?>>Owner</option>
             <option value="renter"           <?= $qRole==='renter'?'selected':'' ?>>Renter</option>
         </select>
         <button class="btn btn--ghost" type="submit">Filter</button>

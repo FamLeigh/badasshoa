@@ -66,6 +66,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'delete'
     redirect('/dashboard/communications.php');
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit') {
+    csrf_check();
+    if (!$canPost) { http_response_code(403); die('Forbidden'); }
+    $id    = (int)($_POST['id'] ?? 0);
+    $title = trim((string)($_POST['title'] ?? ''));
+    $body  = trim((string)($_POST['body'] ?? ''));
+    $type  = $_POST['type'] ?? 'general';
+    $aud   = $_POST['audience'] ?? 'all';
+    if (!in_array($type, ['general','emergency','event','maintenance','beautification'], true)) $type = 'general';
+    if (!in_array($aud,  ['all','owners','renters','board'], true)) $aud = 'all';
+
+    $neverExpires = isset($_POST['never_expires']);
+    $expiresRaw   = trim((string)($_POST['expires_at'] ?? ''));
+    $expiresSql   = null;
+    if (!$neverExpires && $expiresRaw !== '') {
+        $exTs = strtotime($expiresRaw);
+        if ($exTs && $exTs > 0) $expiresSql = date('Y-m-d H:i:s', $exTs);
+    }
+
+    if ($title === '') {
+        $flashError = 'Title is required.';
+    } elseif ($body === '') {
+        $flashError = 'Body is required.';
+    } else {
+        $chk = db()->prepare('SELECT 1 FROM announcements WHERE id = ? AND association_id = ?');
+        $chk->execute([$id, $assocId]);
+        if (!$chk->fetchColumn()) { http_response_code(404); die('Not found'); }
+        db()->prepare(
+            'UPDATE announcements SET title = ?, body = ?, type = ?, audience = ?, expires_at = ? WHERE id = ? AND association_id = ?'
+        )->execute([$title, $body, $type, $aud, $expiresSql, $id, $assocId]);
+        audit('announcement.edited', ['title' => $title], $id, 'announcement');
+        flash('success', 'Announcement updated.');
+        redirect('/dashboard/communications.php?id=' . $id);
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'end_now') {
+    csrf_check();
+    if (!$canPost) { http_response_code(403); die('Forbidden'); }
+    $id = (int)($_POST['id'] ?? 0);
+    db()->prepare(
+        'UPDATE announcements SET expires_at = NOW() WHERE id = ? AND association_id = ?'
+    )->execute([$id, $assocId]);
+    audit('announcement.ended', [], $id, 'announcement');
+    flash('success', 'Announcement ended.');
+    redirect('/dashboard/communications.php?id=' . $id);
+}
+
 $qType = $_GET['type'] ?? '';
 $qAud  = $_GET['audience'] ?? '';
 // Managers can flip a "Show expired / scheduled" toggle; members never see
@@ -118,6 +166,17 @@ require __DIR__ . '/../includes/header.php';
             <div class="row" style="gap: var(--sp-2);">
                 <a class="btn btn--ghost" href="/dashboard/announcement-print.php?id=<?= (int)$detail['id'] ?>" target="_blank" rel="noopener">🖨 Print</a>
                 <?php if ($canPost): ?>
+                    <a class="btn btn--ghost" href="?id=<?= (int)$detail['id'] ?>&action=edit">Edit</a>
+                <?php endif; ?>
+                <?php if ($canPost && ($expTs === null || $expTs > time())): ?>
+                    <form method="post" style="display:inline;" onsubmit="return confirm('End this announcement now? It will disappear from the feed immediately.');">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="form" value="end_now">
+                        <input type="hidden" name="id" value="<?= (int)$detail['id'] ?>">
+                        <button class="btn btn--ghost" type="submit">End now</button>
+                    </form>
+                <?php endif; ?>
+                <?php if ($canPost): ?>
                     <form method="post" style="display:inline;" onsubmit="return confirm('Delete this announcement?');">
                         <?= csrf_field() ?>
                         <input type="hidden" name="form" value="delete">
@@ -157,6 +216,68 @@ require __DIR__ . '/../includes/header.php';
 
             <div style="white-space: pre-wrap; line-height: 1.55; font-size: var(--fs-md);"><?= e((string)$detail['body']) ?></div>
         </article>
+
+    <?php if ($canPost && ($_GET['action'] ?? '') === 'edit'): ?>
+    <?php if ($flashError): ?><div class="flash flash--error"><?= e($flashError) ?></div><?php endif; ?>
+    <div class="card card--padded" style="margin-bottom: var(--sp-6);">
+        <h3 class="card__title">Edit announcement</h3>
+        <form method="post" class="form">
+            <?= csrf_field() ?>
+            <input type="hidden" name="form" value="edit">
+            <input type="hidden" name="id" value="<?= (int)$detail['id'] ?>">
+            <div class="field">
+                <label class="field__label" for="etitle">Title</label>
+                <input class="input" id="etitle" name="title" required value="<?= e((string)$detail['title']) ?>">
+            </div>
+            <div class="field">
+                <label class="field__label" for="ebody">Body</label>
+                <textarea class="textarea" id="ebody" name="body" rows="8" required><?= e((string)$detail['body']) ?></textarea>
+            </div>
+            <div class="form-row form-row--2">
+                <div class="field">
+                    <label class="field__label" for="etype">Type</label>
+                    <select class="select" id="etype" name="type">
+                        <?php foreach (['general'=>'General','event'=>'Event','maintenance'=>'Maintenance','beautification'=>'Beautification','emergency'=>'Emergency'] as $v=>$l): ?>
+                            <option value="<?= e($v) ?>" <?= $detail['type']===$v?'selected':'' ?>><?= e($l) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="field">
+                    <label class="field__label" for="eaud">Audience</label>
+                    <select class="select" id="eaud" name="audience">
+                        <?php foreach (['all'=>'Everyone','owners'=>'Owners only','renters'=>'Renters only','board'=>'Board only'] as $v=>$l): ?>
+                            <option value="<?= e($v) ?>" <?= $detail['audience']===$v?'selected':'' ?>><?= e($l) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </div>
+            <div class="field">
+                <label class="field__label" for="eexpires">Expires at</label>
+                <input class="input" type="datetime-local" id="eexpires" name="expires_at"
+                       value="<?= !empty($detail['expires_at']) ? e(date('Y-m-d\TH:i', strtotime((string)$detail['expires_at']))) : '' ?>"
+                       id="eexpires-input">
+                <label style="display:flex; align-items:center; gap: var(--sp-2); margin-top: var(--sp-2); font-size: var(--fs-sm);">
+                    <input type="checkbox" name="never_expires" id="enever" <?= empty($detail['expires_at']) ? 'checked' : '' ?>>
+                    Never expires (clears the date above)
+                </label>
+            </div>
+            <div class="row" style="justify-content: flex-end; gap: var(--sp-2);">
+                <a class="btn btn--ghost" href="?id=<?= (int)$detail['id'] ?>">Cancel</a>
+                <button class="btn btn--primary" type="submit">Save changes</button>
+            </div>
+        </form>
+    </div>
+    <script>
+    (function () {
+        var cb  = document.getElementById('enever');
+        var inp = document.getElementById('eexpires');
+        if (!cb || !inp) return;
+        function sync() { inp.disabled = cb.checked; }
+        cb.addEventListener('change', sync);
+        sync();
+    })();
+    </script>
+    <?php endif; ?>
 
     <?php else: /* ---------- LISTING VIEW ---------- */ ?>
 
