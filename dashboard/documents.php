@@ -84,13 +84,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit') 
     csrf_check();
     if (!$canManage) { http_response_code(403); die('Forbidden'); }
 
-    $did         = (int)($_POST['id'] ?? 0);
-    $title       = trim((string)($_POST['title'] ?? ''));
-    $description = trim((string)($_POST['description'] ?? ''));
-    $category    = trim((string)($_POST['category'] ?? 'General'));
-    $access      = $_POST['access_level'] ?? 'members_only';
-    $unitId      = ($_POST['unit_id'] ?? '') === '' ? null : (int)$_POST['unit_id'];
-    $memberId    = ($_POST['user_id'] ?? '') === '' ? null : (int)$_POST['user_id'];
+    $did           = (int)($_POST['id'] ?? 0);
+    $title         = trim((string)($_POST['title'] ?? ''));
+    $description   = trim((string)($_POST['description'] ?? ''));
+    $category      = trim((string)($_POST['category'] ?? 'General'));
+    $access        = $_POST['access_level'] ?? 'members_only';
+    $unitId        = ($_POST['unit_id'] ?? '') === '' ? null : (int)$_POST['unit_id'];
+    $memberId      = ($_POST['user_id'] ?? '') === '' ? null : (int)$_POST['user_id'];
+    $effectiveDate = trim((string)($_POST['effective_date'] ?? ''));
+    if ($effectiveDate !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $effectiveDate)) $effectiveDate = '';
+    $version = trim((string)($_POST['version'] ?? ''));
     if (!in_array($access, ['public','members_only','board_only','unit_only'], true)) $access = 'members_only';
     if ($access === 'unit_only' && !$unitId) $access = 'members_only';
     if ($unitId) {
@@ -113,9 +116,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit') 
     } else {
         db()->prepare(
             'UPDATE documents
-                SET title = ?, description = ?, category = ?, access_level = ?, unit_id = ?, user_id = ?
+                SET title = ?, description = ?, category = ?, access_level = ?, unit_id = ?, user_id = ?,
+                    effective_date = ?, version = ?
               WHERE id = ? AND association_id = ?'
-        )->execute([$title, $description ?: null, $category ?: null, $access, $unitId, $memberId, $did, $assocId]);
+        )->execute([$title, $description ?: null, $category ?: null, $access, $unitId, $memberId,
+                    $effectiveDate ?: null, $version ?: null, $did, $assocId]);
         audit('document.edited', ['title' => $title, 'access' => $access, 'unit_id' => $unitId, 'user_id' => $memberId], $did, 'document');
         flash('success', "Updated \"$title\".");
         redirect('/dashboard/documents.php');
@@ -127,14 +132,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'compose
     csrf_check();
     if (!$canManage) { http_response_code(403); die('Forbidden'); }
 
-    $did         = (int)($_POST['id'] ?? 0);
-    $title       = trim((string)($_POST['title'] ?? ''));
-    $description = trim((string)($_POST['description'] ?? ''));
-    $category    = trim((string)($_POST['category'] ?? 'General'));
-    $access      = $_POST['access_level'] ?? 'members_only';
-    $unitId      = ($_POST['unit_id'] ?? '') === '' ? null : (int)$_POST['unit_id'];
-    $memberId    = ($_POST['user_id'] ?? '') === '' ? null : (int)$_POST['user_id'];
-    $body        = (string)($_POST['body_html'] ?? '');
+    $did           = (int)($_POST['id'] ?? 0);
+    $title         = trim((string)($_POST['title'] ?? ''));
+    $description   = trim((string)($_POST['description'] ?? ''));
+    $category      = trim((string)($_POST['category'] ?? 'General'));
+    $access        = $_POST['access_level'] ?? 'members_only';
+    $unitId        = ($_POST['unit_id'] ?? '') === '' ? null : (int)$_POST['unit_id'];
+    $memberId      = ($_POST['user_id'] ?? '') === '' ? null : (int)$_POST['user_id'];
+    $body          = (string)($_POST['body_html'] ?? '');
+    $effectiveDate = trim((string)($_POST['effective_date'] ?? ''));
+    if ($effectiveDate !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $effectiveDate)) $effectiveDate = '';
     if (!in_array($access, ['public','members_only','board_only','unit_only'], true)) $access = 'members_only';
     if ($access === 'unit_only' && !$unitId) $access = 'members_only';
     if ($unitId) {
@@ -153,11 +160,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'compose
     elseif ($bodyText === '') $flashError = 'Body is required — write something in the editor.';
     elseif ($did === 0) {
         db()->prepare(
-            'INSERT INTO documents (association_id, unit_id, user_id, title, description, body_html, category,
+            'INSERT INTO documents (association_id, unit_id, user_id, title, description, effective_date, body_html, category,
                                     file_path, file_type, access_level, uploaded_by, version)
-             VALUES (?, ?, ?, ?, ?, ?, ?, NULL, "text/html", ?, ?, "1.0")'
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, "text/html", ?, ?, "1.0")'
         )->execute([
-            $assocId, $unitId, $memberId, $title, $description ?: null, $body, $category ?: null, $access, (int)$user['id'],
+            $assocId, $unitId, $memberId, $title, $description ?: null, $effectiveDate ?: null,
+            $body, $category ?: null, $access, (int)$user['id'],
         ]);
         $newId = (int)db()->lastInsertId();
         audit('document.composed', ['title' => $title, 'access' => $access, 'unit_id' => $unitId, 'user_id' => $memberId], $newId, 'document');
@@ -173,9 +181,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'compose
         } else {
             db()->prepare(
                 'UPDATE documents
-                    SET title = ?, description = ?, body_html = ?, category = ?, access_level = ?, unit_id = ?, user_id = ?
+                    SET title = ?, description = ?, body_html = ?, category = ?, access_level = ?, unit_id = ?, user_id = ?,
+                        effective_date = ?
                   WHERE id = ? AND association_id = ?'
-            )->execute([$title, $description ?: null, $body, $category ?: null, $access, $unitId, $memberId, $did, $assocId]);
+            )->execute([$title, $description ?: null, $body, $category ?: null, $access, $unitId, $memberId,
+                        $effectiveDate ?: null, $did, $assocId]);
             audit('document.edited', ['title' => $title, 'composed' => true], $did, 'document');
             flash('success', "Updated \"$title\".");
             redirect('/dashboard/document.php?id=' . $did);
@@ -188,12 +198,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'upload'
     csrf_check();
     if (!$canManage) { http_response_code(403); die('Forbidden'); }
 
-    $title       = trim((string)($_POST['title'] ?? ''));
-    $description = trim((string)($_POST['description'] ?? ''));
-    $category    = trim((string)($_POST['category'] ?? 'General'));
-    $access      = $_POST['access_level'] ?? 'members_only';
-    $unitId      = $_POST['unit_id'] !== '' ? (int)$_POST['unit_id'] : null;
-    $memberId    = ($_POST['user_id'] ?? '') === '' ? null : (int)$_POST['user_id'];
+    $title         = trim((string)($_POST['title'] ?? ''));
+    $description   = trim((string)($_POST['description'] ?? ''));
+    $category      = trim((string)($_POST['category'] ?? 'General'));
+    $access        = $_POST['access_level'] ?? 'members_only';
+    $unitId        = ($_POST['unit_id'] ?? '') !== '' ? (int)$_POST['unit_id'] : null;
+    $memberId      = ($_POST['user_id'] ?? '') === '' ? null : (int)$_POST['user_id'];
+    $effectiveDate = trim((string)($_POST['effective_date'] ?? ''));
+    if ($effectiveDate !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $effectiveDate)) $effectiveDate = '';
     if (!in_array($access, ['public', 'members_only', 'board_only', 'unit_only'], true)) $access = 'members_only';
     // unit_only without a unit makes no sense — fall back to members_only.
     if ($access === 'unit_only' && !$unitId) $access = 'members_only';
@@ -249,12 +261,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'upload'
                 $flashError = 'Could not save file. Check storage permissions.';
             } else {
                 $stmt = db()->prepare(
-                    'INSERT INTO documents (association_id, unit_id, user_id, title, description, category, file_path, file_type, access_level, uploaded_by, version)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                    'INSERT INTO documents (association_id, unit_id, user_id, title, description, effective_date, category, file_path, file_type, access_level, uploaded_by, version)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
                 );
                 $stmt->execute([
-                    $assocId, $unitId, $memberId, $title, $description, $category, $relPath,
-                    $allowed[$ext], $access, (int)$user['id'], '1.0',
+                    $assocId, $unitId, $memberId, $title, $description, $effectiveDate ?: null,
+                    $category, $relPath, $allowed[$ext], $access, (int)$user['id'], '1.0',
                 ]);
                 $newId = (int)db()->lastInsertId();
                 audit('document.uploaded', ['title' => $title, 'access' => $access, 'unit_id' => $unitId, 'user_id' => $memberId], $newId, 'document');
@@ -533,6 +545,19 @@ require __DIR__ . '/../includes/header.php';
                 </div>
                 <div class="field"><!-- spacer --></div>
             </div>
+            <div class="form-row form-row--2">
+                <div class="field">
+                    <label class="field__label" for="ed-effdate">Effective date</label>
+                    <input class="input" type="date" id="ed-effdate" name="effective_date"
+                           value="<?= e((string)($editDoc['effective_date'] ?? '')) ?>">
+                    <div class="field__hint">When this version takes effect — shown on the document listing.</div>
+                </div>
+                <div class="field">
+                    <label class="field__label" for="ed-ver">Version</label>
+                    <input class="input" id="ed-ver" name="version" maxlength="20"
+                           value="<?= e((string)($editDoc['version'] ?? '')) ?>" placeholder="e.g. 2.1 or 2026-A">
+                </div>
+            </div>
             <div class="field">
                 <label class="field__label" for="ed-desc">Description</label>
                 <textarea class="textarea" id="ed-desc" name="description" rows="4"><?= e((string)($editDoc['description'] ?? '')) ?></textarea>
@@ -616,7 +641,11 @@ require __DIR__ . '/../includes/header.php';
                         <option value="unit_only"     <?= $cv['access_level']==='unit_only'?'selected':'' ?>>Unit only</option>
                     </select>
                 </div>
-                <div class="field"><!-- spacer --></div>
+                <div class="field">
+                    <label class="field__label" for="dc-effdate">Effective date (optional)</label>
+                    <input class="input" type="date" id="dc-effdate" name="effective_date"
+                           value="<?= e((string)($cv['effective_date'] ?? '')) ?>">
+                </div>
             </div>
             <div class="field">
                 <label class="field__label" for="dc-desc">Description (optional, shown in the listing)</label>
@@ -748,7 +777,11 @@ require __DIR__ . '/../includes/header.php';
                         <option value="unit_only" <?= $preselectUnitId ? 'selected' : '' ?>>Unit only — its occupants + board</option>
                     </select>
                 </div>
-                <div class="field"><!-- spacer --></div>
+                <div class="field">
+                    <label class="field__label" for="upload-effdate">Effective date (optional)</label>
+                    <input class="input" type="date" id="upload-effdate" name="effective_date">
+                    <div class="field__hint">When this version takes effect.</div>
+                </div>
             </div>
             <div class="field">
                 <label class="field__label" for="file">File (max 25 MB)</label>
@@ -830,8 +863,15 @@ require __DIR__ . '/../includes/header.php';
                 </td>
                 <td><span class="badge <?= $accessClass ?>"><?= e(str_replace('_',' ',$r['access_level'])) ?></span></td>
                 <td>
-                    <?= e(udate('M j, Y', strtotime($r['created_at']))) ?>
-                    <div class="muted" style="font-size: var(--fs-xs);">v<?= e((string)$r['version']) ?> &middot; <?= e(trim((string)$r['uploader']) ?: 'unknown') ?></div>
+                    <?php if (!empty($r['effective_date'])): ?>
+                        <strong style="font-size: var(--fs-sm);">Eff. <?= e(udate('M j, Y', strtotime((string)$r['effective_date']))) ?></strong>
+                    <?php else: ?>
+                        <?= e(udate('M j, Y', strtotime($r['created_at']))) ?>
+                    <?php endif; ?>
+                    <div class="muted" style="font-size: var(--fs-xs);">
+                        <?php if (!empty($r['version'])): ?>v<?= e((string)$r['version']) ?> &middot; <?php endif; ?>
+                        <?= e(trim((string)$r['uploader']) ?: 'unknown') ?>
+                    </div>
                 </td>
                 <td style="text-align:right; white-space: nowrap;">
                     <?php $viewUrl = !empty($r['file_path']) ? '/dashboard/file.php?type=document&id=' . (int)$r['id'] : '/dashboard/document.php?id=' . (int)$r['id']; ?>
