@@ -562,9 +562,17 @@ require __DIR__ . '/../includes/header.php';
                 <label class="field__label" for="ed-desc">Description</label>
                 <textarea class="textarea" id="ed-desc" name="description" rows="4"><?= e((string)($editDoc['description'] ?? '')) ?></textarea>
             </div>
-            <div class="row" style="justify-content: flex-end;">
-                <a class="btn btn--ghost" href="/dashboard/documents.php">Cancel</a>
-                <button class="btn btn--primary" type="submit">Save changes</button>
+            <div class="row" style="justify-content: space-between; align-items: center;">
+                <form method="post" action="/dashboard/documents.php" onsubmit="return confirm('Delete this document? This cannot be undone.');">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="form" value="delete">
+                    <input type="hidden" name="id" value="<?= (int)$editDoc['id'] ?>">
+                    <button class="btn btn--ghost" type="submit" style="color: var(--color-error);">Delete</button>
+                </form>
+                <div class="row" style="gap: var(--sp-2);">
+                    <a class="btn btn--ghost" href="/dashboard/documents.php">Cancel</a>
+                    <button class="btn btn--primary" type="submit">Save changes</button>
+                </div>
             </div>
         </form>
     </div>
@@ -878,12 +886,6 @@ require __DIR__ . '/../includes/header.php';
                     <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="<?= e($viewUrl) ?>" <?= !empty($r['file_path']) ? 'target="_blank" rel="noopener"' : '' ?>>View</a>
                     <?php if ($canManage): ?>
                         <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="?action=edit&id=<?= (int)$r['id'] ?>">Edit</a>
-                        <form method="post" action="/dashboard/documents.php" style="display:inline;" onsubmit="return confirm('Delete this document?');">
-                            <?= csrf_field() ?>
-                            <input type="hidden" name="form" value="delete">
-                            <input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
-                            <button class="btn btn--ghost" type="submit" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs); color: var(--color-error);">Delete</button>
-                        </form>
                     <?php endif; ?>
                 </td>
             </tr>

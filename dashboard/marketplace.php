@@ -159,13 +159,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect('/dashboard/marketplace.php');
     }
 
-    // ── delete own listing ────────────────────────────────────────────────
+    // ── delete listing (seller or board) ─────────────────────────────────
     if ($form === 'delete_listing') {
         $lid = (int)($_POST['id'] ?? 0);
         $row = db()->prepare('SELECT * FROM marketplace_listings WHERE id=? AND association_id=?');
         $row->execute([$lid, $assocId]);
         $row = $row->fetch();
-        if ($row && (int)$row['seller_user_id'] === $myUserId) {
+        if ($row && ((int)$row['seller_user_id'] === $myUserId || $canBoard)) {
             if (!empty($row['photo_path'])) {
                 $f = __DIR__ . '/../storage/uploads/' . $assocId . '/' . $row['photo_path'];
                 if (is_file($f)) @unlink($f);
@@ -221,12 +221,20 @@ $listings = $stmt->fetchAll();
 // ── edit preload ───────────────────────────────────────────────────────────
 $editRow = null;
 if (isset($_GET['edit'])) {
-    $er = db()->prepare('SELECT * FROM marketplace_listings WHERE id=? AND association_id=?');
+    $er = db()->prepare('SELECT l.*, u.first_name, u.last_name, u.email FROM marketplace_listings l JOIN users u ON u.id=l.seller_user_id WHERE l.id=? AND l.association_id=?');
     $er->execute([(int)$_GET['edit'], $assocId]);
     $row = $er->fetch();
     if ($row && ((int)$row['seller_user_id'] === $myUserId || $canBoard)) {
         $editRow = $row;
     }
+}
+
+// ── view preload ───────────────────────────────────────────────────────────
+$viewListing = null;
+if (isset($_GET['view'])) {
+    $vr = db()->prepare('SELECT l.*, u.first_name, u.last_name, u.email FROM marketplace_listings l JOIN users u ON u.id=l.seller_user_id WHERE l.id=? AND l.association_id=?');
+    $vr->execute([(int)$_GET['view'], $assocId]);
+    $viewListing = $vr->fetch() ?: null;
 }
 
 $page_title  = 'Community Marketplace';
@@ -238,6 +246,9 @@ require __DIR__ . '/../includes/header.php';
 
 <?php if ($editRow): ?>
 <!-- ═══════════════════════════════════════════════ EDIT LISTING ═════════ -->
+<div style="margin-bottom: var(--sp-4);">
+    <a href="?view=<?= (int)$editRow['id'] ?>" style="font-size: var(--fs-sm); color: var(--color-muted); text-decoration: none;">← Back to listing</a>
+</div>
 <div class="card" style="margin-bottom: var(--sp-6);">
     <h2 style="margin:0 0 var(--sp-4); font-size: var(--fs-xl);">Edit listing</h2>
     <form method="post" enctype="multipart/form-data" class="form" style="max-width: 640px;">
@@ -277,12 +288,16 @@ require __DIR__ . '/../includes/header.php';
         </div>
         <div class="row">
             <button class="btn btn--primary" type="submit">Save changes</button>
-            <a class="btn" href="/dashboard/marketplace.php">Cancel</a>
+            <a class="btn" href="?view=<?= (int)$editRow['id'] ?>">Cancel</a>
         </div>
     </form>
 </div>
+
 <?php elseif (isset($_GET['post'])): ?>
 <!-- ═══════════════════════════════════════════════ POST LISTING ══════════ -->
+<div style="margin-bottom: var(--sp-4);">
+    <a href="/dashboard/marketplace.php" style="font-size: var(--fs-sm); color: var(--color-muted); text-decoration: none;">← Back to marketplace</a>
+</div>
 <div class="card" style="margin-bottom: var(--sp-6);">
     <h2 style="margin:0 0 var(--sp-4); font-size: var(--fs-xl);">Post a listing</h2>
     <form method="post" enctype="multipart/form-data" class="form" style="max-width: 640px;">
@@ -322,13 +337,135 @@ require __DIR__ . '/../includes/header.php';
         </div>
     </form>
 </div>
+
+<?php elseif ($viewListing): ?>
+<!-- ═══════════════════════════════════════════════ DETAIL VIEW ═══════════ -->
+<?php
+    $vl         = $viewListing;
+    $vIsMine    = (int)$vl['seller_user_id'] === $myUserId;
+    $vCondCls   = $COND_CLS[$vl['condition_label']] ?? '';
+    $vSeller    = trim((string)$vl['first_name'] . ' ' . (string)$vl['last_name']) ?: (string)$vl['email'];
+    $vIsSold    = $vl['status'] === 'sold';
+    $vCanDelete = $vIsMine || $canBoard;
+?>
+<div style="margin-bottom: var(--sp-5);">
+    <a href="/dashboard/marketplace.php" style="font-size: var(--fs-sm); color: var(--color-muted); text-decoration: none;">← Back to marketplace</a>
+</div>
+
+<div class="mp-detail-grid" style="display:grid; grid-template-columns: 1fr 1fr; gap: var(--sp-6); align-items: start;">
+    <!-- Left: image -->
+    <div>
+        <?php if (!empty($vl['photo_path'])): ?>
+            <img src="/marketplace-image.php?id=<?= (int)$vl['id'] ?>" alt="" style="width:100%; border-radius: var(--r-lg); object-fit:cover; max-height: 420px; display:block;">
+        <?php else: ?>
+            <div style="width:100%; height:300px; background:var(--color-navy-10,#f0f3f8); border-radius: var(--r-lg); display:flex; align-items:center; justify-content:center; font-size: 5rem;">
+                <?= match($vl['category']) {
+                    'electronics' => '🖥️', 'furniture' => '🪑', 'appliances' => '🍳',
+                    'clothing' => '👕', 'sports' => '⚽', 'tools' => '🔧',
+                    'vehicles' => '🚲', 'garden' => '🌿', 'baby' => '🍼',
+                    default => '📦'
+                } ?>
+            </div>
+        <?php endif; ?>
+    </div>
+
+    <!-- Right: details -->
+    <div style="display:flex; flex-direction:column; gap: var(--sp-4);">
+        <?php if ($vIsSold): ?><span class="badge badge--error" style="align-self:flex-start;">SOLD</span><?php endif; ?>
+        <h1 style="font-size: var(--fs-2xl); margin: 0; line-height: 1.2;"><?= e($vl['title']) ?></h1>
+        <div style="font-size: var(--fs-3xl); font-weight: 800; color: <?= $vl['price_cents'] ? 'var(--color-navy)' : 'var(--color-success)' ?>;">
+            <?= price_display($vl['price_cents']) ?>
+        </div>
+        <div class="row" style="gap: var(--sp-2); flex-wrap:wrap;">
+            <span class="badge <?= $vCondCls ?>"><?= e($CONDITIONS[$vl['condition_label']] ?? $vl['condition_label']) ?></span>
+            <span class="badge"><?= e($CATEGORIES[$vl['category']] ?? $vl['category']) ?></span>
+        </div>
+        <div style="font-size: var(--fs-sm); line-height: 1.6; white-space: pre-wrap;"><?= e((string)$vl['description']) ?></div>
+        <div class="muted" style="font-size: var(--fs-sm);">
+            Posted by <?= e($vSeller) ?> &middot; <?= udate('M j, Y', strtotime((string)$vl['created_at'])) ?>
+        </div>
+
+        <!-- Disclaimer -->
+        <div style="background: #fefce8; border: 1px solid #fde68a; border-radius: var(--r-md); padding: var(--sp-3) var(--sp-4); font-size: var(--fs-xs); line-height: 1.6; color: #78350f;">
+            <strong>As-is listing.</strong> All items are sold as-is with no warranty or guarantee unless the seller explicitly states otherwise above. Verify condition before exchanging payment. The association is not a party to this transaction and assumes no liability for disputes, misrepresentation, item quality, or loss. Exchange items in a common area of the building.
+        </div>
+
+        <!-- Contact (non-owner, active listing) -->
+        <?php if (!$vIsMine && !$vIsSold): ?>
+            <a href="mailto:<?= e((string)$vl['email']) ?>?subject=<?= urlencode('Re: ' . $vl['title'] . ' — Community Marketplace') ?>" class="btn btn--primary">Contact seller</a>
+        <?php endif; ?>
+
+        <!-- Owner actions -->
+        <?php if ($vIsMine): ?>
+            <div class="row" style="gap: var(--sp-2); flex-wrap:wrap;">
+                <?php if (!$vIsSold): ?>
+                    <a class="btn" href="?edit=<?= (int)$vl['id'] ?>">Edit listing</a>
+                    <form method="post">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="form" value="mark_sold">
+                        <input type="hidden" name="id" value="<?= (int)$vl['id'] ?>">
+                        <button class="btn" type="submit">Mark as sold</button>
+                    </form>
+                <?php else: ?>
+                    <form method="post">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="form" value="reactivate_listing">
+                        <input type="hidden" name="id" value="<?= (int)$vl['id'] ?>">
+                        <button class="btn" type="submit">Relist</button>
+                    </form>
+                <?php endif; ?>
+            </div>
+        <?php endif; ?>
+
+        <!-- Delete (seller or board) -->
+        <?php if ($vCanDelete): ?>
+            <form method="post" onsubmit="return confirm('Permanently delete this listing?')">
+                <?= csrf_field() ?>
+                <input type="hidden" name="form" value="delete_listing">
+                <input type="hidden" name="id" value="<?= (int)$vl['id'] ?>">
+                <button class="btn btn--error" type="submit" style="width:100%;">Delete listing</button>
+            </form>
+        <?php endif; ?>
+
+        <!-- Board soft-remove (when not the poster) -->
+        <?php if ($canBoard && !$vIsMine && !$vIsSold): ?>
+            <details>
+                <summary class="muted" style="font-size: var(--fs-xs); cursor:pointer; user-select:none;">Board: remove without deleting</summary>
+                <form method="post" style="margin-top: var(--sp-2); display:flex; flex-direction:column; gap: var(--sp-2);">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="form" value="board_remove">
+                    <input type="hidden" name="id" value="<?= (int)$vl['id'] ?>">
+                    <input class="input" name="reason" placeholder="Reason (optional)" style="font-size: var(--fs-sm);">
+                    <button class="btn btn--error btn--sm" type="submit">Remove listing</button>
+                </form>
+            </details>
+        <?php endif; ?>
+    </div>
+</div>
+
+<style>
+@media (max-width: 700px) {
+    .mp-detail-grid { grid-template-columns: 1fr !important; }
+}
+</style>
+
 <?php else: ?>
 <!-- ═══════════════════════════════════════════════ BROWSE ════════════════ -->
 
-<div class="row" style="justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--sp-3); margin-bottom: var(--sp-5);">
+<div class="row" style="justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--sp-3); margin-bottom: var(--sp-4);">
     <h1 style="font-size: var(--fs-3xl); margin:0;">Community Marketplace</h1>
     <a class="btn btn--primary" href="?post=1">+ Post a listing</a>
 </div>
+
+<!-- Disclaimer -->
+<details style="margin-bottom: var(--sp-5);">
+    <summary style="font-size: var(--fs-xs); color: var(--color-muted); cursor: pointer; user-select: none; list-style: none; display: flex; align-items: center; gap: var(--sp-1);">
+        <span>⚠️</span> <span>Marketplace disclaimer</span>
+    </summary>
+    <div style="margin-top: var(--sp-2); background: #fefce8; border: 1px solid #fde68a; border-radius: var(--r-md); padding: var(--sp-3) var(--sp-4); font-size: var(--fs-xs); line-height: 1.7; color: #78350f;">
+        All items are listed by community members and sold as-is with no warranty or guarantee unless the seller explicitly states otherwise in their listing. Buyers are responsible for inspecting items and verifying condition before exchanging payment. The association is not a party to any transaction and assumes no liability for disputes, misrepresentation, item quality, safety issues, or financial loss. Exchange items in a common area of the building. To report a listing that violates community standards, contact the board directly.
+    </div>
+</details>
 
 <!-- Filter bar -->
 <form method="get" class="row" style="gap: var(--sp-2); flex-wrap: wrap; margin-bottom: var(--sp-5); align-items: center;">
@@ -355,10 +492,10 @@ require __DIR__ . '/../includes/header.php';
 <?php else: ?>
 <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--sp-4);">
     <?php foreach ($listings as $l):
-        $isMine  = (int)$l['seller_user_id'] === $myUserId;
-        $condCls = $COND_CLS[$l['condition_label']] ?? '';
+        $isMine     = (int)$l['seller_user_id'] === $myUserId;
+        $condCls    = $COND_CLS[$l['condition_label']] ?? '';
         $sellerName = trim((string)$l['first_name'] . ' ' . (string)$l['last_name']) ?: (string)$l['email'];
-        $isSold  = $l['status'] === 'sold';
+        $isSold     = $l['status'] === 'sold';
     ?>
     <div class="card" style="padding: 0; overflow: hidden; display:flex; flex-direction:column; position:relative; <?= $isSold ? 'opacity:.7;' : '' ?>">
         <?php if ($isSold): ?>
@@ -366,72 +503,56 @@ require __DIR__ . '/../includes/header.php';
                 <span class="badge badge--error">SOLD</span>
             </div>
         <?php endif; ?>
-        <?php if (!empty($l['photo_path'])): ?>
-            <img src="/marketplace-image.php?id=<?= (int)$l['id'] ?>" alt="" style="width:100%; height:180px; object-fit:cover; display:block;">
-        <?php else: ?>
-            <div style="width:100%; height:120px; background:var(--color-navy-10,#f0f3f8); display:flex; align-items:center; justify-content:center; font-size: 2.5rem;">
-                <?= match($l['category']) {
-                    'electronics' => '🖥️', 'furniture' => '🪑', 'appliances' => '🍳',
-                    'clothing' => '👕', 'sports' => '⚽', 'tools' => '🔧',
-                    'vehicles' => '🚲', 'garden' => '🌿', 'baby' => '🍼',
-                    default => '📦'
-                } ?>
+        <!-- Clickable area → detail view -->
+        <a href="?view=<?= (int)$l['id'] ?>" style="text-decoration:none; color:inherit; display:block;">
+            <?php if (!empty($l['photo_path'])): ?>
+                <img src="/marketplace-image.php?id=<?= (int)$l['id'] ?>" alt="" style="width:100%; height:180px; object-fit:cover; display:block;">
+            <?php else: ?>
+                <div style="width:100%; height:120px; background:var(--color-navy-10,#f0f3f8); display:flex; align-items:center; justify-content:center; font-size: 2.5rem;">
+                    <?= match($l['category']) {
+                        'electronics' => '🖥️', 'furniture' => '🪑', 'appliances' => '🍳',
+                        'clothing' => '👕', 'sports' => '⚽', 'tools' => '🔧',
+                        'vehicles' => '🚲', 'garden' => '🌿', 'baby' => '🍼',
+                        default => '📦'
+                    } ?>
+                </div>
+            <?php endif; ?>
+            <div style="padding: var(--sp-3); display:flex; flex-direction:column; gap: var(--sp-2);">
+                <div class="row" style="gap: var(--sp-2); flex-wrap:wrap; align-items:center;">
+                    <span class="badge <?= $condCls ?>"><?= e($CONDITIONS[$l['condition_label']] ?? $l['condition_label']) ?></span>
+                    <span class="badge"><?= e($CATEGORIES[$l['category']] ?? $l['category']) ?></span>
+                </div>
+                <div style="font-weight: 700; font-size: var(--fs-base); line-height: 1.3;"><?= e($l['title']) ?></div>
+                <div class="muted" style="font-size: var(--fs-sm); line-height: 1.4;"><?= e(mb_strimwidth((string)$l['description'], 0, 120, '…')) ?></div>
+                <div style="font-size: var(--fs-xl); font-weight: 800; color: <?= $l['price_cents'] ? 'var(--color-navy)' : 'var(--color-success)' ?>;">
+                    <?= price_display($l['price_cents']) ?>
+                </div>
+                <div class="muted" style="font-size: var(--fs-xs);">
+                    <?= e($sellerName) ?> &middot; <?= udate('M j', strtotime((string)$l['created_at'])) ?>
+                </div>
+            </div>
+        </a>
+        <!-- Owner quick actions (no delete — that lives in the detail view) -->
+        <?php if ($isMine && !$isSold): ?>
+            <div class="row" style="gap: var(--sp-2); padding: 0 var(--sp-3) var(--sp-3); flex-wrap: wrap;">
+                <a class="btn btn--ghost" href="?edit=<?= (int)$l['id'] ?>" style="flex:1; text-align:center; font-size: var(--fs-sm);">Edit</a>
+                <form method="post" style="flex:1;">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="form" value="mark_sold">
+                    <input type="hidden" name="id" value="<?= (int)$l['id'] ?>">
+                    <button class="btn btn--ghost" style="width:100%; font-size: var(--fs-sm);" type="submit">Mark sold</button>
+                </form>
+            </div>
+        <?php elseif ($isMine && $isSold): ?>
+            <div style="padding: 0 var(--sp-3) var(--sp-3);">
+                <form method="post">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="form" value="reactivate_listing">
+                    <input type="hidden" name="id" value="<?= (int)$l['id'] ?>">
+                    <button class="btn btn--ghost" style="width:100%; font-size: var(--fs-sm);" type="submit">Relist</button>
+                </form>
             </div>
         <?php endif; ?>
-        <div style="padding: var(--sp-3); flex:1; display:flex; flex-direction:column; gap: var(--sp-2);">
-            <div class="row" style="gap: var(--sp-2); flex-wrap:wrap; align-items:center;">
-                <span class="badge <?= $condCls ?>"><?= e($CONDITIONS[$l['condition_label']] ?? $l['condition_label']) ?></span>
-                <span class="badge"><?= e($CATEGORIES[$l['category']] ?? $l['category']) ?></span>
-            </div>
-            <div style="font-weight: 700; font-size: var(--fs-base); line-height: 1.3;"><?= e($l['title']) ?></div>
-            <div class="muted" style="font-size: var(--fs-sm); flex:1; line-height: 1.4;"><?= e(mb_strimwidth((string)$l['description'], 0, 120, '…')) ?></div>
-            <div style="font-size: var(--fs-xl); font-weight: 800; color: <?= $l['price_cents'] ? 'var(--color-navy)' : 'var(--color-success)' ?>;">
-                <?= price_display($l['price_cents']) ?>
-            </div>
-            <div class="muted" style="font-size: var(--fs-xs);">
-                <?= e($sellerName) ?> &middot; <?= udate('M j', strtotime((string)$l['created_at'])) ?>
-            </div>
-            <?php if (!$isSold && !$isMine): ?>
-                <a href="mailto:<?= e((string)$l['email']) ?>?subject=<?= urlencode('Re: ' . $l['title'] . ' — Community Marketplace') ?>" class="btn btn--primary" style="width:100%; text-align:center; margin-top: auto;">Contact seller</a>
-            <?php endif; ?>
-            <?php if ($isMine): ?>
-                <div class="row" style="gap: var(--sp-2); flex-wrap: wrap; margin-top: auto;">
-                    <?php if (!$isSold): ?>
-                        <a class="btn" href="?edit=<?= (int)$l['id'] ?>" style="flex:1; text-align:center;">Edit</a>
-                        <form method="post" style="flex:1;">
-                            <?= csrf_field() ?>
-                            <input type="hidden" name="form" value="mark_sold">
-                            <input type="hidden" name="id" value="<?= (int)$l['id'] ?>">
-                            <button class="btn" style="width:100%;" type="submit">Mark sold</button>
-                        </form>
-                    <?php else: ?>
-                        <form method="post" style="flex:1;">
-                            <?= csrf_field() ?>
-                            <input type="hidden" name="form" value="reactivate_listing">
-                            <input type="hidden" name="id" value="<?= (int)$l['id'] ?>">
-                            <button class="btn" style="width:100%;" type="submit">Relist</button>
-                        </form>
-                    <?php endif; ?>
-                    <form method="post" onsubmit="return confirm('Remove this listing?')">
-                        <?= csrf_field() ?>
-                        <input type="hidden" name="form" value="delete_listing">
-                        <input type="hidden" name="id" value="<?= (int)$l['id'] ?>">
-                        <button class="btn btn--error" type="submit">Delete</button>
-                    </form>
-                </div>
-            <?php elseif ($canBoard && !$isSold): ?>
-                <details style="margin-top: auto;">
-                    <summary class="muted" style="font-size: var(--fs-xs); cursor:pointer; user-select:none;">Board: remove listing</summary>
-                    <form method="post" style="margin-top: var(--sp-2);">
-                        <?= csrf_field() ?>
-                        <input type="hidden" name="form" value="board_remove">
-                        <input type="hidden" name="id" value="<?= (int)$l['id'] ?>">
-                        <input class="input" name="reason" placeholder="Reason (optional)" style="margin-bottom: var(--sp-2); font-size: var(--fs-sm);">
-                        <button class="btn btn--error btn--sm" type="submit">Remove</button>
-                    </form>
-                </details>
-            <?php endif; ?>
-        </div>
     </div>
     <?php endforeach; ?>
 </div>
