@@ -187,6 +187,14 @@ $psStmt = db()->prepare(
 $psStmt->execute([$assocId, $unitId]);
 $unitSpots = $psStmt->fetchAll();
 
+// --- Load floor plan doc (association-level, referenced by FK on unit) ---
+$floorPlanDoc = null;
+if (!empty($unit['floor_plan_doc_id'])) {
+    $fpStmt = db()->prepare('SELECT id, title FROM documents WHERE id = ? AND association_id = ?');
+    $fpStmt->execute([(int)$unit['floor_plan_doc_id'], $assocId]);
+    $floorPlanDoc = $fpStmt->fetch() ?: null;
+}
+
 // --- Load per-unit documents (manager sees all) ---
 $docStmt = db()->prepare(
     'SELECT d.*, CONCAT(IFNULL(u.first_name,""), " ", IFNULL(u.last_name,"")) AS uploader
@@ -532,6 +540,21 @@ require __DIR__ . '/../includes/header.php';
         </div>
     <?php else: ?>
         <p class="muted" style="margin-bottom: var(--sp-6);">No forms filed for this unit yet.</p>
+    <?php endif; ?>
+
+    <!-- Floor plan -->
+    <?php if ($floorPlanDoc): ?>
+    <h2 style="font-size: var(--fs-xl); margin-top: var(--sp-6);">Floor Plan</h2>
+    <div style="margin-bottom: var(--sp-6);">
+        <a href="/dashboard/file.php?type=document&id=<?= (int)$floorPlanDoc['id'] ?>" target="_blank" rel="noopener" style="display:inline-block;">
+            <img src="/dashboard/file.php?type=document&id=<?= (int)$floorPlanDoc['id'] ?>"
+                 alt="<?= e((string)$floorPlanDoc['title']) ?>"
+                 style="max-width: 480px; width: 100%; border-radius: var(--r-lg); border: 1px solid var(--color-border); display:block;">
+        </a>
+        <div class="muted" style="font-size: var(--fs-xs); margin-top: var(--sp-2);">
+            <?= e((string)$floorPlanDoc['title']) ?> — <a href="/dashboard/file.php?type=document&id=<?= (int)$floorPlanDoc['id'] ?>" target="_blank" rel="noopener">open full size</a>
+        </div>
+    </div>
     <?php endif; ?>
 
     <!-- Per-unit documents -->
