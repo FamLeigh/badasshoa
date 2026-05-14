@@ -21,26 +21,42 @@ $anns = db()->prepare(
       WHERE association_id = ? AND audience = 'all'
         AND published_at <= NOW() AND (expires_at IS NULL OR expires_at > NOW())
       ORDER BY type = 'emergency' DESC, published_at DESC
-      LIMIT 8"
+      LIMIT 20"
 );
 $anns->execute([$assocId]);
 $announcements = $anns->fetchAll();
 
-// Upcoming events (next 14 days, all-audience)
+// Upcoming events (next 30 days, all-audience)
 $evts = db()->prepare(
     "SELECT title, starts_at, ends_at, location FROM events
       WHERE association_id = ? AND audience = 'all'
-        AND starts_at >= NOW() AND starts_at <= NOW() + INTERVAL 14 DAY
-      ORDER BY starts_at LIMIT 6"
+        AND starts_at >= NOW() AND starts_at <= NOW() + INTERVAL 30 DAY
+      ORDER BY starts_at LIMIT 20"
 );
 $evts->execute([$assocId]);
 $events = $evts->fetchAll();
 
-$hasLogo   = !empty($assoc['logo_path']);
-$primary   = preg_match('/^#[0-9a-f]{6}$/i', (string)$assoc['primary_color']) ? $assoc['primary_color'] : '#0f1f3d';
+// Active marketplace listings
+$mkt = db()->prepare(
+    "SELECT m.title, m.description, m.price_cents, m.category, m.condition_label,
+            u.first_name
+       FROM marketplace_listings m
+       JOIN users u ON u.id = m.seller_user_id
+      WHERE m.association_id = ? AND m.status = 'active'
+      ORDER BY m.created_at DESC
+      LIMIT 20"
+);
+$mkt->execute([$assocId]);
+$listings = $mkt->fetchAll();
 
-// Refresh every 60 seconds
+$hasLogo  = !empty($assoc['logo_path']);
+$primary  = preg_match('/^#[0-9a-f]{6}$/i', (string)$assoc['primary_color']) ? $assoc['primary_color'] : '#0f1f3d';
 $refreshSec = 60;
+
+$CONDITION_LABELS = [
+    'new' => 'New', 'like_new' => 'Like new', 'good' => 'Good',
+    'fair' => 'Fair', 'for_parts' => 'For parts',
+];
 ?><!doctype html>
 <html lang="en">
 <head>
@@ -54,60 +70,276 @@ $refreshSec = 60;
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
     --primary: <?= e($primary) ?>;
-    --bg: #0a0f1e;
-    --card: #131929;
-    --border: rgba(255,255,255,.08);
-    --text: #fff;
-    --muted: rgba(255,255,255,.55);
-    --orange: #f05a28;
-    --r: 16px;
+    --bg:      #08111f;
+    --panel:   #111c2e;
+    --card:    #182438;
+    --border:  rgba(255,255,255,.09);
+    --text:    #fff;
+    --muted:   rgba(255,255,255,.5);
+    --orange:  #f05a28;
+    --green:   #22c55e;
+    --red:     #ef4444;
+    --amber:   #f59e0b;
+    --r:       14px;
 }
-html, body { height: 100%; background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; overflow: hidden; }
-body { display: grid; grid-template-rows: auto 1fr; grid-template-columns: 1fr 1fr; gap: 24px; padding: 32px; }
 
-/* header spans full width */
-header { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; }
-.brand { display: flex; align-items: center; gap: 20px; }
-.brand img { max-height: 56px; }
-.brand h1 { font-size: clamp(1.4rem, 2.5vw, 2.2rem); font-weight: 800; letter-spacing: -0.02em; }
-.clock { font-size: clamp(2rem, 5vw, 4rem); font-weight: 900; font-variant-numeric: tabular-nums; letter-spacing: -0.03em; color: var(--primary); }
-.date-line { font-size: clamp(.75rem, 1.2vw, 1rem); color: var(--muted); text-align: right; margin-top: 2px; }
+html, body {
+    width: 100%; height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    overflow: hidden;
+}
 
-/* columns */
-.col { display: flex; flex-direction: column; gap: 20px; overflow: hidden; }
-.col-label { font-size: .7rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+/* ── Full-screen grid ─────────────────────────────────────── */
+body {
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 20px;
+    padding: 28px 32px;
+    height: 100vh;
+}
 
-/* cards */
-.card { background: var(--card); border-radius: var(--r); border: 1px solid var(--border); padding: 20px 24px; overflow: hidden; }
-.card--emergency { border-color: #ef4444; background: rgba(239,68,68,.12); }
+/* ── Header ───────────────────────────────────────────────── */
+header {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 16px;
+}
+.brand { display: flex; align-items: center; gap: 18px; }
+.brand img { max-height: 60px; object-fit: contain; }
+.brand-name { font-size: clamp(1.6rem, 2.4vw, 2.4rem); font-weight: 900; letter-spacing: -0.03em; }
+.brand-tag {
+    font-size: clamp(.75rem, 1.1vw, 1rem);
+    font-weight: 700;
+    color: var(--muted);
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    padding-left: 2px;
+}
+.clock-block { text-align: right; }
+.clock {
+    font-size: clamp(2.8rem, 5.5vw, 5rem);
+    font-weight: 900;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.04em;
+    color: var(--primary);
+    line-height: 1;
+}
+.dateline {
+    font-size: clamp(.85rem, 1.3vw, 1.15rem);
+    color: var(--muted);
+    margin-top: 4px;
+    font-weight: 600;
+}
 
-.ann-type { display: inline-block; font-size: .65rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; padding: 3px 8px; border-radius: 6px; margin-bottom: 8px; background: var(--border); }
-.ann-type--emergency { background: #ef4444; color: #fff; }
-.ann-type--maintenance { background: #f59e0b; color: #000; }
-.ann-type--info, .ann-type--general { background: var(--primary); color: #fff; }
+/* ── Columns ──────────────────────────────────────────────── */
+.col {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
+}
+.col-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 16px 22px 12px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+.col-icon { font-size: 1.4rem; }
+.col-label {
+    font-size: clamp(.85rem, 1.2vw, 1.1rem);
+    font-weight: 800;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+.col-count {
+    margin-left: auto;
+    font-size: .75rem;
+    font-weight: 700;
+    color: var(--muted);
+    background: var(--border);
+    padding: 2px 8px;
+    border-radius: 999px;
+}
 
-.ann-title { font-size: clamp(.95rem, 1.5vw, 1.2rem); font-weight: 700; line-height: 1.25; margin-bottom: 6px; }
-.ann-body  { font-size: clamp(.75rem, 1.1vw, .95rem); color: var(--muted); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.ann-date  { font-size: .7rem; color: var(--muted); margin-top: 8px; }
+/* ── Scroll viewport ──────────────────────────────────────── */
+.scroll-viewport {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+    min-height: 0;
+}
+.scroll-track {
+    padding: 16px 18px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
 
-.evt-item { display: flex; gap: 16px; align-items: flex-start; }
-.evt-cal { flex-shrink: 0; width: 52px; text-align: center; background: var(--primary); border-radius: 10px; padding: 6px 4px; }
-.evt-cal .m { font-size: .65rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: rgba(255,255,255,.8); }
-.evt-cal .d { font-size: 1.6rem; font-weight: 900; line-height: 1; color: #fff; }
-.evt-info h3 { font-size: clamp(.9rem, 1.3vw, 1.1rem); font-weight: 700; }
-.evt-info .meta { font-size: .75rem; color: var(--muted); margin-top: 4px; }
-.evt-divider { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
+/* ── Cards ────────────────────────────────────────────────── */
+.card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    flex-shrink: 0;
+}
+.card--emergency {
+    border-color: var(--red);
+    background: rgba(239,68,68,.14);
+}
 
-.empty { color: var(--muted); font-size: .9rem; font-style: italic; text-align: center; padding: 20px 0; }
+/* ── Announcement card ────────────────────────────────────── */
+.ann-badge {
+    display: inline-block;
+    font-size: clamp(.6rem, .9vw, .8rem);
+    font-weight: 800;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    padding: 3px 10px;
+    border-radius: 6px;
+    margin-bottom: 10px;
+    background: var(--border);
+    color: var(--text);
+}
+.ann-badge--emergency   { background: var(--red); }
+.ann-badge--maintenance { background: var(--amber); color: #000; }
+.ann-badge--info,
+.ann-badge--general     { background: var(--primary); }
+.ann-badge--event       { background: #7c3aed; }
 
-.scroll-announcements { overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 14px; }
-.scroll-announcements::-webkit-scrollbar { width: 4px; }
-.scroll-announcements::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+.ann-title {
+    font-size: clamp(1.1rem, 1.8vw, 1.6rem);
+    font-weight: 800;
+    line-height: 1.2;
+    margin-bottom: 8px;
+}
+.ann-body {
+    font-size: clamp(.9rem, 1.3vw, 1.2rem);
+    color: var(--muted);
+    line-height: 1.55;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.ann-date {
+    font-size: clamp(.7rem, 1vw, .9rem);
+    color: rgba(255,255,255,.3);
+    margin-top: 10px;
+    font-weight: 600;
+}
 
-/* Ticker at bottom */
-footer { grid-column: 1 / -1; border-top: 1px solid var(--border); padding-top: 12px; display: flex; align-items: center; justify-content: space-between; }
-.powered { font-size: .65rem; color: rgba(255,255,255,.25); }
-.last-updated { font-size: .65rem; color: rgba(255,255,255,.25); }
+/* ── Event card ───────────────────────────────────────────── */
+.evt-item { display: flex; gap: 18px; align-items: flex-start; }
+.evt-cal {
+    flex-shrink: 0;
+    width: clamp(52px, 7vw, 72px);
+    text-align: center;
+    background: var(--primary);
+    border-radius: 10px;
+    padding: 8px 6px;
+}
+.evt-cal .m {
+    font-size: clamp(.6rem, .9vw, .8rem);
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: rgba(255,255,255,.75);
+}
+.evt-cal .d {
+    font-size: clamp(1.7rem, 3vw, 2.6rem);
+    font-weight: 900;
+    line-height: 1;
+    color: #fff;
+}
+.evt-info { flex: 1; min-width: 0; }
+.evt-title {
+    font-size: clamp(1.05rem, 1.7vw, 1.5rem);
+    font-weight: 800;
+    line-height: 1.2;
+    margin-bottom: 6px;
+}
+.evt-meta {
+    font-size: clamp(.8rem, 1.15vw, 1.05rem);
+    color: var(--muted);
+    line-height: 1.4;
+}
+.evt-loc { margin-top: 3px; color: rgba(255,255,255,.35); }
+
+/* ── Marketplace card ─────────────────────────────────────── */
+.mkt-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.mkt-title {
+    font-size: clamp(1.05rem, 1.7vw, 1.5rem);
+    font-weight: 800;
+    line-height: 1.2;
+    flex: 1;
+}
+.mkt-price {
+    font-size: clamp(1rem, 1.6vw, 1.4rem);
+    font-weight: 900;
+    color: var(--green);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.mkt-price--free { color: var(--orange); }
+.mkt-desc {
+    font-size: clamp(.85rem, 1.2vw, 1.1rem);
+    color: var(--muted);
+    line-height: 1.5;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    margin-bottom: 10px;
+}
+.mkt-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+.mkt-tag {
+    font-size: clamp(.6rem, .85vw, .75rem);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    padding: 3px 9px;
+    border-radius: 6px;
+    background: var(--border);
+    color: var(--muted);
+}
+
+/* ── Empty state ──────────────────────────────────────────── */
+.empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--muted);
+    font-size: clamp(1rem, 1.4vw, 1.2rem);
+    font-style: italic;
+}
+
+/* ── Footer ───────────────────────────────────────────────── */
+footer {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+}
+.footer-note {
+    font-size: clamp(.6rem, .9vw, .8rem);
+    color: rgba(255,255,255,.2);
+    font-weight: 600;
+    letter-spacing: .04em;
+}
 </style>
 </head>
 <body>
@@ -117,77 +349,219 @@ footer { grid-column: 1 / -1; border-top: 1px solid var(--border); padding-top: 
         <?php if ($hasLogo): ?>
             <img src="/branding.php?id=<?= $assocId ?>" alt="<?= e((string)$assoc['name']) ?>">
         <?php else: ?>
-            <h1><?= e((string)$assoc['name']) ?></h1>
+            <div>
+                <div class="brand-name"><?= e((string)$assoc['name']) ?></div>
+                <div class="brand-tag">Community Board</div>
+            </div>
         <?php endif; ?>
-        <span style="color: var(--muted); font-size: 1rem; font-weight: 600;">Community Board</span>
     </div>
-    <div style="text-align:right;">
+    <div class="clock-block">
         <div class="clock" id="clock">--:--</div>
-        <div class="date-line" id="dateline"></div>
+        <div class="dateline" id="dateline"></div>
     </div>
 </header>
 
+<!-- Announcements -->
 <div class="col">
-    <div class="col-label">Announcements</div>
-    <div class="scroll-announcements">
-    <?php if (empty($announcements)): ?>
-        <div class="empty">No active announcements.</div>
-    <?php else: foreach ($announcements as $a):
-        $isEmergency = $a['type'] === 'emergency';
-    ?>
-        <div class="card <?= $isEmergency ? 'card--emergency' : '' ?>">
-            <span class="ann-type ann-type--<?= e((string)$a['type']) ?>"><?= e((string)$a['type']) ?></span>
-            <div class="ann-title"><?= e((string)$a['title']) ?></div>
-            <div class="ann-body"><?= e(strip_tags((string)$a['body'])) ?></div>
-            <div class="ann-date"><?= udate('M j, Y', strtotime((string)$a['published_at'])) ?></div>
+    <div class="col-header">
+        <span class="col-icon">📢</span>
+        <span class="col-label">Announcements</span>
+        <?php if ($announcements): ?>
+            <span class="col-count"><?= count($announcements) ?></span>
+        <?php endif; ?>
+    </div>
+    <div class="scroll-viewport" id="vp-ann">
+        <div class="scroll-track" id="tr-ann">
+        <?php if (!$announcements): ?>
+            <div class="empty">No active announcements.</div>
+        <?php else: foreach ($announcements as $a):
+            $isEmergency = $a['type'] === 'emergency';
+        ?>
+            <div class="card <?= $isEmergency ? 'card--emergency' : '' ?>">
+                <span class="ann-badge ann-badge--<?= e((string)$a['type']) ?>"><?= e((string)$a['type']) ?></span>
+                <div class="ann-title"><?= e((string)$a['title']) ?></div>
+                <?php $body = trim(strip_tags((string)$a['body'])); if ($body): ?>
+                    <div class="ann-body"><?= e($body) ?></div>
+                <?php endif; ?>
+                <div class="ann-date"><?= udate('M j, Y', strtotime((string)$a['published_at'])) ?></div>
+            </div>
+        <?php endforeach; endif; ?>
         </div>
-    <?php endforeach; endif; ?>
     </div>
 </div>
 
+<!-- Events -->
 <div class="col">
-    <div class="col-label">Upcoming Events</div>
-    <?php if (empty($events)): ?>
-        <div class="empty">No upcoming events.</div>
-    <?php else: foreach ($events as $i => $ev):
-        $ts = strtotime((string)$ev['starts_at']);
-        $endTs = !empty($ev['ends_at']) ? strtotime((string)$ev['ends_at']) : null;
-        if ($i > 0): ?><hr class="evt-divider"><?php endif; ?>
-        <div class="evt-item">
-            <div class="evt-cal">
-                <div class="m"><?= udate('M', $ts) ?></div>
-                <div class="d"><?= udate('j', $ts) ?></div>
-            </div>
-            <div class="evt-info">
-                <h3><?= e((string)$ev['title']) ?></h3>
-                <div class="meta">
-                    <?= udate('g:i A', $ts) ?>
-                    <?php if ($endTs): ?> – <?= udate($endTs - $ts < 86400 ? 'g:i A' : 'M j, g:i A', $endTs) ?><?php endif; ?>
-                    <?php if (!empty($ev['location'])): ?> &middot; <?= e((string)$ev['location']) ?><?php endif; ?>
+    <div class="col-header">
+        <span class="col-icon">📅</span>
+        <span class="col-label">Upcoming Events</span>
+        <?php if ($events): ?>
+            <span class="col-count"><?= count($events) ?></span>
+        <?php endif; ?>
+    </div>
+    <div class="scroll-viewport" id="vp-evt">
+        <div class="scroll-track" id="tr-evt">
+        <?php if (!$events): ?>
+            <div class="empty">No upcoming events.</div>
+        <?php else: foreach ($events as $ev):
+            $ts    = strtotime((string)$ev['starts_at']);
+            $endTs = !empty($ev['ends_at']) ? strtotime((string)$ev['ends_at']) : null;
+        ?>
+            <div class="card">
+                <div class="evt-item">
+                    <div class="evt-cal">
+                        <div class="m"><?= udate('M', $ts) ?></div>
+                        <div class="d"><?= udate('j', $ts) ?></div>
+                    </div>
+                    <div class="evt-info">
+                        <div class="evt-title"><?= e((string)$ev['title']) ?></div>
+                        <div class="evt-meta">
+                            <?= udate('g:i A', $ts) ?>
+                            <?php if ($endTs): ?> – <?= udate($endTs - $ts < 86400 ? 'g:i A' : 'M j, g:i A', $endTs) ?><?php endif; ?>
+                        </div>
+                        <?php if (!empty($ev['location'])): ?>
+                            <div class="evt-meta evt-loc"><?= e((string)$ev['location']) ?></div>
+                        <?php endif; ?>
+                    </div>
                 </div>
             </div>
+        <?php endforeach; endif; ?>
         </div>
-    <?php endforeach; endif; ?>
+    </div>
+</div>
+
+<!-- Marketplace -->
+<div class="col">
+    <div class="col-header">
+        <span class="col-icon">🏷️</span>
+        <span class="col-label">Marketplace</span>
+        <?php if ($listings): ?>
+            <span class="col-count"><?= count($listings) ?></span>
+        <?php endif; ?>
+    </div>
+    <div class="scroll-viewport" id="vp-mkt">
+        <div class="scroll-track" id="tr-mkt">
+        <?php if (!$listings): ?>
+            <div class="empty">No active listings.</div>
+        <?php else: foreach ($listings as $item):
+            $isFree  = ($item['price_cents'] === null || (int)$item['price_cents'] === 0);
+            $price   = $isFree ? 'FREE' : '$' . number_format((int)$item['price_cents'] / 100, 2);
+            $condLbl = $CONDITION_LABELS[$item['condition_label']] ?? $item['condition_label'];
+            $catLbl  = ucfirst((string)$item['category']);
+        ?>
+            <div class="card">
+                <div class="mkt-head">
+                    <div class="mkt-title"><?= e((string)$item['title']) ?></div>
+                    <div class="mkt-price <?= $isFree ? 'mkt-price--free' : '' ?>"><?= $price ?></div>
+                </div>
+                <?php $desc = trim((string)$item['description']); if ($desc): ?>
+                    <div class="mkt-desc"><?= e($desc) ?></div>
+                <?php endif; ?>
+                <div class="mkt-tags">
+                    <span class="mkt-tag"><?= e($catLbl) ?></span>
+                    <span class="mkt-tag"><?= e($condLbl) ?></span>
+                    <?php if (!empty($item['first_name'])): ?>
+                        <span class="mkt-tag">From <?= e((string)$item['first_name']) ?></span>
+                    <?php endif; ?>
+                </div>
+            </div>
+        <?php endforeach; endif; ?>
+        </div>
+    </div>
 </div>
 
 <footer>
-    <div class="powered">Powered by BadassHOA</div>
-    <div class="last-updated">Auto-refreshes every <?= $refreshSec ?> seconds</div>
+    <div class="footer-note">Powered by BadassHOA</div>
+    <div class="footer-note">Auto-refreshes every <?= $refreshSec ?> seconds</div>
 </footer>
 
 <script>
+// ── Clock ──────────────────────────────────────────────────────────────────
 function tick() {
     var now = new Date();
     var h = now.getHours(), m = now.getMinutes();
     var ampm = h >= 12 ? 'PM' : 'AM';
     h = h % 12 || 12;
-    document.getElementById('clock').textContent = h + ':' + String(m).padStart(2,'0') + ' ' + ampm;
-    var days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-    var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-    document.getElementById('dateline').textContent = days[now.getDay()] + ', ' + months[now.getMonth()] + ' ' + now.getDate() + ', ' + now.getFullYear();
+    document.getElementById('clock').textContent =
+        h + ':' + String(m).padStart(2, '0') + ' ' + ampm;
+    var days    = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    var months  = ['January','February','March','April','May','June',
+                   'July','August','September','October','November','December'];
+    document.getElementById('dateline').textContent =
+        days[now.getDay()] + ', ' + months[now.getMonth()] + ' ' + now.getDate() + ', ' + now.getFullYear();
 }
 tick();
 setInterval(tick, 1000);
+
+// ── Auto-scroll each column independently ─────────────────────────────────
+// Speed: pixels per second. Pause (ms) at top and bottom before resuming.
+var SPEED      = 55;   // px/sec — comfortable reading speed
+var PAUSE_TOP  = 3000; // ms to wait at the top before starting
+var PAUSE_BOT  = 2500; // ms to wait at the bottom before resetting
+
+function autoScroll(vpId, trId) {
+    var vp = document.getElementById(vpId);
+    var tr = document.getElementById(trId);
+    if (!vp || !tr) return;
+
+    var pos       = 0;
+    var direction = 1; // 1 = down, -1 = up (we reset, not reverse)
+    var lastTime  = null;
+    var pausing   = true;
+    var pauseEnd  = Date.now() + PAUSE_TOP;
+    var maxScroll = 0;
+
+    function measure() {
+        maxScroll = tr.scrollHeight - vp.clientHeight;
+    }
+    measure();
+
+    // No overflow — nothing to do
+    if (maxScroll <= 20) return;
+
+    function frame(ts) {
+        if (lastTime === null) lastTime = ts;
+        var dt = ts - lastTime;
+        lastTime = ts;
+
+        if (pausing) {
+            if (Date.now() >= pauseEnd) {
+                pausing = false;
+            }
+        } else {
+            pos += (SPEED * dt) / 1000;
+            measure();
+            if (pos >= maxScroll) {
+                pos = maxScroll;
+                tr.style.transform = 'translateY(-' + pos + 'px)';
+                pausing  = true;
+                pauseEnd = Date.now() + PAUSE_BOT;
+                // after bottom pause, reset to top
+                setTimeout(function () {
+                    pos = 0;
+                    tr.style.transform = 'translateY(0)';
+                    tr.style.transition = 'none';
+                    pausing  = true;
+                    pauseEnd = Date.now() + PAUSE_TOP;
+                    lastTime = null;
+                }, PAUSE_BOT);
+                requestAnimationFrame(frame);
+                return;
+            }
+        }
+
+        tr.style.transition = 'none';
+        tr.style.transform  = 'translateY(-' + Math.round(pos) + 'px)';
+        requestAnimationFrame(frame);
+    }
+
+    requestAnimationFrame(frame);
+}
+
+// Stagger start times so all three columns don't scroll in lockstep
+setTimeout(function () { autoScroll('vp-ann', 'tr-ann'); }, 0);
+setTimeout(function () { autoScroll('vp-evt', 'tr-evt'); }, 800);
+setTimeout(function () { autoScroll('vp-mkt', 'tr-mkt'); }, 1600);
 </script>
 </body>
 </html>
