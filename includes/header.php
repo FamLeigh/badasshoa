@@ -32,6 +32,7 @@ function nav_icon(string $name): string
         case 'permissions':    return "<svg $base><rect x='3' y='11' width='18' height='11' rx='2' ry='2'/><path d='M7 11V7a5 5 0 0 1 10 0v4'/></svg>";
         case 'voting':         return "<svg $base><circle cx='12' cy='12' r='10'/><polyline points='8 12 11 15 16 9'/></svg>";
         case 'marketplace':    return "<svg $base><path d='M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2 5h12M10 18a1 1 0 1 1-2 0 1 1 0 0 1 2 0zm7 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0z'/></svg>";
+        case 'legal':          return "<svg $base><line x1='12' y1='3' x2='12' y2='21'/><polyline points='3 6 12 3 21 6'/><path d='M6 6L3 12a3 3 0 0 0 6 0'/><path d='M18 6l-3 6a3 3 0 0 0 6 0'/><line x1='3' y1='20' x2='21' y2='20'/></svg>";
         case 'contacts':       return "<svg $base><path d='M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z'/></svg>";
         case 'parking':        return "<svg $base><rect x='3' y='3' width='18' height='18' rx='2' ry='2'/><path d='M9 17V7h4a3 3 0 0 1 0 6H9'/></svg>";
         case 'menu':           return "<svg $base><line x1='3' y1='12' x2='21' y2='12'/><line x1='3' y1='6' x2='21' y2='6'/><line x1='3' y1='18' x2='21' y2='18'/></svg>";
@@ -64,6 +65,8 @@ function active_nav_key(): string
         '/dashboard/minutes.php'        => 'minutes',
         '/dashboard/voting.php'         => 'voting',
         '/dashboard/marketplace.php'    => 'marketplace',
+        '/dashboard/legal.php'          => 'legal',
+        '/admin/legal.php'              => 'legal',
         '/dashboard/permissions.php'    => 'settings',
         '/dashboard/locations.php'      => 'settings',
         '/admin'                        => 'overview',
@@ -95,7 +98,7 @@ $userInitial = strtoupper(substr(trim((string)($_SESSION['name'] ?? $_SESSION['e
 $_groupForActive = [
     'home' => 'community', 'communications' => 'community', 'events' => 'community', 'faq' => 'community', 'marketplace' => 'community',
     'documents' => 'resources', 'forms' => 'resources', 'rules' => 'resources',
-    'minutes' => 'resources', 'media' => 'resources', 'directory' => 'resources', 'contacts' => 'resources',
+    'minutes' => 'resources', 'media' => 'resources', 'directory' => 'resources', 'contacts' => 'resources', 'legal' => 'resources',
     'committees' => 'governance', 'concerns' => 'governance', 'arc' => 'governance',
     'violations' => 'governance', 'work-orders' => 'governance', 'voting' => 'governance',
     'units' => 'operations', 'parking' => 'operations', 'employees' => 'operations', 'insurance' => 'operations',
@@ -520,6 +523,7 @@ if ($page_layout === 'app' && isset($association) && $association):
                 <?php if (can_do('read_contacts')): ?>
                     <?= nav_link('/dashboard/contacts.php', 'contacts', 'Contacts', 'contacts', $active) ?>
                 <?php endif; ?>
+                <?= nav_link('/dashboard/legal.php', 'legal', 'Legal', 'legal', $active) ?>
             <?php $navGroup('resources', 'Resources', ob_get_clean()); ?>
 
             <?php ob_start(); ?>
@@ -573,6 +577,7 @@ if ($page_layout === 'app' && isset($association) && $association):
             <?= nav_link('/admin/users.php',           'directory',      'Users',          'users',          $active) ?>
             <?= nav_link('/admin/activity.php',        'activity',       'Activity',       'activity',       $active) ?>
             <?= nav_link('/admin/changelog.php',       'documents',      'Changelog',      'changelog',      $active) ?>
+            <?= nav_link('/admin/legal.php',           'legal',          'Legal / Laws',   'legal',          $active) ?>
         <?php endif; ?>
         </div>
 

@@ -118,7 +118,7 @@ if ($includeBoard) {
     </table>
     <?php if ($hasContractor): ?>
         <div class="disclaimer">
-            <strong>Disclaimer:</strong> Contractors listed above are listed as a convenience for residents.
+            <strong>Disclaimer:</strong> Contractors above are listed as a convenience for residents.
             <?= e((string)$association['name']) ?> doesn't guarantee their work and isn't responsible for the quality, pricing, or outcome of any service performed. Get your own quotes and references.
         </div>
     <?php endif; ?>
