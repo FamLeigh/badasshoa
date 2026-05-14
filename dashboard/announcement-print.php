@@ -48,9 +48,9 @@ $typeColor = match ($a['type']) {
 
 <div class="head">
     <div class="date-block">
-        <div class="m"><?= e(date('M', $startTs)) ?></div>
-        <div class="d"><?= e(date('j', $startTs)) ?></div>
-        <div class="y"><?= e(date('Y', $startTs)) ?></div>
+        <div class="m"><?= e(udate('M', $startTs)) ?></div>
+        <div class="d"><?= e(udate('j', $startTs)) ?></div>
+        <div class="y"><?= e(udate('Y', $startTs)) ?></div>
     </div>
     <div style="flex: 1;">
         <div>
@@ -59,16 +59,16 @@ $typeColor = match ($a['type']) {
         </div>
         <h1><?= e((string)$a['title']) ?></h1>
         <div class="meta">
-            <?= e(date('l, F j, Y · g:i A', $startTs)) ?>
+            <?= e(udate('l, F j, Y · g:i A', $startTs)) ?>
             · by <?= e(trim((string)$a['author']) ?: 'Unknown') ?>
-            <?php if ($expTs): ?> · expires <?= e(date('M j, Y', $expTs)) ?><?php endif; ?>
+            <?php if ($expTs): ?> · expires <?= e(udate('M j, Y', $expTs)) ?><?php endif; ?>
         </div>
     </div>
 </div>
 
 <div class="body"><?= e((string)$a['body']) ?></div>
 
-<?= print_footer_html('Printed ' . date('M j, Y')) ?>
+<?= print_footer_html('Printed ' . udate('M j, Y')) ?>
 
 <script>window.addEventListener('load', function(){ window.print(); });</script>
 </body></html>

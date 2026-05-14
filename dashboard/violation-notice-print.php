@@ -79,7 +79,7 @@ $NOTICE_LABELS = [
 $noticeLabel = $NOTICE_LABELS[$notice['notice_type']] ?? ucwords(str_replace('_',' ',(string)$notice['notice_type']));
 $vtypeLabel  = $VTYPES[$notice['violation_type']] ?? ucwords(str_replace('_',' ',(string)$notice['violation_type']));
 $unitLabel   = !empty($notice['unit_number']) ? 'Unit ' . $notice['unit_number'] : '';
-$issueDate   = date('F j, Y', strtotime((string)$notice['issued_at']));
+$issueDate   = udate('F j, Y', strtotime((string)$notice['issued_at']));
 
 $recipientName = trim((string)$notice['resident_name']);
 $recipientLine = implode(' — ', array_filter([$recipientName ?: null, $unitLabel ?: null]));
@@ -177,7 +177,7 @@ $recipientLine = implode(' — ', array_filter([$recipientName ?: null, $unitLab
             </td></tr>
         <?php endif; ?>
         <?php if (!empty($notice['due_date'])): ?>
-            <tr><td>Due / Cure by:</td><td><strong><?= e(date('F j, Y', strtotime((string)$notice['due_date']))) ?></strong></td></tr>
+            <tr><td>Due / Cure by:</td><td><strong><?= e(udate('F j, Y', strtotime((string)$notice['due_date']))) ?></strong></td></tr>
         <?php endif; ?>
     </table>
 </div>
@@ -188,7 +188,7 @@ $recipientLine = implode(' — ', array_filter([$recipientName ?: null, $unitLab
     <div class="fine-label">Fine amount levied</div>
     <div class="fine-amount">$<?= number_format((int)$notice['fine_amount_cents'] / 100, 2) ?></div>
     <?php if (!empty($notice['due_date'])): ?>
-        <div class="fine-due">Due by <?= e(date('F j, Y', strtotime((string)$notice['due_date']))) ?></div>
+        <div class="fine-due">Due by <?= e(udate('F j, Y', strtotime((string)$notice['due_date']))) ?></div>
     <?php endif; ?>
 </div>
 <?php elseif (!empty($notice['due_date']) && in_array($notice['notice_type'], ['cure','hearing'], true)): ?>
@@ -196,7 +196,7 @@ $recipientLine = implode(' — ', array_filter([$recipientName ?: null, $unitLab
 <div class="cure-box">
     <div>
         <div class="cure-label"><?= $notice['notice_type'] === 'hearing' ? 'Hearing date' : 'Cure deadline' ?></div>
-        <div class="cure-date"><?= e(date('F j, Y', strtotime((string)$notice['due_date']))) ?></div>
+        <div class="cure-date"><?= e(udate('F j, Y', strtotime((string)$notice['due_date']))) ?></div>
     </div>
 </div>
 <?php endif; ?>
@@ -227,7 +227,7 @@ $recipientLine = implode(' — ', array_filter([$recipientName ?: null, $unitLab
     <?php if (!empty($association['contact_email'])): ?> · <?= e((string)$association['contact_email']) ?><?php endif; ?>
 </div>
 
-<?= print_footer_html('Printed ' . date('M j, Y')) ?>
+<?= print_footer_html('Printed ' . udate('M j, Y')) ?>
 
 </div><!-- .page -->
 <script>window.addEventListener('load', function(){ window.print(); });</script>

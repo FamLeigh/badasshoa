@@ -55,7 +55,7 @@ $rows = $stmt->fetchAll();
 
 <h1>Rule suggestions <span style="font-size:11pt; color:#888;">(<?= e($statusFilter) ?>)</span></h1>
 <div class="meta">
-    <?= count($rows) ?> suggestion<?= count($rows)===1?'':'s' ?> · Printed <?= e(date('M j, Y')) ?>
+    <?= count($rows) ?> suggestion<?= count($rows)===1?'':'s' ?> · Printed <?= e(udate('M j, Y')) ?>
 </div>
 
 <?php if (!$rows): ?>
@@ -74,14 +74,14 @@ $rows = $stmt->fetchAll();
                 <span class="cat-pill"><?= e((string)$s['category']) ?></span>
             <?php endif; ?>
             Suggested by <strong><?= e($name) ?></strong>
-            on <?= e(date('M j, Y', strtotime((string)$s['suggested_at']))) ?>
+            on <?= e(udate('M j, Y', strtotime((string)$s['suggested_at']))) ?>
         </div>
         <h2><?= e((string)$s['title']) ?></h2>
         <div class="body"><?= e($bodyText) ?></div>
         <?php if ($s['status'] !== 'pending'): ?>
             <div class="decision">
                 <?= e(ucfirst((string)$s['status'])) ?>
-                <?php if (!empty($s['reviewed_at'])): ?>on <?= e(date('M j, Y', strtotime((string)$s['reviewed_at']))) ?><?php endif; ?>
+                <?php if (!empty($s['reviewed_at'])): ?>on <?= e(udate('M j, Y', strtotime((string)$s['reviewed_at']))) ?><?php endif; ?>
                 <?php if (!empty($s['decision_note'])): ?> · "<em><?= e((string)$s['decision_note']) ?></em>"<?php endif; ?>
             </div>
         <?php endif; ?>
@@ -89,7 +89,7 @@ $rows = $stmt->fetchAll();
     <?php endforeach; ?>
 <?php endif; ?>
 
-<?= print_footer_html('Printed ' . date('M j, Y') . ' · suggestions (' . $statusFilter . ')') ?>
+<?= print_footer_html('Printed ' . udate('M j, Y') . ' · suggestions (' . $statusFilter . ')') ?>
 
 <script>window.addEventListener('load', function(){ window.print(); });</script>
 </body></html>

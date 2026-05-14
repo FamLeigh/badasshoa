@@ -55,9 +55,9 @@ require __DIR__ . '/../includes/header.php';
     <article class="card card--padded">
         <div class="row" style="gap: var(--sp-4); align-items: center; margin-bottom: var(--sp-4); padding-bottom: var(--sp-3); border-bottom: 1px solid var(--color-border);">
             <div style="text-align:center; min-width: 80px; padding: 6px 12px; border: 2px solid var(--color-navy); border-radius: 8px; background: var(--color-surface);">
-                <div style="font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-text-soft); font-weight: 700;"><?= e(date('M', $startTs)) ?></div>
-                <div style="font-size: 32pt; line-height: 1; font-weight: 800; color: var(--color-navy);"><?= e(date('j', $startTs)) ?></div>
-                <div style="font-size: var(--fs-xs); color: var(--color-text-soft);"><?= e(date('D', $startTs)) ?></div>
+                <div style="font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-text-soft); font-weight: 700;"><?= e(udate('M', $startTs)) ?></div>
+                <div style="font-size: 32pt; line-height: 1; font-weight: 800; color: var(--color-navy);"><?= e(udate('j', $startTs)) ?></div>
+                <div style="font-size: var(--fs-xs); color: var(--color-text-soft);"><?= e(udate('D', $startTs)) ?></div>
             </div>
             <div style="flex: 1; min-width: 0;">
                 <div class="row" style="gap: var(--sp-2); flex-wrap: wrap; margin-bottom: var(--sp-1);">
@@ -68,9 +68,9 @@ require __DIR__ . '/../includes/header.php';
                 </div>
                 <h1 style="font-size: var(--fs-2xl); margin: 0 0 var(--sp-1);"><?= e((string)$ev['title']) ?></h1>
                 <div class="muted" style="font-size: var(--fs-md);">
-                    <?= e(date('l, F j, Y · g:i A', $startTs)) ?>
+                    <?= e(udate('l, F j, Y · g:i A', $startTs)) ?>
                     <?php if ($endTs): ?>
-                        – <?= e(date($sameDay ? 'g:i A' : 'M j, Y g:i A', $endTs)) ?>
+                        – <?= e(udate($sameDay ? 'g:i A' : 'M j, Y g:i A', $endTs)) ?>
                     <?php endif; ?>
                 </div>
                 <?php if (!empty($ev['location'])): ?>
@@ -94,7 +94,7 @@ require __DIR__ . '/../includes/header.php';
         <?php endif; ?>
 
         <?php if (!empty($ev['recurrence_until'])): ?>
-            <p class="muted" style="margin-top: var(--sp-4); font-size: var(--fs-sm);">Repeats until <?= e(date('M j, Y', strtotime((string)$ev['recurrence_until']))) ?>.</p>
+            <p class="muted" style="margin-top: var(--sp-4); font-size: var(--fs-sm);">Repeats until <?= e(udate('M j, Y', strtotime((string)$ev['recurrence_until']))) ?>.</p>
         <?php endif; ?>
     </article>
 
@@ -103,7 +103,7 @@ require __DIR__ . '/../includes/header.php';
             <h2 style="font-size: var(--fs-lg); margin: 0 0 var(--sp-3);">Upcoming occurrences</h2>
             <ul style="margin: 0; padding-left: 1.2em; font-size: var(--fs-sm);">
                 <?php foreach ($occurrences as $occ): $oTs = strtotime((string)$occ['starts_at']); ?>
-                    <li><?= e(date('D, M j, Y · g:i A', $oTs)) ?></li>
+                    <li><?= e(udate('D, M j, Y · g:i A', $oTs)) ?></li>
                 <?php endforeach; ?>
             </ul>
         </div>

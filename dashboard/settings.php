@@ -40,6 +40,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'change_
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// POST: Save timezone preference
+// ──────────────────────────────────────────────────────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'save_timezone') {
+    csrf_check();
+    $tz = (string)($_POST['timezone'] ?? '');
+    if ($tz !== '' && !@timezone_open($tz)) {
+        flash('error', 'Invalid timezone.');
+    } else {
+        db()->prepare('UPDATE users SET timezone = ? WHERE id = ?')
+            ->execute([$tz !== '' ? $tz : null, (int)$user['id']]);
+        flash('success', 'Timezone saved.');
+    }
+    redirect('/dashboard/settings.php#account');
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // POST: Save permissions
 // ──────────────────────────────────────────────────────────────────────────
 $PERM_ROLES = [
@@ -679,6 +695,40 @@ require __DIR__ . '/../includes/header.php';
                 Signed in as <strong><?= e(trim((string)($user['first_name'] ?? '') . ' ' . (string)($user['last_name'] ?? '')) ?: (string)$user['email']) ?></strong>
                 (<?= e((string)$user['email']) ?>).
             </p>
+
+            <?php
+            // Build timezone list: US zones first, then a separator, then the rest alphabetically.
+            $usZones = ['America/New_York','America/Chicago','America/Denver','America/Phoenix','America/Los_Angeles','America/Anchorage','America/Adak','Pacific/Honolulu'];
+            $allZones = DateTimeZone::listIdentifiers();
+            $otherZones = array_diff($allZones, $usZones);
+            sort($otherZones);
+            $currentTz = !empty($user['timezone']) ? (string)$user['timezone'] : '';
+            ?>
+            <form method="post" class="form" style="max-width: 480px; margin-bottom: var(--sp-7);">
+                <?= csrf_field() ?>
+                <input type="hidden" name="form" value="save_timezone">
+                <div class="field">
+                    <label class="field__label" for="tz-select">Display timezone</label>
+                    <select class="input" id="tz-select" name="timezone">
+                        <option value="">UTC (default)</option>
+                        <optgroup label="United States">
+                            <?php foreach ($usZones as $z): ?>
+                                <option value="<?= e($z) ?>"<?= $currentTz === $z ? ' selected' : '' ?>><?= e(str_replace('_', ' ', $z)) ?></option>
+                            <?php endforeach; ?>
+                        </optgroup>
+                        <optgroup label="All timezones">
+                            <?php foreach ($otherZones as $z): ?>
+                                <option value="<?= e($z) ?>"<?= $currentTz === $z ? ' selected' : '' ?>><?= e(str_replace('_', ' ', $z)) ?></option>
+                            <?php endforeach; ?>
+                        </optgroup>
+                    </select>
+                    <div class="field__hint">Dates and times across your dashboard will display in this timezone.</div>
+                </div>
+                <div class="row" style="justify-content: flex-end;">
+                    <button class="btn btn--primary" type="submit">Save timezone</button>
+                </div>
+            </form>
+
             <form method="post" class="form" style="max-width: 480px;">
                 <?= csrf_field() ?>
                 <input type="hidden" name="form" value="change_password">

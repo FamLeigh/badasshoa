@@ -559,7 +559,7 @@ require __DIR__ . '/../includes/header.php';
             <h1 style="font-size: var(--fs-2xl); margin: 0 0 var(--sp-1);"><?= e((string)$detail['title']) ?></h1>
             <p class="muted" style="margin: 0;">
                 Filed by <?= e(trim((string)$detail['submitter_name']) ?: 'unknown') ?>
-                on <?= e(date('M j, Y g:i A', strtotime((string)$detail['created_at']))) ?>
+                on <?= e(udate('M j, Y g:i A', strtotime((string)$detail['created_at']))) ?>
             </p>
 
             <!-- Big confirmation code -->
@@ -571,8 +571,8 @@ require __DIR__ . '/../includes/header.php';
                 <?php if (!empty($detail['starts_at']) || !empty($detail['ends_at'])): ?>
                     <div style="font-size: var(--fs-lg); font-weight: 700; color: var(--color-warning); margin-top: var(--sp-3); letter-spacing: 0.02em;">
                         Valid
-                        <?php if (!empty($detail['starts_at'])): ?><?= e(date('M j, Y', strtotime((string)$detail['starts_at']))) ?><?php endif; ?>
-                        <?php if (!empty($detail['ends_at'])): ?> – <?= e(date('M j, Y', strtotime((string)$detail['ends_at']))) ?><?php endif; ?>
+                        <?php if (!empty($detail['starts_at'])): ?><?= e(udate('M j, Y', strtotime((string)$detail['starts_at']))) ?><?php endif; ?>
+                        <?php if (!empty($detail['ends_at'])): ?> – <?= e(udate('M j, Y', strtotime((string)$detail['ends_at']))) ?><?php endif; ?>
                     </div>
                 <?php endif; ?>
             </div>
@@ -708,7 +708,7 @@ require __DIR__ . '/../includes/header.php';
 
                     <div class="muted" style="font-size: var(--fs-xs); margin-top: var(--sp-3); padding-top: var(--sp-2); border-top: 1px dotted #ccc; line-height: 1.6;">
                         Signed by <strong><?= e(trim((string)$detail['submitter_name']) ?: '—') ?></strong>
-                        <?php if (!empty($detail['signed_at'])): ?> on <?= e(date('M j, Y g:i:s A', strtotime((string)$detail['signed_at']))) ?><?php endif; ?>
+                        <?php if (!empty($detail['signed_at'])): ?> on <?= e(udate('M j, Y g:i:s A', strtotime((string)$detail['signed_at']))) ?><?php endif; ?>
                         <?php if (!empty($detail['signed_ip'])): ?> · IP <?= e((string)$detail['signed_ip']) ?><?php endif; ?>
                         <br>
                         Consent to electronic records: <strong><?= (int)$detail['consent_given'] === 1 ? 'Yes' : 'No' ?></strong>
@@ -725,7 +725,7 @@ require __DIR__ . '/../includes/header.php';
             <?php if ($isRevoked): ?>
                 <div style="margin-top: var(--sp-4); padding: var(--sp-3); background: #fff; border-radius: var(--r-md);">
                     <strong style="color: var(--color-error);">Revoked</strong>
-                    <?php if (!empty($detail['revoked_at'])): ?> on <?= e(date('M j, Y', strtotime((string)$detail['revoked_at']))) ?><?php endif; ?>
+                    <?php if (!empty($detail['revoked_at'])): ?> on <?= e(udate('M j, Y', strtotime((string)$detail['revoked_at']))) ?><?php endif; ?>
                     <?php if (!empty($detail['revoker_name'])): ?> by <?= e((string)$detail['revoker_name']) ?><?php endif; ?>
                     <?php if (!empty($detail['revoke_reason'])): ?>
                         <p style="margin: 4px 0 0; white-space: pre-wrap;"><?= e((string)$detail['revoke_reason']) ?></p>
@@ -1099,7 +1099,7 @@ require __DIR__ . '/../includes/header.php';
                                 <?php endif; ?>
                                 <div class="muted" style="font-size: var(--fs-xs); margin-top: 6px;">
                                     <?= e((string)($s['label'] ?: ucfirst($s['kind']))) ?>
-                                    · saved <?= e(date('M j, Y', strtotime((string)$s['created_at']))) ?>
+                                    · saved <?= e(udate('M j, Y', strtotime((string)$s['created_at']))) ?>
                                 </div>
                             </label>
                         <?php endforeach; ?>
@@ -1319,8 +1319,8 @@ require __DIR__ . '/../includes/header.php';
                     <td><?= !empty($r['unit_number']) ? e((string)$r['unit_number']) : '—' ?></td>
                     <td><?= e(trim((string)$r['submitter_name']) ?: '—') ?></td>
                     <td style="font-size: var(--fs-sm);">
-                        <?= !empty($r['starts_at']) ? e(date('M j', strtotime((string)$r['starts_at']))) : '' ?>
-                        <?= !empty($r['ends_at'])   ? ' – ' . e(date('M j', strtotime((string)$r['ends_at']))) : '' ?>
+                        <?= !empty($r['starts_at']) ? e(udate('M j', strtotime((string)$r['starts_at']))) : '' ?>
+                        <?= !empty($r['ends_at'])   ? ' – ' . e(udate('M j', strtotime((string)$r['ends_at']))) : '' ?>
                     </td>
                     <td><code style="font-size: var(--fs-xs);"><?= e((string)$r['confirmation_code']) ?></code></td>
                     <td><span class="badge <?= $statusBadge ?>"><?= e($statusLabel) ?></span></td>

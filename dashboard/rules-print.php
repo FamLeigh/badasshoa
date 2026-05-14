@@ -72,7 +72,7 @@ $filterLabel = $filterBits ? ' · ' . implode(' · ', $filterBits) : '';
 
 <h1 class="cover">Rules &amp; Bylaws</h1>
 <div class="cover-meta">
-    <?= count($rules) ?> rule<?= count($rules)===1?'':'s' ?><?= e($filterLabel) ?> · Printed <?= e(date('M j, Y')) ?>
+    <?= count($rules) ?> rule<?= count($rules)===1?'':'s' ?><?= e($filterLabel) ?> · Printed <?= e(udate('M j, Y')) ?>
 </div>
 
 <?php if (!$rules): ?>
@@ -85,7 +85,7 @@ $filterLabel = $filterBits ? ' · ' . implode(' · ', $filterBits) : '';
             <?php if (!empty($r['rule_number'])): ?><span class="num">#<?= e((string)$r['rule_number']) ?></span><?php endif; ?>
             <span class="src"><?= e(ucfirst(str_replace('_',' ',(string)$r['source']))) ?></span>
             <?php if (!empty($r['category'])): ?><span class="pill"><?= e((string)$r['category']) ?></span><?php endif; ?>
-            <?php if (!empty($r['effective_date'])): ?>In effect <?= e(date('M j, Y', strtotime((string)$r['effective_date']))) ?><?php endif; ?>
+            <?php if (!empty($r['effective_date'])): ?>In effect <?= e(udate('M j, Y', strtotime((string)$r['effective_date']))) ?><?php endif; ?>
         </div>
         <h2><?= e((string)$r['title']) ?></h2>
         <div class="body"><?= e(trim(strip_tags(str_replace(['&nbsp;', "\xc2\xa0"], ' ', (string)$r['body'])))) ?></div>
@@ -94,7 +94,7 @@ $filterLabel = $filterBits ? ' · ' . implode(' · ', $filterBits) : '';
 </div>
 <?php endif; ?>
 
-<?= print_footer_html('Printed ' . date('M j, Y')) ?>
+<?= print_footer_html('Printed ' . udate('M j, Y')) ?>
 
 <script>window.addEventListener('load', function(){ window.print(); });</script>
 </body></html>

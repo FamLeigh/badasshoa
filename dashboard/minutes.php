@@ -147,7 +147,7 @@ function mtype_badge(string $t): string {
             <h1 style="font-size: var(--fs-2xl); margin: var(--sp-2) 0 var(--sp-1);"><?= e((string)$detail['title']) ?></h1>
             <div class="row" style="gap: var(--sp-2); flex-wrap: wrap;">
                 <span class="badge <?= mtype_badge((string)$detail['meeting_type']) ?>"><?= e($MEETING_TYPES[$detail['meeting_type']] ?? (string)$detail['meeting_type']) ?></span>
-                <span class="muted" style="font-size: var(--fs-sm);"><?= e(date('l, F j, Y', strtotime((string)$detail['meeting_date']))) ?></span>
+                <span class="muted" style="font-size: var(--fs-sm);"><?= e(udate('l, F j, Y', strtotime((string)$detail['meeting_date']))) ?></span>
                 <?php if (!empty($detail['author_name'])): ?>
                     <span class="muted" style="font-size: var(--fs-sm);">· recorded by <?= e(trim((string)$detail['author_name'])) ?></span>
                 <?php endif; ?>
@@ -310,7 +310,7 @@ function mtype_badge(string $t): string {
                     <strong style="font-size: var(--fs-lg);"><?= e((string)$row['title']) ?></strong>
                 </div>
                 <div class="muted" style="font-size: var(--fs-sm);">
-                    <?= e(date('l, F j, Y', strtotime((string)$row['meeting_date']))) ?>
+                    <?= e(udate('l, F j, Y', strtotime((string)$row['meeting_date']))) ?>
                     <?php if (!empty($row['attendees'])): ?>
                         · <?= e(mb_strimwidth((string)$row['attendees'], 0, 80, '…')) ?>
                     <?php endif; ?>

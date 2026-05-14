@@ -171,7 +171,7 @@ require __DIR__ . '/../includes/header.php';
                         <td><?= e(trim($m['first_name'] . ' ' . $m['last_name']) ?: '—') ?></td>
                         <td><?= e($m['unit_number'] ?: '—') ?></td>
                         <td><?= e((string)$m['email']) ?></td>
-                        <td class="muted"><?= e(date('M j, Y', strtotime((string)$m['created_at']))) ?></td>
+                        <td class="muted"><?= e(udate('M j, Y', strtotime((string)$m['created_at']))) ?></td>
                         <td style="text-align:right;"><a class="btn btn--ghost" style="padding: 0.3rem 0.6rem; font-size: var(--fs-xs);" href="/dashboard/directory.php?action=edit&id=<?= (int)$m['id'] ?>">Edit</a></td>
                     </tr>
                 <?php endforeach; ?>
@@ -195,7 +195,7 @@ require __DIR__ . '/../includes/header.php';
                         <td><?= e(trim($m['first_name'] . ' ' . $m['last_name']) ?: '—') ?></td>
                         <td><?= e($m['unit_number'] ?: '—') ?></td>
                         <td><?= e(str_replace('_', ' ', (string)$m['role'])) ?></td>
-                        <td class="muted"><?= e(date('M j, Y g:i a', strtotime((string)$m['last_login_at']))) ?></td>
+                        <td class="muted"><?= e(udate('M j, Y g:i a', strtotime((string)$m['last_login_at']))) ?></td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
@@ -261,7 +261,7 @@ require __DIR__ . '/../includes/header.php';
         ?>
             <tr>
                 <td>
-                    <?= e(date('M j, Y', strtotime((string)$r['created_at']))) ?>
+                    <?= e(udate('M j, Y', strtotime((string)$r['created_at']))) ?>
                     <div class="muted" style="font-size: var(--fs-xs);"><?= e(date('H:i:s', strtotime((string)$r['created_at']))) ?> UTC</div>
                 </td>
                 <td><span class="badge badge--navy"><?= e((string)$r['action']) ?></span></td>

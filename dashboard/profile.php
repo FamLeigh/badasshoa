@@ -263,8 +263,8 @@ require __DIR__ . '/../includes/header.php';
                     <?php endif; ?>
                     <div class="muted" style="font-size: var(--fs-xs); margin-top: 8px;">
                         <strong><?= e((string)($s['label'] ?: ucfirst($s['kind']))) ?></strong>
-                        · saved <?= e(date('M j, Y', strtotime((string)$s['created_at']))) ?>
-                        <?php if (!empty($s['last_used_at'])): ?> · last used <?= e(date('M j, Y', strtotime((string)$s['last_used_at']))) ?><?php endif; ?>
+                        · saved <?= e(udate('M j, Y', strtotime((string)$s['created_at']))) ?>
+                        <?php if (!empty($s['last_used_at'])): ?> · last used <?= e(udate('M j, Y', strtotime((string)$s['last_used_at']))) ?><?php endif; ?>
                     </div>
                     <form method="post" style="display:inline; margin-top: 8px;" onsubmit="return confirm('Delete this saved signature? Already-signed forms keep their copy.');">
                         <?= csrf_field() ?>
@@ -301,8 +301,8 @@ require __DIR__ . '/../includes/header.php';
                     <?= e($pay) ?>
                     <?php if (!empty($j['start_date']) || !empty($j['end_date'])): ?>
                         <?= !empty($pay) ? ' · ' : '' ?>
-                        <?php if (!empty($j['start_date'])): ?><?= e(date('M Y', strtotime((string)$j['start_date']))) ?><?php endif; ?>
-                        <?php if (!empty($j['end_date'])): ?> – <?= e(date('M Y', strtotime((string)$j['end_date']))) ?><?php elseif (!empty($j['start_date'])): ?> – present<?php endif; ?>
+                        <?php if (!empty($j['start_date'])): ?><?= e(udate('M Y', strtotime((string)$j['start_date']))) ?><?php endif; ?>
+                        <?php if (!empty($j['end_date'])): ?> – <?= e(udate('M Y', strtotime((string)$j['end_date']))) ?><?php elseif (!empty($j['start_date'])): ?> – present<?php endif; ?>
                     <?php endif; ?>
                 </div>
                 <?php if (!empty($j['notes'])): ?>
@@ -332,7 +332,7 @@ require __DIR__ . '/../includes/header.php';
                         <?php endif; ?>
                     </td>
                     <td><?= e((string)($d['category'] ?? '')) ?></td>
-                    <td><?= e(date('M j, Y', strtotime((string)$d['created_at']))) ?></td>
+                    <td><?= e(udate('M j, Y', strtotime((string)$d['created_at']))) ?></td>
                     <td style="text-align:right; white-space: nowrap;">
                         <?php if (!empty($d['file_path'])): ?>
                             <a class="btn btn--ghost" href="/dashboard/file.php?type=document&id=<?= (int)$d['id'] ?>" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);">Download</a>

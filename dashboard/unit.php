@@ -346,7 +346,7 @@ require __DIR__ . '/../includes/header.php';
                 <td><strong><?= e(trim((string)$o['first_name'] . ' ' . (string)$o['last_name']) ?: (string)$o['email']) ?></strong></td>
                 <td><span class="badge <?= $roleClass ?>"><?= e(str_replace('_',' ',(string)$o['role'])) ?></span></td>
                 <td><?= (int)$o['is_primary'] === 1 ? '<span class="badge badge--orange">primary</span>' : '<span class="muted">—</span>' ?></td>
-                <td><?= $o['since'] ? e(date('M j, Y', strtotime((string)$o['since']))) : '<span class="muted">—</span>' ?></td>
+                <td><?= $o['since'] ? e(udate('M j, Y', strtotime((string)$o['since']))) : '<span class="muted">—</span>' ?></td>
                 <td><?= e((string)$o['email']) ?></td>
                 <td><?= $o['phone'] ? e((string)$o['phone']) : '<span class="muted">—</span>' ?></td>
                 <td style="text-align:right; white-space: nowrap;">
@@ -520,8 +520,8 @@ require __DIR__ . '/../includes/header.php';
                     <td><?= e($m['icon']) ?> <?= e($m['label']) ?></td>
                     <td><a href="/dashboard/forms.php?id=<?= (int)$f['id'] ?>"><strong><?= e((string)$f['title']) ?></strong></a></td>
                     <td style="font-size: var(--fs-sm);">
-                        <?= !empty($f['starts_at']) ? e(date('M j', strtotime((string)$f['starts_at']))) : '' ?>
-                        <?= !empty($f['ends_at'])   ? ' – ' . e(date('M j', strtotime((string)$f['ends_at']))) : '' ?>
+                        <?= !empty($f['starts_at']) ? e(udate('M j', strtotime((string)$f['starts_at']))) : '' ?>
+                        <?= !empty($f['ends_at'])   ? ' – ' . e(udate('M j', strtotime((string)$f['ends_at']))) : '' ?>
                     </td>
                     <td><code style="font-size: var(--fs-xs);"><?= e((string)$f['confirmation_code']) ?></code></td>
                     <td><span class="badge <?= $statusBadge ?>"><?= e($statusLabel) ?></span></td>
@@ -562,7 +562,7 @@ require __DIR__ . '/../includes/header.php';
                 <td><?= e((string)($d['category'] ?? '—')) ?></td>
                 <td><span class="badge <?= $accessClass ?>"><?= e(str_replace('_',' ',(string)$d['access_level'])) ?></span></td>
                 <td>
-                    <?= e(date('M j, Y', strtotime((string)$d['created_at']))) ?>
+                    <?= e(udate('M j, Y', strtotime((string)$d['created_at']))) ?>
                     <div class="muted" style="font-size: var(--fs-xs);">v<?= e((string)$d['version']) ?> · <?= e(trim((string)$d['uploader']) ?: 'unknown') ?></div>
                 </td>
                 <td style="text-align:right; white-space: nowrap;">

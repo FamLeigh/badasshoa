@@ -231,7 +231,7 @@ function expiry_status(?string $expires_at): array
     if ($days < 0)   return ['cls' => 'badge--error',   'label' => 'Expired ' . (-$days) . 'd ago', 'tone' => 'error'];
     if ($days <= 30) return ['cls' => 'badge--warning', 'label' => 'Expires in ' . $days . 'd',     'tone' => 'warning'];
     if ($days <= 90) return ['cls' => 'badge--info',    'label' => 'Expires in ' . $days . 'd',     'tone' => 'info'];
-    return ['cls' => 'badge--success', 'label' => 'Expires ' . date('M j, Y', strtotime($expires_at)), 'tone' => 'ok'];
+    return ['cls' => 'badge--success', 'label' => 'Expires ' . udate('M j, Y', strtotime($expires_at)), 'tone' => 'ok'];
 }
 
 $page_title = 'Insurance — ' . $association['name'];
@@ -400,7 +400,7 @@ require __DIR__ . '/../includes/header.php';
             <div class="row row--between" style="align-items: center; padding: var(--sp-2) var(--sp-3); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--r-md);">
                 <div>
                     <a href="/dashboard/file.php?doc=<?= (int)$d['id'] ?>" target="_blank" style="font-weight: 600;"><?= e((string)$d['title']) ?></a>
-                    <div class="muted" style="font-size: var(--fs-xs);"><?= e(strtoupper((string)($d['file_type'] ?? ''))) ?> · <?= e(date('M j, Y', strtotime((string)$d['created_at']))) ?></div>
+                    <div class="muted" style="font-size: var(--fs-xs);"><?= e(strtoupper((string)($d['file_type'] ?? ''))) ?> · <?= e(udate('M j, Y', strtotime((string)$d['created_at']))) ?></div>
                 </div>
                 <form method="post" style="display:inline;" onsubmit="return confirm('Remove this document?');">
                     <?= csrf_field() ?>
@@ -478,8 +478,8 @@ require __DIR__ . '/../includes/header.php';
                     <?php if ($r['deductible'] !== null): ?><div class="muted" style="font-size: var(--fs-xs);">Ded $<?= number_format((float)$r['deductible'], 0) ?></div><?php endif; ?>
                 </td>
                 <td style="font-size: var(--fs-sm); white-space: nowrap;">
-                    <?php if (!empty($r['effective_at'])): ?><?= e(date('M j, Y', strtotime((string)$r['effective_at']))) ?><?php endif; ?>
-                    <?php if (!empty($r['expires_at'])): ?><br><span class="muted">→ <?= e(date('M j, Y', strtotime((string)$r['expires_at']))) ?></span><?php endif; ?>
+                    <?php if (!empty($r['effective_at'])): ?><?= e(udate('M j, Y', strtotime((string)$r['effective_at']))) ?><?php endif; ?>
+                    <?php if (!empty($r['expires_at'])): ?><br><span class="muted">→ <?= e(udate('M j, Y', strtotime((string)$r['expires_at']))) ?></span><?php endif; ?>
                 </td>
                 <td><span class="badge <?= e($st['cls']) ?>"><?= e($st['label']) ?></span></td>
                 <td>

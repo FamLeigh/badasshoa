@@ -156,7 +156,7 @@ $paidGb = (int)($association['storage_paid_extra_gb'] ?? 0);
                             <div class="muted" style="font-size: var(--fs-xs);"><?= e(basename($f['rel'])) ?></div>
                         </td>
                         <td style="text-align:right; white-space:nowrap; font-variant-numeric: tabular-nums;"><?= e(format_bytes($f['size'])) ?></td>
-                        <td class="muted" style="white-space:nowrap;"><?= e(date('M j, Y', $f['mtime'])) ?></td>
+                        <td class="muted" style="white-space:nowrap;"><?= e(udate('M j, Y', $f['mtime'])) ?></td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>

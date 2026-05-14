@@ -358,7 +358,7 @@ require __DIR__ . '/../includes/header.php';
                 <?php if (!empty($detail['violator_name'])): ?>
                     <span class="muted" style="font-size: var(--fs-sm);">· <?= e(trim((string)$detail['violator_name'])) ?></span>
                 <?php endif; ?>
-                <span class="muted" style="font-size: var(--fs-sm);">· Filed <?= e(date('M j, Y', strtotime((string)$detail['created_at']))) ?></span>
+                <span class="muted" style="font-size: var(--fs-sm);">· Filed <?= e(udate('M j, Y', strtotime((string)$detail['created_at']))) ?></span>
             </div>
         </div>
     </div>
@@ -421,12 +421,12 @@ require __DIR__ . '/../includes/header.php';
                     <div class="row" style="gap: var(--sp-2); flex-wrap: wrap; align-items: center;">
                         <span class="badge <?= $ntColor ?>"><?= e($NOTICE_TYPES[$n['notice_type']] ?? (string)$n['notice_type']) ?></span>
                         <?php if (!empty($n['due_date'])): ?>
-                            <span class="muted" style="font-size: var(--fs-sm);">Due <?= e(date('M j, Y', strtotime((string)$n['due_date']))) ?></span>
+                            <span class="muted" style="font-size: var(--fs-sm);">Due <?= e(udate('M j, Y', strtotime((string)$n['due_date']))) ?></span>
                         <?php endif; ?>
                         <?php if (!empty($n['fine_amount_cents'])): ?>
                             <strong style="color: var(--color-error);">Fine: $<?= number_format((int)$n['fine_amount_cents'] / 100, 2) ?></strong>
                         <?php endif; ?>
-                        <span class="muted" style="font-size: var(--fs-xs);">· Issued <?= e(date('M j, Y', strtotime((string)$n['issued_at']))) ?> by <?= e(trim((string)$n['issuer_name']) ?: '—') ?></span>
+                        <span class="muted" style="font-size: var(--fs-xs);">· Issued <?= e(udate('M j, Y', strtotime((string)$n['issued_at']))) ?> by <?= e(trim((string)$n['issuer_name']) ?: '—') ?></span>
                     </div>
                     <a class="btn btn--ghost" style="font-size: var(--fs-sm); padding: 4px 12px;"
                        href="/dashboard/violation-notice-print.php?notice_id=<?= (int)$n['id'] ?>"
@@ -693,7 +693,7 @@ require __DIR__ . '/../includes/header.php';
                         <?php endif; ?>
                     </td>
                     <td><span class="badge <?= $STATUSES[$row['status']]['cls'] ?>"><?= e($STATUSES[$row['status']]['label']) ?></span></td>
-                    <td><?= e(date('M j, Y', strtotime((string)$row['updated_at']))) ?></td>
+                    <td><?= e(udate('M j, Y', strtotime((string)$row['updated_at']))) ?></td>
                 </tr>
             <?php endforeach; ?>
             </tbody>

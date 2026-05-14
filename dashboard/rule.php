@@ -38,11 +38,11 @@ if ($printMode) {
         <?php if ($rule['rule_number']): ?><strong>#<?= e((string)$rule['rule_number']) ?></strong> · <?php endif; ?>
         <?= e(ucfirst(str_replace('_',' ',(string)$rule['source']))) ?>
         <?php if ($rule['category']): ?> · <?= e((string)$rule['category']) ?><?php endif; ?>
-        <?php if ($rule['effective_date']): ?> · In effect <?= e(date('M j, Y', strtotime((string)$rule['effective_date']))) ?><?php endif; ?>
+        <?php if ($rule['effective_date']): ?> · In effect <?= e(udate('M j, Y', strtotime((string)$rule['effective_date']))) ?><?php endif; ?>
     </div>
     <h1><?= e((string)$rule['title']) ?></h1>
     <div class="body"><?= e(trim(strip_tags(str_replace(['&nbsp;', "\xc2\xa0"], ' ', (string)$rule['body'])))) ?></div>
-    <?= print_footer_html('Rule printed ' . date('M j, Y')) ?>
+    <?= print_footer_html('Rule printed ' . udate('M j, Y')) ?>
     <script>window.addEventListener('load', function(){ window.print(); });</script>
     </body></html>
     <?php
@@ -74,7 +74,7 @@ require __DIR__ . '/../includes/header.php';
             <span class="badge" style="background: var(--color-warning-bg); color: var(--color-warning); border: 1px solid rgba(182,130,42,0.25);"><?= e((string)$rule['category']) ?></span>
         <?php endif; ?>
         <?php if ($rule['effective_date']): ?>
-            <span class="muted" style="font-size: var(--fs-sm);">In effect <?= e(date('M j, Y', strtotime((string)$rule['effective_date']))) ?></span>
+            <span class="muted" style="font-size: var(--fs-sm);">In effect <?= e(udate('M j, Y', strtotime((string)$rule['effective_date']))) ?></span>
         <?php endif; ?>
     </div>
 

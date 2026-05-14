@@ -81,7 +81,7 @@ if ($includeBoard) {
 <div class="meta">
     <?= count($contacts) ?> contact<?= count($contacts)===1?'':'s' ?>
     <?php if ($includeBoard): ?> · <?= count($boardMembers) ?> board / management member<?= count($boardMembers)===1?'':'s' ?><?php endif; ?>
-    · Printed <?= e(date('M j, Y')) ?>
+    · Printed <?= e(udate('M j, Y')) ?>
 </div>
 
 <?php if (!$contacts): ?>
@@ -153,7 +153,7 @@ if ($includeBoard) {
     <?php endif; ?>
 <?php endif; ?>
 
-<?= print_footer_html('Printed ' . date('M j, Y') . ($includeBoard ? ' · contacts + board' : ' · contacts')) ?>
+<?= print_footer_html('Printed ' . udate('M j, Y') . ($includeBoard ? ' · contacts + board' : ' · contacts')) ?>
 
 <script>window.addEventListener('load', function(){ window.print(); });</script>
 </body></html>

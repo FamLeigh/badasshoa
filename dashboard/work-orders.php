@@ -556,7 +556,7 @@ function wo_form_card(?array $editing, ?array $prefill, ?array $arcPrefill, arra
                 </div>
                 <div>
                     <div class="muted" style="font-size: var(--fs-xs); text-transform: uppercase;">Due date</div>
-                    <div><?= !empty($detail['due_date']) ? e(date('M j, Y', strtotime((string)$detail['due_date']))) : '<span class="muted">—</span>' ?></div>
+                    <div><?= !empty($detail['due_date']) ? e(udate('M j, Y', strtotime((string)$detail['due_date']))) : '<span class="muted">—</span>' ?></div>
                 </div>
                 <div>
                     <div class="muted" style="font-size: var(--fs-xs); text-transform: uppercase;">Cost</div>
@@ -575,7 +575,7 @@ function wo_form_card(?array $editing, ?array $prefill, ?array $arcPrefill, arra
                 <div>
                     <div class="muted" style="font-size: var(--fs-xs); text-transform: uppercase;">Created</div>
                     <div>
-                        <?= e(date('M j, Y', strtotime((string)$detail['created_at']))) ?>
+                        <?= e(udate('M j, Y', strtotime((string)$detail['created_at']))) ?>
                         <?php if (!empty($detail['creator_first'])): ?>
                             <span class="muted" style="font-size: var(--fs-xs);"> by <?= e(trim($detail['creator_first'] . ' ' . $detail['creator_last'])) ?></span>
                         <?php endif; ?>
@@ -584,7 +584,7 @@ function wo_form_card(?array $editing, ?array $prefill, ?array $arcPrefill, arra
                 <?php if (!empty($detail['closed_at'])): ?>
                 <div>
                     <div class="muted" style="font-size: var(--fs-xs); text-transform: uppercase;">Closed</div>
-                    <div><?= e(date('M j, Y', strtotime((string)$detail['closed_at']))) ?></div>
+                    <div><?= e(udate('M j, Y', strtotime((string)$detail['closed_at']))) ?></div>
                 </div>
                 <?php endif; ?>
             </div>
@@ -609,7 +609,7 @@ function wo_form_card(?array $editing, ?array $prefill, ?array $arcPrefill, arra
                         <?php if ($isStatus): ?>
                             <span class="badge badge--info" style="font-size: var(--fs-xs);">→ <?= e($STATUSES[$t['new_status']]['label'] ?? $t['new_status']) ?></span>
                         <?php endif; ?>
-                        <span class="muted" style="font-size: var(--fs-xs);">· <?= e(date('M j, Y g:i A', strtotime((string)$t['created_at']))) ?></span>
+                        <span class="muted" style="font-size: var(--fs-xs);">· <?= e(udate('M j, Y g:i A', strtotime((string)$t['created_at']))) ?></span>
                     </div>
                     <?php if (!empty($t['body'])): ?>
                         <p style="white-space: pre-wrap; margin: 0;"><?= e((string)$t['body']) ?></p>
@@ -771,7 +771,7 @@ function wo_form_card(?array $editing, ?array $prefill, ?array $arcPrefill, arra
                         ?>
                     </td>
                     <td><?= !empty($r['assignee_first']) ? e(trim($r['assignee_first'] . ' ' . $r['assignee_last'])) : (!empty($r['contractor_label']) ? '<em>' . e((string)$r['contractor_label']) . '</em>' : '<span class="muted">—</span>') ?></td>
-                    <td><?= !empty($r['due_date']) ? e(date('M j', strtotime((string)$r['due_date']))) : '<span class="muted">—</span>' ?></td>
+                    <td><?= !empty($r['due_date']) ? e(udate('M j', strtotime((string)$r['due_date']))) : '<span class="muted">—</span>' ?></td>
                 </tr>
             <?php endforeach; ?>
             </tbody>

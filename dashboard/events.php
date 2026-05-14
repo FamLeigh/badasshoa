@@ -377,9 +377,9 @@ function event_form_card(?array $editing, string $assocSlug, array $activeLocati
     ?>
     <article class="card card--padded ev-row" style="display:flex; gap: var(--sp-4); align-items: flex-start;">
         <a href="/dashboard/event.php?id=<?= (int)$ev['id'] ?>" class="ev-date" style="flex: 0 0 72px; text-align:center; padding: 6px 10px; border: 2px solid var(--color-navy); border-radius: 8px; background: var(--color-surface); text-decoration: none; color: inherit;">
-            <div style="font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-text-soft); font-weight: 700;"><?= e(date('M', $startTs)) ?></div>
-            <div style="font-size: 22pt; line-height: 1; font-weight: 800; color: var(--color-navy); margin: 2px 0;"><?= e(date('j', $startTs)) ?></div>
-            <div style="font-size: var(--fs-xs); color: var(--color-text-soft);"><?= e(date('D', $startTs)) ?></div>
+            <div style="font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-text-soft); font-weight: 700;"><?= e(udate('M', $startTs)) ?></div>
+            <div style="font-size: 22pt; line-height: 1; font-weight: 800; color: var(--color-navy); margin: 2px 0;"><?= e(udate('j', $startTs)) ?></div>
+            <div style="font-size: var(--fs-xs); color: var(--color-text-soft);"><?= e(udate('D', $startTs)) ?></div>
         </a>
         <div style="flex: 1; min-width: 0;">
             <div class="row" style="gap: var(--sp-2); margin-bottom: var(--sp-2); flex-wrap: wrap;">
@@ -390,9 +390,9 @@ function event_form_card(?array $editing, string $assocSlug, array $activeLocati
                     </span>
                 <?php endif; ?>
                 <span class="muted" style="font-size: var(--fs-sm);">
-                    <?= e(date('g:i A', $startTs)) ?>
+                    <?= e(udate('g:i A', $startTs)) ?>
                     <?php if ($endTs): ?>
-                        – <?= e(date($sameDay ? 'g:i A' : 'M j, g:i A', $endTs)) ?>
+                        – <?= e(udate($sameDay ? 'g:i A' : 'M j, g:i A', $endTs)) ?>
                     <?php endif; ?>
                 </span>
                 <?php if (!empty($ev['location'])): ?>

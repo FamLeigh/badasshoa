@@ -426,7 +426,7 @@ require __DIR__ . '/../includes/header.php';
             <div class="row row--between" style="align-items: center; padding: var(--sp-2) var(--sp-3); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--r-md);">
                 <div>
                     <a href="/dashboard/file.php?doc=<?= (int)$d['id'] ?>" target="_blank" style="font-weight: 600;"><?= e((string)$d['title']) ?></a>
-                    <div class="muted" style="font-size: var(--fs-xs);"><?= e(strtoupper((string)($d['file_type'] ?? ''))) ?> · <?= e(date('M j, Y', strtotime((string)$d['created_at']))) ?></div>
+                    <div class="muted" style="font-size: var(--fs-xs);"><?= e(strtoupper((string)($d['file_type'] ?? ''))) ?> · <?= e(udate('M j, Y', strtotime((string)$d['created_at']))) ?></div>
                 </div>
                 <form method="post" style="display:inline;" onsubmit="return confirm('Remove this document?');">
                     <?= csrf_field() ?>
@@ -516,8 +516,8 @@ require __DIR__ . '/../includes/header.php';
                 <td><span class="badge" style="font-size: var(--fs-xs);"><?= e($TYPES[$r['employment_type']] ?? $r['employment_type']) ?></span></td>
                 <?php if ($canSeeFinancials): ?><td><?= e($pay) ?: '<span class="muted">—</span>' ?></td><?php endif; ?>
                 <td style="font-size: var(--fs-sm);">
-                    <?php if (!empty($r['start_date'])): ?><?= e(date('M Y', strtotime((string)$r['start_date']))) ?><?php endif; ?>
-                    <?php if (!empty($r['end_date'])): ?> – <?= e(date('M Y', strtotime((string)$r['end_date']))) ?><?php elseif (!empty($r['start_date'])): ?> – present<?php endif; ?>
+                    <?php if (!empty($r['start_date'])): ?><?= e(udate('M Y', strtotime((string)$r['start_date']))) ?><?php endif; ?>
+                    <?php if (!empty($r['end_date'])): ?> – <?= e(udate('M Y', strtotime((string)$r['end_date']))) ?><?php elseif (!empty($r['start_date'])): ?> – present<?php endif; ?>
                 </td>
                 <td><span class="badge <?= $r['status']==='active' ? 'badge--success' : '' ?>"><?= e($r['status']) ?></span></td>
                 <td style="text-align:right; white-space: nowrap;">

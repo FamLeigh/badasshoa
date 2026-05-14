@@ -64,7 +64,7 @@ if ($printMode) {
     <div class="meta">
         <?php if (!empty($doc['category'])): ?><?= e((string)$doc['category']) ?> · <?php endif; ?>
         <?php if (!empty($doc['unit_label'])): ?>Unit <?= e((string)$doc['unit_label']) ?> · <?php endif; ?>
-        Created <?= e(date('M j, Y', strtotime((string)$doc['created_at']))) ?>
+        Created <?= e(udate('M j, Y', strtotime((string)$doc['created_at']))) ?>
         <?php if ($doc['uploaded_by']): ?> · by <?= e(trim((string)$doc['uploader_name']) ?: 'unknown') ?><?php endif; ?>
     </div>
     <div class="body">
@@ -73,7 +73,7 @@ if ($printMode) {
         <?php endif; ?>
         <?= (string)$doc['body_html'] /* board-trusted HTML from Quill */ ?>
     </div>
-    <?= print_footer_html('Printed ' . date('M j, Y')) ?>
+    <?= print_footer_html('Printed ' . udate('M j, Y')) ?>
     <script>window.addEventListener('load', function(){ window.print(); });</script>
     </body></html>
     <?php
@@ -113,7 +113,7 @@ require __DIR__ . '/../includes/header.php';
         <?php if (!empty($doc['unit_label'])): ?>
             <a class="badge badge--info" href="/dashboard/unit.php?id=<?= (int)$doc['unit_id'] ?>" style="text-decoration:none;">Unit <?= e((string)$doc['unit_label']) ?></a>
         <?php endif; ?>
-        <span class="muted" style="font-size: var(--fs-sm);">Created <?= e(date('M j, Y', strtotime((string)$doc['created_at']))) ?></span>
+        <span class="muted" style="font-size: var(--fs-sm);">Created <?= e(udate('M j, Y', strtotime((string)$doc['created_at']))) ?></span>
     </div>
 
     <h1 style="font-size: var(--fs-3xl); margin: 0 0 var(--sp-4); letter-spacing: -0.01em;"><?= e((string)$doc['title']) ?></h1>

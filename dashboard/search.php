@@ -562,7 +562,7 @@ if ($ajax) {
            .     ($r['rule_number'] ? '<strong style="font-size: var(--fs-md); color: var(--color-navy);">#' . e((string)$r['rule_number']) . '</strong>' : '')
            .     '<span class="badge badge--' . $sourceBadge . '">' . e(str_replace('_',' ',(string)$r['source'])) . '</span>'
            .     ($r['category'] ? '<span class="badge" style="background: var(--color-warning-bg); color: var(--color-warning); border: 1px solid rgba(182,130,42,0.25);">' . e((string)$r['category']) . '</span>' : '')
-           .     ($r['effective_date'] ? '<span class="muted" style="font-size: var(--fs-xs);">&middot; in effect ' . e(date('M j, Y', strtotime((string)$r['effective_date']))) . '</span>' : '')
+           .     ($r['effective_date'] ? '<span class="muted" style="font-size: var(--fs-xs);">&middot; in effect ' . e(udate('M j, Y', strtotime((string)$r['effective_date']))) . '</span>' : '')
            .     (!empty($r['review_flag']) ? '<span class="badge badge--error" style="font-size: var(--fs-xs);" title="' . e((string)($r['review_note'] ?? 'Flagged for board review')) . '">🚩 Needs review</span>' : '')
            .   '</div>'
            .   '<div class="row" style="gap: var(--sp-2);">'
@@ -1054,7 +1054,7 @@ function rule_form_card(?array $editing, array $categories): void {
                                 <span class="badge" style="background: var(--color-warning-bg); color: var(--color-warning); border: 1px solid rgba(182,130,42,0.25); font-size: var(--fs-xs);"><?= e((string)$sug['category']) ?></span>
                             <?php endif; ?>
                             <span class="muted" style="font-size: var(--fs-xs); align-self: center;">
-                                <?= e(date('M j, Y', strtotime((string)$sug['suggested_at']))) ?>
+                                <?= e(udate('M j, Y', strtotime((string)$sug['suggested_at']))) ?>
                             </span>
                         </div>
                         <h4 style="margin: 0 0 var(--sp-2); font-size: var(--fs-lg);"><?= e((string)$sug['title']) ?></h4>
@@ -1076,7 +1076,7 @@ function rule_form_card(?array $editing, array $categories): void {
                         <div class="muted" style="font-size: var(--fs-sm); white-space: pre-wrap; max-height: 200px; overflow-y: auto;"><?= e(trim(strip_tags(str_replace(['&nbsp;', "\xc2\xa0"], ' ', (string)$sug['body'])))) ?></div>
                         <?php if ($sug['status'] !== 'pending'): ?>
                             <div class="muted" style="font-size: var(--fs-xs); margin-top: var(--sp-2); padding-top: var(--sp-2); border-top: 1px solid var(--color-border);">
-                                <?= e(ucfirst((string)$sug['status'])) ?> <?= $sug['reviewed_at'] ? 'on ' . e(date('M j, Y', strtotime((string)$sug['reviewed_at']))) : '' ?>
+                                <?= e(ucfirst((string)$sug['status'])) ?> <?= $sug['reviewed_at'] ? 'on ' . e(udate('M j, Y', strtotime((string)$sug['reviewed_at']))) : '' ?>
                                 <?php if (!empty($sug['decision_note'])): ?>
                                     · <em>"<?= e((string)$sug['decision_note']) ?>"</em>
                                 <?php endif; ?>
@@ -1128,7 +1128,7 @@ function rule_form_card(?array $editing, array $categories): void {
                 <strong>Suggested by <?= e(trim((string)$editingSug['suggester_name']) ?: (string)($editingSug['suggester_email'] ?? '') ?: '— suggester removed —') ?></strong>
                 <div class="muted" style="font-size: var(--fs-xs);">
                     <?= !empty($editingSug['suggester_email']) ? e((string)$editingSug['suggester_email']) . ' · ' : '' ?>
-                    submitted <?= e(date('M j, Y', strtotime((string)$editingSug['suggested_at']))) ?>
+                    submitted <?= e(udate('M j, Y', strtotime((string)$editingSug['suggested_at']))) ?>
                 </div>
             </div>
         </div>
@@ -1194,7 +1194,7 @@ function rule_form_card(?array $editing, array $categories): void {
                 <strong>Suggested by <?= e(trim((string)$approvingSug['suggester_name']) ?: (string)($approvingSug['suggester_email'] ?? '') ?: '— suggester removed —') ?></strong>
                 <div class="muted" style="font-size: var(--fs-xs);">
                     <?= !empty($approvingSug['suggester_email']) ? e((string)$approvingSug['suggester_email']) . ' · ' : '' ?>
-                    submitted <?= e(date('M j, Y', strtotime((string)$approvingSug['suggested_at']))) ?>
+                    submitted <?= e(udate('M j, Y', strtotime((string)$approvingSug['suggested_at']))) ?>
                 </div>
             </div>
         </div>
@@ -1309,7 +1309,7 @@ function rule_form_card(?array $editing, array $categories): void {
                             <?php if ($r['category']): ?>
                                 <span class="badge" style="background: var(--color-warning-bg); color: var(--color-warning); border: 1px solid rgba(182,130,42,0.25);"><?= e($r['category']) ?></span>
                             <?php endif; ?>
-                            <?php if ($r['effective_date']): ?><span class="muted" style="font-size: var(--fs-xs);">&middot; in effect <?= e(date('M j, Y', strtotime((string)$r['effective_date']))) ?></span><?php endif; ?>
+                            <?php if ($r['effective_date']): ?><span class="muted" style="font-size: var(--fs-xs);">&middot; in effect <?= e(udate('M j, Y', strtotime((string)$r['effective_date']))) ?></span><?php endif; ?>
                             <?php if (!empty($r['review_flag'])): ?>
                                 <span class="badge badge--error" style="font-size: var(--fs-xs);" title="<?= e((string)($r['review_note'] ?? 'Flagged for board review')) ?>">🚩 Needs review</span>
                             <?php endif; ?>
@@ -1358,7 +1358,7 @@ function rule_form_card(?array $editing, array $categories): void {
                             <?php if ($r['category']): ?>
                                 <span class="badge" style="background: var(--color-warning-bg); color: var(--color-warning); border: 1px solid rgba(182,130,42,0.25);"><?= e($r['category']) ?></span>
                             <?php endif; ?>
-                            <?php if ($r['effective_date']): ?><span class="muted" style="font-size: var(--fs-xs);">&middot; in effect <?= e(date('M j, Y', strtotime((string)$r['effective_date']))) ?></span><?php endif; ?>
+                            <?php if ($r['effective_date']): ?><span class="muted" style="font-size: var(--fs-xs);">&middot; in effect <?= e(udate('M j, Y', strtotime((string)$r['effective_date']))) ?></span><?php endif; ?>
                             <?php if (!empty($r['review_flag'])): ?>
                                 <span class="badge badge--error" style="font-size: var(--fs-xs);" title="<?= e((string)($r['review_note'] ?? 'Flagged for board review')) ?>">🚩 Needs review</span>
                             <?php endif; ?>

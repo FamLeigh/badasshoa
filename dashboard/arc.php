@@ -338,7 +338,7 @@ require __DIR__ . '/../includes/header.php';
                 <span class="muted" style="font-size: var(--fs-sm);">
                     by <?= e(trim((string)$detail['submitter_name']) ?: (string)($detail['submitter_email'] ?? '— removed —')) ?>
                     <?php if (!empty($detail['unit_number'])): ?> · Unit <?= e((string)$detail['unit_number']) ?><?php endif; ?>
-                    · <?= e(date('M j, Y', strtotime((string)$detail['created_at']))) ?>
+                    · <?= e(udate('M j, Y', strtotime((string)$detail['created_at']))) ?>
                 </span>
             </div>
             <h1 style="font-size: var(--fs-2xl); margin: 0 0 var(--sp-3);"><?= e((string)$detail['title']) ?></h1>
@@ -351,8 +351,8 @@ require __DIR__ . '/../includes/header.php';
                 <?php if (!empty($detail['requested_start']) || !empty($detail['requested_end'])): ?>
                     <div>
                         <div class="muted" style="font-size: var(--fs-xs); text-transform: uppercase;">Requested dates</div>
-                        <?= !empty($detail['requested_start']) ? e(date('M j, Y', strtotime((string)$detail['requested_start']))) : '?' ?>
-                        <?= !empty($detail['requested_end']) ? ' – ' . e(date('M j, Y', strtotime((string)$detail['requested_end']))) : '' ?>
+                        <?= !empty($detail['requested_start']) ? e(udate('M j, Y', strtotime((string)$detail['requested_start']))) : '?' ?>
+                        <?= !empty($detail['requested_end']) ? ' – ' . e(udate('M j, Y', strtotime((string)$detail['requested_end']))) : '' ?>
                     </div>
                 <?php endif; ?>
                 <?php if (!empty($detail['contractor_name'])): ?>
@@ -376,7 +376,7 @@ require __DIR__ . '/../includes/header.php';
                 <?php endif; ?>
                 <small class="muted">
                     By <?= e(trim((string)$detail['decider_name']) ?: 'board') ?>
-                    <?php if (!empty($detail['decided_at'])): ?> on <?= e(date('M j, Y', strtotime((string)$detail['decided_at']))) ?><?php endif; ?>
+                    <?php if (!empty($detail['decided_at'])): ?> on <?= e(udate('M j, Y', strtotime((string)$detail['decided_at']))) ?><?php endif; ?>
                 </small>
             </div>
         <?php endif; ?>
@@ -398,7 +398,7 @@ require __DIR__ . '/../includes/header.php';
                         <?php if ($isInt): ?>
                             <span class="badge badge--warning" style="font-size: var(--fs-xs);">internal · board only</span>
                         <?php endif; ?>
-                        <span class="muted" style="font-size: var(--fs-xs);">· <?= e(date('M j, Y g:i A', strtotime((string)$c['created_at']))) ?></span>
+                        <span class="muted" style="font-size: var(--fs-xs);">· <?= e(udate('M j, Y g:i A', strtotime((string)$c['created_at']))) ?></span>
                     </div>
                     <p style="white-space: pre-wrap; margin: 0;"><?= e((string)$c['body']) ?></p>
                 </div>
@@ -583,7 +583,7 @@ require __DIR__ . '/../includes/header.php';
                     <span class="muted" style="font-size: var(--fs-xs);">
                         <?= e(trim((string)$r['submitter_name']) ?: '—') ?>
                         <?php if (!empty($r['unit_number'])): ?> · Unit <?= e((string)$r['unit_number']) ?><?php endif; ?>
-                        · <?= e(date('M j, Y', strtotime((string)$r['created_at']))) ?>
+                        · <?= e(udate('M j, Y', strtotime((string)$r['created_at']))) ?>
                     </span>
                 </div>
                 <strong style="font-size: var(--fs-lg);"><?= e((string)$r['title']) ?></strong>

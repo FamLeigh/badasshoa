@@ -131,16 +131,16 @@ if ($qPeriod !== '') {
     if ($qPeriod === 'today') {
         $periodStart = $todayStart;
         $periodEnd   = $todayStart + 86400 - 1;
-        $periodLabel = 'Today — ' . date('l, F j, Y', $todayStart);
+        $periodLabel = 'Today — ' . udate('l, F j, Y', $todayStart);
     } elseif ($qPeriod === 'week') {
         $dow         = (int)date('w', $todayStart);
         $periodStart = $todayStart - $dow * 86400;
         $periodEnd   = $periodStart + 7 * 86400 - 1;
-        $periodLabel = 'Week of ' . date('M j', $periodStart) . ' – ' . date('M j, Y', $periodEnd);
+        $periodLabel = 'Week of ' . udate('M j', $periodStart) . ' – ' . udate('M j, Y', $periodEnd);
     } elseif ($qPeriod === 'month') {
         $periodStart = strtotime(date('Y-m-01') . ' 00:00:00');
         $periodEnd   = strtotime(date('Y-m-t') . ' 23:59:59');
-        $periodLabel = date('F Y', $periodStart);
+        $periodLabel = udate('F Y', $periodStart);
     }
 }
 
@@ -220,9 +220,9 @@ require __DIR__ . '/../includes/header.php';
             <!-- Date-first header with calendar icon -->
             <div class="row" style="gap: var(--sp-4); align-items: center; margin-bottom: var(--sp-4); padding-bottom: var(--sp-3); border-bottom: 1px solid var(--color-border);">
                 <div style="text-align:center; min-width: 70px; padding: 6px 10px; border: 2px solid var(--color-navy); border-radius: 8px; background: var(--color-surface);">
-                    <div style="font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-text-soft); font-weight: 700;"><?= e(date('M', $startTs)) ?></div>
-                    <div style="font-size: 26pt; line-height: 1; font-weight: 800; color: var(--color-navy);"><?= e(date('j', $startTs)) ?></div>
-                    <div style="font-size: var(--fs-xs); color: var(--color-text-soft);"><?= e(date('Y', $startTs)) ?></div>
+                    <div style="font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-text-soft); font-weight: 700;"><?= e(udate('M', $startTs)) ?></div>
+                    <div style="font-size: 26pt; line-height: 1; font-weight: 800; color: var(--color-navy);"><?= e(udate('j', $startTs)) ?></div>
+                    <div style="font-size: var(--fs-xs); color: var(--color-text-soft);"><?= e(udate('Y', $startTs)) ?></div>
                 </div>
                 <div style="flex: 1; min-width: 0;">
                     <div class="row" style="gap: var(--sp-2); margin-bottom: var(--sp-1); flex-wrap: wrap;">
@@ -236,9 +236,9 @@ require __DIR__ . '/../includes/header.php';
                     </div>
                     <h1 style="font-size: var(--fs-2xl); margin: 0;"><?= e((string)$detail['title']) ?></h1>
                     <div class="muted" style="font-size: var(--fs-sm); margin-top: var(--sp-1);">
-                        <?= e(date('l, F j, Y · g:i A', $startTs)) ?>
+                        <?= e(udate('l, F j, Y · g:i A', $startTs)) ?>
                         · by <?= e(trim((string)$detail['author']) ?: 'Unknown') ?>
-                        <?php if ($expTs): ?> · expires <?= e(date('M j, Y', $expTs)) ?><?php endif; ?>
+                        <?php if ($expTs): ?> · expires <?= e(udate('M j, Y', $expTs)) ?><?php endif; ?>
                     </div>
                 </div>
             </div>
@@ -472,9 +472,9 @@ require __DIR__ . '/../includes/header.php';
         ?>
         <a class="ann-card" href="?id=<?= (int)$a['id'] ?>" style="<?= $isExpired ? 'opacity: 0.55;' : ($isScheduled ? 'border-left: 3px solid var(--color-info);' : '') ?>">
             <div class="ann-date">
-                <div class="m"><?= e(date('M', $startTs)) ?></div>
-                <div class="d"><?= e(date('j', $startTs)) ?></div>
-                <div class="y"><?= e(date('Y', $startTs)) ?></div>
+                <div class="m"><?= e(udate('M', $startTs)) ?></div>
+                <div class="d"><?= e(udate('j', $startTs)) ?></div>
+                <div class="y"><?= e(udate('Y', $startTs)) ?></div>
             </div>
             <div class="ann-body">
                 <div class="row" style="gap: var(--sp-2); margin-bottom: var(--sp-1); flex-wrap: wrap;">
@@ -485,9 +485,9 @@ require __DIR__ . '/../includes/header.php';
                     <?php elseif ($isExpired): ?>
                         <span class="badge" style="background: #e8e8e8; color: #666;" title="Expired">⌛ expired</span>
                     <?php elseif ($expTs !== null): ?>
-                        <span class="muted" style="font-size: var(--fs-xs);" title="Expires <?= e(date('M j, Y g:i A', $expTs)) ?>">expires <?= e(date('M j', $expTs)) ?></span>
+                        <span class="muted" style="font-size: var(--fs-xs);" title="Expires <?= e(udate('M j, Y g:i A', $expTs)) ?>">expires <?= e(udate('M j', $expTs)) ?></span>
                     <?php endif; ?>
-                    <span class="muted" style="font-size: var(--fs-xs);"><?= e(date('g:i A', $startTs)) ?> &middot; <?= e(trim((string)$a['author']) ?: 'Unknown') ?></span>
+                    <span class="muted" style="font-size: var(--fs-xs);"><?= e(udate('g:i A', $startTs)) ?> &middot; <?= e(trim((string)$a['author']) ?: 'Unknown') ?></span>
                 </div>
                 <h2 style="font-size: var(--fs-lg); margin: 0 0 var(--sp-1);"><?= e($a['title']) ?></h2>
                 <p class="muted" style="margin: 0; font-size: var(--fs-sm);"><?= e(mb_strimwidth(strip_tags($a['body']), 0, 200, '…')) ?></p>

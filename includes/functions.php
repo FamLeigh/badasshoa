@@ -748,6 +748,30 @@ function us_ca_states_datalist(string $id = 'us-ca-states'): string
     return $out;
 }
 
+// --- timezone helpers ---------------------------------------------------
+function user_tz(): DateTimeZone
+{
+    static $tz = null;
+    if ($tz !== null) return $tz;
+    $user   = current_user();
+    $tzName = (!empty($user['timezone']) && @timezone_open((string)$user['timezone'])) ? (string)$user['timezone'] : 'UTC';
+    $tz     = new DateTimeZone($tzName);
+    return $tz;
+}
+
+// Drop-in for date() that respects the signed-in user's timezone preference.
+// Timestamps stored in the DB are always UTC; this converts to the user's TZ for display.
+// Do NOT use for DB/form format strings (Y-m-d H:i:s, Y-m-d\TH:i) — those stay in UTC.
+function udate(string $format, int|string|null $ts = null): string
+{
+    if ($ts === null) $ts = time();
+    if (is_string($ts)) {
+        $parsed = strtotime($ts);
+        $ts     = $parsed !== false ? $parsed : time();
+    }
+    return (new DateTime('@' . $ts))->setTimezone(user_tz())->format($format);
+}
+
 // --- pricing calc (single source of truth) ------------------------------
 // 30-day free trial on every paid tier. Two pricing bands (Professional was
 // dropped 2026-05-13 — superfluous):

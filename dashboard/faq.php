@@ -248,7 +248,7 @@ require __DIR__ . '/../includes/header.php';
                     <span class="muted" style="font-size: var(--fs-xs);">
                         sort: <?= (int)$f['sort_order'] ?>
                         <?php if (!empty($f['updated_at'])): ?>
-                            &middot; updated <?= e(date('M j, Y', strtotime((string)$f['updated_at']))) ?>
+                            &middot; updated <?= e(udate('M j, Y', strtotime((string)$f['updated_at']))) ?>
                         <?php endif; ?>
                     </span>
                 </div>

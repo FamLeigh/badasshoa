@@ -98,7 +98,7 @@ $isExpired = !empty($f['ends_at']) && strtotime((string)$f['ends_at']) < strtoti
     <div class="unit">
         <?php if (!empty($f['unit_number'])): ?>Unit <?= e((string)$f['unit_number']) ?> · <?php endif; ?>
         Filed by <?= e(trim((string)$f['submitter_name']) ?: 'unknown') ?>
-        on <?= e(date('M j, Y', strtotime((string)$f['created_at']))) ?>
+        on <?= e(udate('M j, Y', strtotime((string)$f['created_at']))) ?>
     </div>
 
     <div class="code-block">
@@ -107,8 +107,8 @@ $isExpired = !empty($f['ends_at']) && strtotime((string)$f['ends_at']) < strtoti
         <?php if (!empty($f['starts_at']) || !empty($f['ends_at'])): ?>
             <div class="window">
                 Valid
-                <?php if (!empty($f['starts_at'])): ?><?= e(date('M j, Y', strtotime((string)$f['starts_at']))) ?><?php endif; ?>
-                <?php if (!empty($f['ends_at'])): ?> – <?= e(date('M j, Y', strtotime((string)$f['ends_at']))) ?><?php endif; ?>
+                <?php if (!empty($f['starts_at'])): ?><?= e(udate('M j, Y', strtotime((string)$f['starts_at']))) ?><?php endif; ?>
+                <?php if (!empty($f['ends_at'])): ?> – <?= e(udate('M j, Y', strtotime((string)$f['ends_at']))) ?><?php endif; ?>
             </div>
         <?php endif; ?>
     </div>
@@ -258,7 +258,7 @@ $isExpired = !empty($f['ends_at']) && strtotime((string)$f['ends_at']) < strtoti
 
             <div style="font-size: 8.5pt; color: #555; margin-top: 8pt; padding-top: 6pt; border-top: 1px dotted #ccc; line-height: 1.5;">
                 Signed by <strong><?= e(trim((string)$f['submitter_name']) ?: '—') ?></strong>
-                <?php if (!empty($f['signed_at'])): ?> on <?= e(date('M j, Y g:i:s A', strtotime((string)$f['signed_at']))) ?><?php endif; ?>
+                <?php if (!empty($f['signed_at'])): ?> on <?= e(udate('M j, Y g:i:s A', strtotime((string)$f['signed_at']))) ?><?php endif; ?>
                 <?php if (!empty($f['signed_ip'])): ?> · IP <?= e((string)$f['signed_ip']) ?><?php endif; ?>
                 · Consent to electronic records: <strong><?= (int)$f['consent_given'] === 1 ? 'Yes' : 'No' ?></strong>
                 <?php if (!empty($f['payload_hash'])): ?> · Record hash <code><?= e(substr((string)$f['payload_hash'], 0, 16)) ?>…</code><?php endif; ?>
@@ -280,7 +280,7 @@ $isExpired = !empty($f['ends_at']) && strtotime((string)$f['ends_at']) < strtoti
     </div>
 </div>
 
-<?= print_footer_html('Printed ' . date('M j, Y')) ?>
+<?= print_footer_html('Printed ' . udate('M j, Y')) ?>
 
 <script>window.addEventListener('load', function(){ window.print(); });</script>
 </body></html>

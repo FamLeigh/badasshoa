@@ -283,26 +283,26 @@ require __DIR__ . '/../includes/header.php';
                             <?php endif; ?>
                         <?php elseif ($key === 'announcements'): ?>
                             <a href="<?= e($href) ?>"><strong><?= e((string)$r['title']) ?></strong></a>
-                            <div class="muted" style="font-size: var(--fs-xs);"><?= e((string)$r['type']) ?> · <?= e(date('M j, Y', strtotime((string)$r['published_at']))) ?></div>
+                            <div class="muted" style="font-size: var(--fs-xs);"><?= e((string)$r['type']) ?> · <?= e(udate('M j, Y', strtotime((string)$r['published_at']))) ?></div>
                         <?php elseif ($key === 'events'): ?>
                             <a href="<?= e($href) ?>"><strong><?= e((string)$r['title']) ?></strong></a>
-                            <div class="muted" style="font-size: var(--fs-xs);"><?= e(date('D, M j, Y · g:i A', strtotime((string)$r['starts_at']))) ?><?php if (!empty($r['location'])): ?> · <?= e((string)$r['location']) ?><?php endif; ?></div>
+                            <div class="muted" style="font-size: var(--fs-xs);"><?= e(udate('D, M j, Y · g:i A', strtotime((string)$r['starts_at']))) ?><?php if (!empty($r['location'])): ?> · <?= e((string)$r['location']) ?><?php endif; ?></div>
                         <?php elseif ($key === 'concerns'): ?>
                             <a href="<?= e($href) ?>"><strong><?= e((string)$r['subject']) ?></strong></a>
-                            <div class="muted" style="font-size: var(--fs-xs);"><?= e((string)$r['type']) ?> · <?= e(str_replace('_',' ', (string)$r['status'])) ?> · <?= e(date('M j, Y', strtotime((string)$r['created_at']))) ?></div>
+                            <div class="muted" style="font-size: var(--fs-xs);"><?= e((string)$r['type']) ?> · <?= e(str_replace('_',' ', (string)$r['status'])) ?> · <?= e(udate('M j, Y', strtotime((string)$r['created_at']))) ?></div>
                         <?php elseif ($key === 'arc'): ?>
                             <a href="<?= e($href) ?>"><strong><?= e((string)$r['title']) ?></strong></a>
-                            <div class="muted" style="font-size: var(--fs-xs);"><?= e((string)$r['category']) ?> · <?= e(str_replace('_',' ', (string)$r['status'])) ?> · <?= e(date('M j, Y', strtotime((string)$r['created_at']))) ?></div>
+                            <div class="muted" style="font-size: var(--fs-xs);"><?= e((string)$r['category']) ?> · <?= e(str_replace('_',' ', (string)$r['status'])) ?> · <?= e(udate('M j, Y', strtotime((string)$r['created_at']))) ?></div>
                         <?php elseif ($key === 'work_orders'): ?>
                             <a href="<?= e($href) ?>"><strong><?= e((string)$r['title']) ?></strong></a>
-                            <div class="muted" style="font-size: var(--fs-xs);"><?= e(str_replace('_',' ', (string)$r['status'])) ?> · <?= e((string)$r['priority']) ?> priority · <?= e(date('M j, Y', strtotime((string)$r['created_at']))) ?></div>
+                            <div class="muted" style="font-size: var(--fs-xs);"><?= e(str_replace('_',' ', (string)$r['status'])) ?> · <?= e((string)$r['priority']) ?> priority · <?= e(udate('M j, Y', strtotime((string)$r['created_at']))) ?></div>
                         <?php elseif ($key === 'violations'): ?>
                             <a href="<?= e($href) ?>"><strong><?= e(str_replace('_',' ', ucwords((string)$r['violation_type']))) ?></strong></a>
-                            <div class="muted" style="font-size: var(--fs-xs);"><?= e(str_replace('_',' ', (string)$r['status'])) ?> · <?= e(date('M j, Y', strtotime((string)$r['created_at']))) ?></div>
+                            <div class="muted" style="font-size: var(--fs-xs);"><?= e(str_replace('_',' ', (string)$r['status'])) ?> · <?= e(udate('M j, Y', strtotime((string)$r['created_at']))) ?></div>
                             <div class="muted" style="font-size: var(--fs-sm); margin-top: 2px;"><?= e(mb_strimwidth((string)$r['description'], 0, 140, '…')) ?></div>
                         <?php elseif ($key === 'minutes'): ?>
                             <a href="<?= e($href) ?>"><strong><?= e((string)$r['title']) ?></strong></a>
-                            <div class="muted" style="font-size: var(--fs-xs);"><?= e(str_replace('_',' ', (string)$r['meeting_type'])) ?> · <?= e(date('M j, Y', strtotime((string)$r['meeting_date']))) ?></div>
+                            <div class="muted" style="font-size: var(--fs-xs);"><?= e(str_replace('_',' ', (string)$r['meeting_type'])) ?> · <?= e(udate('M j, Y', strtotime((string)$r['meeting_date']))) ?></div>
                         <?php elseif ($key === 'units'): ?>
                             <a href="<?= e($href) ?>"><strong>Unit <?= e((string)$r['unit_number']) ?></strong></a>
                             <div class="muted" style="font-size: var(--fs-xs);">

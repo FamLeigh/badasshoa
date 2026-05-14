@@ -90,7 +90,7 @@ $loginUrl   = 'https://badasshoa.com/login.php';
     , click <strong>Committees</strong>, find <strong><?= e((string)$committee['name']) ?></strong>, and hit <strong>Join</strong>. That's it.
 </div>
 
-<?= print_footer_html('Posted ' . date('M j, Y')) ?>
+<?= print_footer_html('Posted ' . udate('M j, Y')) ?>
 
 <script>window.addEventListener('load', function(){ window.print(); });</script>
 </body></html>

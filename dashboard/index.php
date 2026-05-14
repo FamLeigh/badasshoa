@@ -387,13 +387,13 @@ require __DIR__ . '/../includes/header.php';
                 ?>
                     <a class="dash-row" href="/dashboard/communications.php?id=<?= (int)$a['id'] ?>">
                         <div class="dash-date">
-                            <div class="m"><?= e(date('M', $aTs)) ?></div>
-                            <div class="d"><?= e(date('j', $aTs)) ?></div>
+                            <div class="m"><?= e(udate('M', $aTs)) ?></div>
+                            <div class="d"><?= e(udate('j', $aTs)) ?></div>
                         </div>
                         <div class="dash-body">
                             <div class="row" style="gap: var(--sp-2); margin-bottom: 2px; flex-wrap: wrap;">
                                 <span class="badge <?= $typeBadge ?>" style="font-size: var(--fs-xs);"><?= e($a['type']) ?></span>
-                                <span class="muted" style="font-size: var(--fs-xs);"><?= e(date('g:i A', $aTs)) ?> · <?= e(trim($a['author']) ?: 'Unknown') ?></span>
+                                <span class="muted" style="font-size: var(--fs-xs);"><?= e(udate('g:i A', $aTs)) ?> · <?= e(trim($a['author']) ?: 'Unknown') ?></span>
                             </div>
                             <strong><?= e($a['title']) ?></strong>
                             <p class="muted" style="margin: 2px 0 0; font-size: var(--fs-sm);"><?= e(mb_strimwidth(strip_tags($a['body']), 0, 120, '…')) ?></p>
@@ -428,9 +428,9 @@ require __DIR__ . '/../includes/header.php';
                 ?>
                     <a class="dash-row" href="/dashboard/event.php?id=<?= (int)$ev['id'] ?>">
                         <div class="dash-date">
-                            <div class="m"><?= e(date('M', $startTs)) ?></div>
-                            <div class="d"><?= e(date('j', $startTs)) ?></div>
-                            <div class="dow"><?= e(date('D', $startTs)) ?></div>
+                            <div class="m"><?= e(udate('M', $startTs)) ?></div>
+                            <div class="d"><?= e(udate('j', $startTs)) ?></div>
+                            <div class="dow"><?= e(udate('D', $startTs)) ?></div>
                         </div>
                         <div class="dash-body">
                             <div class="row" style="gap: var(--sp-2); margin-bottom: 2px; flex-wrap: wrap;">
@@ -439,8 +439,8 @@ require __DIR__ . '/../includes/header.php';
                                     <span class="badge" style="background: var(--color-surface); color: var(--color-text-soft); font-size: var(--fs-xs);">↻ <?= e((string)$ev['recurrence_type']) ?></span>
                                 <?php endif; ?>
                                 <span class="muted" style="font-size: var(--fs-xs);">
-                                    <?= e(date('g:i A', $startTs)) ?>
-                                    <?php if ($endTs): ?> – <?= e(date($sameDay ? 'g:i A' : 'M j, g:i A', $endTs)) ?><?php endif; ?>
+                                    <?= e(udate('g:i A', $startTs)) ?>
+                                    <?php if ($endTs): ?> – <?= e(udate($sameDay ? 'g:i A' : 'M j, g:i A', $endTs)) ?><?php endif; ?>
                                 </span>
                             </div>
                             <strong><?= e((string)$ev['title']) ?></strong>

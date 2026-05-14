@@ -830,7 +830,7 @@ require __DIR__ . '/../includes/header.php';
                 </td>
                 <td><span class="badge <?= $accessClass ?>"><?= e(str_replace('_',' ',$r['access_level'])) ?></span></td>
                 <td>
-                    <?= e(date('M j, Y', strtotime($r['created_at']))) ?>
+                    <?= e(udate('M j, Y', strtotime($r['created_at']))) ?>
                     <div class="muted" style="font-size: var(--fs-xs);">v<?= e((string)$r['version']) ?> &middot; <?= e(trim((string)$r['uploader']) ?: 'unknown') ?></div>
                 </td>
                 <td style="text-align:right; white-space: nowrap;">

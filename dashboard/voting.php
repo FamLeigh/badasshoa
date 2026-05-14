@@ -543,7 +543,7 @@ if ($action === 'list'): ?>
                     <?php if (!empty($v['ends_at'])): ?>
                         <div class="muted" style="font-size: var(--fs-xs);">
                             <?= $status === 'active' ? 'Closes' : 'Closed' ?>
-                            <?= e(date('M j, Y · g:i A', strtotime((string)$v['ends_at']))) ?>
+                            <?= e(udate('M j, Y · g:i A', strtotime((string)$v['ends_at']))) ?>
                         </div>
                     <?php endif; ?>
                 </div>
@@ -888,7 +888,7 @@ elseif ($action === 'vote' && $castBallot):
             <p style="color: var(--color-text-soft); margin:0 0 var(--sp-2);"><?= nl2br(e((string)$castBallot['description'])) ?></p>
         <?php endif; ?>
         <?php if (!empty($castBallot['ends_at'])): ?>
-            <p class="muted" style="font-size: var(--fs-sm); margin:0;">Closes <?= e(date('l, F j, Y · g:i A', strtotime((string)$castBallot['ends_at']))) ?></p>
+            <p class="muted" style="font-size: var(--fs-sm); margin:0;">Closes <?= e(udate('l, F j, Y · g:i A', strtotime((string)$castBallot['ends_at']))) ?></p>
         <?php endif; ?>
     </div>
 
@@ -1035,7 +1035,7 @@ elseif ($action === 'results' && $resultsBallot):
         <?php if (!empty($resultsBallot['ends_at'])): ?>
         <div class="muted" style="font-size: var(--fs-xs); margin-top: var(--sp-2);">
             <?= $resultsBallot['status'] === 'closed' ? 'Closed' : 'Closes' ?>
-            <?= e(date('l, F j, Y · g:i A', strtotime((string)$resultsBallot['ends_at']))) ?>
+            <?= e(udate('l, F j, Y · g:i A', strtotime((string)$resultsBallot['ends_at']))) ?>
         </div>
         <?php endif; ?>
     </div>

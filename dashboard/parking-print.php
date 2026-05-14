@@ -68,7 +68,7 @@ $threeCol = ($_GET['cols'] ?? '') === '3';
 <?= print_header_html($association) ?>
 
 <h1>Parking spots <?= $threeCol ? '<span style="font-size:11pt; color:#888;">(compact)</span>' : '' ?></h1>
-<div class="meta"><?= count($spots) ?> active spot<?= count($spots)===1?'':'s' ?> · Printed <?= e(date('M j, Y')) ?></div>
+<div class="meta"><?= count($spots) ?> active spot<?= count($spots)===1?'':'s' ?> · Printed <?= e(udate('M j, Y')) ?></div>
 
 <?php if (!$spots): ?>
     <p>No parking spots on file.</p>
@@ -106,7 +106,7 @@ $threeCol = ($_GET['cols'] ?? '') === '3';
     </table>
 <?php endif; ?>
 
-<?= print_footer_html('Printed ' . date('M j, Y')) ?>
+<?= print_footer_html('Printed ' . udate('M j, Y')) ?>
 
 <script>window.addEventListener('load', function(){ window.print(); });</script>
 </body></html>

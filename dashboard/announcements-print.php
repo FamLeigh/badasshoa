@@ -23,16 +23,16 @@ if ($qPeriod !== '') {
     if ($qPeriod === 'today') {
         $periodStart = $todayStart;
         $periodEnd   = $todayStart + 86400 - 1;
-        $rangeTitle  = 'Today — ' . date('l, F j, Y', $todayStart);
+        $rangeTitle  = 'Today — ' . udate('l, F j, Y', $todayStart);
     } elseif ($qPeriod === 'week') {
         $dow         = (int)date('w', $todayStart);
         $periodStart = $todayStart - $dow * 86400;
         $periodEnd   = $periodStart + 7 * 86400 - 1;
-        $rangeTitle  = 'Week of ' . date('M j', $periodStart) . ' – ' . date('M j, Y', $periodEnd);
+        $rangeTitle  = 'Week of ' . udate('M j', $periodStart) . ' – ' . udate('M j, Y', $periodEnd);
     } elseif ($qPeriod === 'month') {
         $periodStart = strtotime(date('Y-m-01') . ' 00:00:00');
         $periodEnd   = strtotime(date('Y-m-t') . ' 23:59:59');
-        $rangeTitle  = date('F Y', $periodStart);
+        $rangeTitle  = udate('F Y', $periodStart);
     }
 }
 
@@ -99,7 +99,7 @@ if ($qAud  !== '')  $subtitle .= ' · ' . ucfirst($qAud) . ' only';
 
 <h1><?= e($rangeTitle) ?></h1>
 <div class="subtitle">
-    <?= count($rows) ?> announcement<?= count($rows) === 1 ? '' : 's' ?><?= e($subtitle) ?> · Printed <?= e(date('M j, Y')) ?>
+    <?= count($rows) ?> announcement<?= count($rows) === 1 ? '' : 's' ?><?= e($subtitle) ?> · Printed <?= e(udate('M j, Y')) ?>
 </div>
 
 <?php if (!$rows): ?>
@@ -113,17 +113,17 @@ if ($qAud  !== '')  $subtitle .= ' · ' . ucfirst($qAud) . ' only';
     ?>
     <div class="ann<?= $isExpired ? ' expired' : '' ?>">
         <div class="date-block">
-            <div class="m"><?= e(date('M', $startTs)) ?></div>
-            <div class="d"><?= e(date('j', $startTs)) ?></div>
-            <div class="y"><?= e(date('Y', $startTs)) ?></div>
+            <div class="m"><?= e(udate('M', $startTs)) ?></div>
+            <div class="d"><?= e(udate('j', $startTs)) ?></div>
+            <div class="y"><?= e(udate('Y', $startTs)) ?></div>
         </div>
         <div class="ann-body">
             <div class="ann-meta">
                 <span class="pill" style="background: <?= e($color) ?>;"><?= e((string)$a['type']) ?></span>
                 <span class="pill-soft"><?= e((string)$a['audience']) ?></span>
-                <?= e(date('g:i A', $startTs)) ?>
+                <?= e(udate('g:i A', $startTs)) ?>
                 · <?= e(trim((string)$a['author']) ?: 'Unknown') ?>
-                <?php if ($expTs): ?> · expires <?= e(date('M j, Y', $expTs)) ?><?php endif; ?>
+                <?php if ($expTs): ?> · expires <?= e(udate('M j, Y', $expTs)) ?><?php endif; ?>
                 <?php if ($isExpired): ?> · <em>expired</em><?php endif; ?>
             </div>
             <div class="ann-title"><?= e((string)$a['title']) ?></div>
@@ -133,7 +133,7 @@ if ($qAud  !== '')  $subtitle .= ' · ' . ucfirst($qAud) . ' only';
     <?php endforeach; ?>
 <?php endif; ?>
 
-<?= print_footer_html('Printed ' . date('M j, Y g:i A') . ($subtitle !== '' ? ' ·' . $subtitle : '')) ?>
+<?= print_footer_html('Printed ' . udate('M j, Y g:i A') . ($subtitle !== '' ? ' ·' . $subtitle : '')) ?>
 
 <script>window.addEventListener('load', function(){ window.print(); });</script>
 </body></html>

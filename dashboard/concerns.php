@@ -368,7 +368,7 @@ function concern_status_badge(string $s): string {
                 <?php if (!empty($detail['category'])): ?><span class="muted" style="font-size: var(--fs-sm);">· <?= e((string)$detail['category']) ?></span><?php endif; ?>
                 <span class="muted" style="font-size: var(--fs-sm);">
                     · <?= (int)$detail['is_anonymous'] === 1 ? 'Anonymous' : 'by ' . e(trim((string)$detail['submitter_name']) ?: (string)$detail['submitter_email']) ?>
-                    on <?= e(date('M j, Y', strtotime((string)$detail['created_at']))) ?>
+                    on <?= e(udate('M j, Y', strtotime((string)$detail['created_at']))) ?>
                 </span>
             </div>
         </div>
@@ -442,7 +442,7 @@ function concern_status_badge(string $s): string {
     <div class="card card--padded" style="margin-bottom: var(--sp-4); border-left: 3px solid var(--color-success);">
         <strong style="color: var(--color-success);">Resolution</strong>
         <p style="white-space: pre-wrap; margin: var(--sp-2) 0 0;"><?= e((string)$detail['resolution_summary']) ?></p>
-        <small class="muted">Marked resolved <?= e(date('M j, Y', strtotime((string)$detail['resolved_at']))) ?></small>
+        <small class="muted">Marked resolved <?= e(udate('M j, Y', strtotime((string)$detail['resolved_at']))) ?></small>
     </div>
     <?php endif; ?>
 
@@ -463,7 +463,7 @@ function concern_status_badge(string $s): string {
                     <?php if ($isInternal): ?>
                         <span class="badge badge--warning" style="font-size: var(--fs-xs);">internal · board only</span>
                     <?php endif; ?>
-                    <span class="muted" style="font-size: var(--fs-xs);">· <?= e(date('M j, Y g:i A', strtotime((string)$c['created_at']))) ?></span>
+                    <span class="muted" style="font-size: var(--fs-xs);">· <?= e(udate('M j, Y g:i A', strtotime((string)$c['created_at']))) ?></span>
                 </div>
                 <p style="white-space: pre-wrap; margin: 0;"><?= e((string)$c['body']) ?></p>
             </div>
@@ -705,7 +705,7 @@ function concern_status_badge(string $s): string {
                     <?php endif; ?>
                 </td>
                 <?php endif; ?>
-                <td><?= e(date('M j, Y', strtotime((string)$row['updated_at']))) ?></td>
+                <td><?= e(udate('M j, Y', strtotime((string)$row['updated_at']))) ?></td>
             </tr>
         <?php endforeach; ?>
         </tbody>

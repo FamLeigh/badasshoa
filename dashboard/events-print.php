@@ -58,9 +58,9 @@ if ($singleId > 0) {
 
     <div class="head">
         <div class="date-block">
-            <div class="m"><?= e(date('M', $startTs)) ?></div>
-            <div class="d"><?= e(date('j', $startTs)) ?></div>
-            <div class="dow"><?= e(date('D', $startTs)) ?></div>
+            <div class="m"><?= e(udate('M', $startTs)) ?></div>
+            <div class="d"><?= e(udate('j', $startTs)) ?></div>
+            <div class="dow"><?= e(udate('D', $startTs)) ?></div>
         </div>
         <div style="flex:1;">
             <div>
@@ -71,8 +71,8 @@ if ($singleId > 0) {
             </div>
             <h1><?= e((string)$ev['title']) ?></h1>
             <div class="when">
-                <?= e(date('l, F j, Y · g:i A', $startTs)) ?>
-                <?php if ($endTs): ?> – <?= e(date($sameDay ? 'g:i A' : 'M j, Y g:i A', $endTs)) ?><?php endif; ?>
+                <?= e(udate('l, F j, Y · g:i A', $startTs)) ?>
+                <?php if ($endTs): ?> – <?= e(udate($sameDay ? 'g:i A' : 'M j, Y g:i A', $endTs)) ?><?php endif; ?>
             </div>
             <?php if (!empty($ev['location'])): ?>
                 <div class="when">📍 <?= e((string)$ev['location']) ?></div>
@@ -99,13 +99,13 @@ if ($singleId > 0) {
             <h2>Upcoming occurrences</h2>
             <ul>
                 <?php foreach ($occurrences as $occ): $oTs = strtotime((string)$occ['starts_at']); ?>
-                    <li><?= e(date('D, M j, Y · g:i A', $oTs)) ?></li>
+                    <li><?= e(udate('D, M j, Y · g:i A', $oTs)) ?></li>
                 <?php endforeach; ?>
             </ul>
         </div>
     <?php endif; ?>
 
-    <?= print_footer_html('Printed ' . date('M j, Y')) ?>
+    <?= print_footer_html('Printed ' . udate('M j, Y')) ?>
 
     <script>window.addEventListener('load', function(){ window.print(); });</script>
     </body></html>
@@ -136,7 +136,7 @@ switch ($range) {
     case 'day':
         $rangeStart = $todayStart;
         $rangeEnd   = $todayStart + 86400 - 1;
-        $rangeTitle = 'Events for ' . date('l, F j, Y', $todayStart);
+        $rangeTitle = 'Events for ' . udate('l, F j, Y', $todayStart);
         break;
     case 'week':
         // Sunday → Saturday week.
@@ -144,13 +144,13 @@ switch ($range) {
         $rangeStart = $todayStart - $dow * 86400;
         $rangeEnd   = $rangeStart + 7 * 86400 - 1;
         $rangeTitle = 'Events for the week of '
-            . date('M j', $rangeStart) . ' – ' . date('M j, Y', $rangeEnd);
+            . udate('M j', $rangeStart) . ' – ' . udate('M j, Y', $rangeEnd);
         break;
     case 'month':
     default:
         $rangeStart = strtotime(date('Y-m-01') . ' 00:00:00');
         $rangeEnd   = strtotime(date('Y-m-t') . ' 23:59:59');
-        $rangeTitle = 'Events for ' . date('F Y', $rangeStart);
+        $rangeTitle = 'Events for ' . udate('F Y', $rangeStart);
         break;
 }
 } /* end else (range mode) */
@@ -237,13 +237,13 @@ $audClass = [
 <?= print_header_html($association) ?>
 
 <h1><?= e($rangeTitle) ?></h1>
-<div class="meta"><?= count($events) ?> event<?= count($events)===1?'':'s' ?> · Printed <?= e(date('M j, Y')) ?></div>
+<div class="meta"><?= count($events) ?> event<?= count($events)===1?'':'s' ?> · Printed <?= e(udate('M j, Y')) ?></div>
 
 <?php if (!$events): ?>
     <p>No events scheduled in this range.</p>
 <?php else: ?>
     <?php foreach ($byDate as $dateKey => $dayEvents): ?>
-        <h2><?= e(date('l, F j, Y', strtotime($dateKey))) ?></h2>
+        <h2><?= e(udate('l, F j, Y', strtotime($dateKey))) ?></h2>
         <?php foreach ($dayEvents as $ev):
             $startTs = strtotime((string)$ev['starts_at']);
             $endTs   = !empty($ev['ends_at']) ? strtotime((string)$ev['ends_at']) : null;
@@ -255,9 +255,9 @@ $audClass = [
                 <div class="meta-row">
                     <span class="pill" style="background: <?= e($color) ?>;"><?= e($aud) ?></span>
                     <span class="time">
-                        <?= e(date('g:i A', $startTs)) ?>
+                        <?= e(udate('g:i A', $startTs)) ?>
                         <?php if ($endTs): ?>
-                            – <?= e(date($sameDay ? 'g:i A' : 'M j, g:i A', $endTs)) ?>
+                            – <?= e(udate($sameDay ? 'g:i A' : 'M j, g:i A', $endTs)) ?>
                         <?php endif; ?>
                     </span>
                     <?php if (($ev['recurrence_type'] ?? 'none') !== 'none'): ?>
@@ -276,7 +276,7 @@ $audClass = [
     <?php endforeach; ?>
 <?php endif; ?>
 
-<?= print_footer_html('Printed ' . date('M j, Y') . ' · ' . ($upcoming ? 'upcoming' : ($rangeLabels[$range] ?? ''))) ?>
+<?= print_footer_html('Printed ' . udate('M j, Y') . ' · ' . ($upcoming ? 'upcoming' : ($rangeLabels[$range] ?? ''))) ?>
 
 <script>window.addEventListener('load', function(){ window.print(); });</script>
 </body></html>
