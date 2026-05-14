@@ -79,8 +79,18 @@ require __DIR__ . '/../includes/header.php';
             </div>
         </div>
 
+        <?php if (!empty($ev['image_path'])): ?>
+            <img src="/event-image.php?id=<?= (int)$ev['id'] ?>" alt="Event image"
+                 style="width: 100%; max-height: 340px; object-fit: cover; border-radius: var(--r-md); margin-bottom: var(--sp-4); display: block; border: 1px solid var(--color-border);">
+        <?php endif; ?>
         <?php if (!empty($ev['description'])): ?>
-            <div style="white-space: pre-wrap; line-height: 1.55; font-size: var(--fs-md);"><?= e((string)$ev['description']) ?></div>
+            <?php $desc = (string)$ev['description'];
+                  $isHtml = strpos($desc, '<') !== false; ?>
+            <?php if ($isHtml): ?>
+                <div class="quill-output" style="line-height: 1.55; font-size: var(--fs-md);"><?= $desc /* Quill HTML — board-authored */ ?></div>
+            <?php else: ?>
+                <div style="white-space: pre-wrap; line-height: 1.55; font-size: var(--fs-md);"><?= e($desc) ?></div>
+            <?php endif; ?>
         <?php endif; ?>
 
         <?php if (!empty($ev['recurrence_until'])): ?>

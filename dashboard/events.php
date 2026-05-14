@@ -37,6 +37,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'add') {
         );
         $stmt->execute([$assocId, $title, $description ?: null, $location ?: null, $startsSql, $endsSql, $audience, $recurType, $recurUntilSql, (int)$user['id']]);
         $newId = (int)db()->lastInsertId();
+        // Optional image upload
+        if (!empty($_FILES['image']['name']) && $_FILES['image']['error'] === UPLOAD_ERR_OK && $_FILES['image']['size'] <= 8 * 1024 * 1024) {
+            $imgAllowed = ['png','jpg','jpeg','gif','webp'];
+            $imgExt = strtolower(pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION));
+            if (in_array($imgExt, $imgAllowed, true)) {
+                $relDir = "uploads/$assocId/events";
+                ensure_dir(storage_path($relDir));
+                $imgFile = uuid_filename($_FILES['image']['name']);
+                if (move_uploaded_file($_FILES['image']['tmp_name'], storage_path("$relDir/$imgFile"))) {
+                    db()->prepare('UPDATE events SET image_path = ? WHERE id = ?')->execute(["$relDir/$imgFile", $newId]);
+                }
+            }
+        }
         audit('event.created', ['title' => $title, 'audience' => $audience, 'recurrence' => $recurType], $newId, 'event');
         flash('success', "Event \"$title\" added" . ($recurType !== 'none' ? " (repeats {$recurType})." : '.'));
         redirect('/dashboard/events.php');
@@ -61,9 +74,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit') 
     if ($recurUntil !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $recurUntil)) $recurUntil = '';
     $recurUntilSql = ($recurType !== 'none' && $recurUntil !== '') ? $recurUntil : null;
 
-    $check = db()->prepare('SELECT 1 FROM events WHERE id = ? AND association_id = ?');
+    $check = db()->prepare('SELECT image_path FROM events WHERE id = ? AND association_id = ?');
     $check->execute([$eid, $assocId]);
-    if (!$check->fetchColumn()) { http_response_code(404); die('Event not found'); }
+    $curRow = $check->fetch();
+    if (!$curRow) { http_response_code(404); die('Event not found'); }
+    $curImagePath = (string)($curRow['image_path'] ?? '');
 
     $startsTs = $starts !== '' ? strtotime($starts) : 0;
     $endsTs   = $ends   !== '' ? strtotime($ends)   : 0;
@@ -81,6 +96,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit') 
             $endsTs ? date('Y-m-d H:i:s', $endsTs) : null,
             $audience, $recurType, $recurUntilSql, $eid, $assocId,
         ]);
+        // Image: remove existing
+        if (isset($_POST['delete_image']) && $curImagePath !== '') {
+            @unlink(storage_path($curImagePath));
+            db()->prepare('UPDATE events SET image_path = NULL WHERE id = ? AND association_id = ?')->execute([$eid, $assocId]);
+        } elseif (!empty($_FILES['image']['name']) && $_FILES['image']['error'] === UPLOAD_ERR_OK && $_FILES['image']['size'] <= 8 * 1024 * 1024) {
+            $imgAllowed = ['png','jpg','jpeg','gif','webp'];
+            $imgExt = strtolower(pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION));
+            if (in_array($imgExt, $imgAllowed, true)) {
+                $relDir = "uploads/$assocId/events";
+                ensure_dir(storage_path($relDir));
+                $imgFile = uuid_filename($_FILES['image']['name']);
+                if (move_uploaded_file($_FILES['image']['tmp_name'], storage_path("$relDir/$imgFile"))) {
+                    if ($curImagePath !== '') @unlink(storage_path($curImagePath));
+                    db()->prepare('UPDATE events SET image_path = ? WHERE id = ? AND association_id = ?')->execute(["$relDir/$imgFile", $eid, $assocId]);
+                }
+            }
+        }
         audit('event.edited', ['title' => $title, 'recurrence' => $recurType], $eid, 'event');
         flash('success', "Event updated.");
         redirect('/dashboard/events.php');
@@ -92,10 +124,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'delete'
     csrf_check();
     if (!$canManage) { http_response_code(403); die('Forbidden'); }
     $eid = (int)($_POST['id'] ?? 0);
-    $stmt = db()->prepare('SELECT title FROM events WHERE id = ? AND association_id = ?');
+    $stmt = db()->prepare('SELECT title, image_path FROM events WHERE id = ? AND association_id = ?');
     $stmt->execute([$eid, $assocId]);
     $row = $stmt->fetch();
     if ($row) {
+        if (!empty($row['image_path'])) @unlink(storage_path((string)$row['image_path']));
         db()->prepare('DELETE FROM events WHERE id = ? AND association_id = ?')->execute([$eid, $assocId]);
         audit('event.deleted', ['title' => $row['title']], $eid, 'event');
         flash('success', "Event \"{$row['title']}\" deleted.");
@@ -154,22 +187,27 @@ if (($_GET['action'] ?? '') === 'edit' && $canManage) {
 }
 $showCreate = ($_GET['action'] ?? '') === 'new' && $canManage;
 
+if ($canManage && ($showCreate || $editEvent)) {
+    $page_extra_head = '<link href="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.snow.css" rel="stylesheet">';
+}
 $page_title = 'Events — ' . $association['name'];
 require __DIR__ . '/../includes/header.php';
 
 function event_form_card(?array $editing, string $assocSlug, array $activeLocations = []): void {
     $isEdit = $editing !== null;
     $vals   = $editing ?? [
-        'title'=>'', 'description'=>'', 'location'=>'',
+        'title'=>'', 'description'=>'', 'location'=>'', 'image_path'=>'',
         'starts_at'=>'', 'ends_at'=>'', 'audience'=>'members',
         'recurrence_type'=>'none', 'recurrence_until'=>'', 'id'=>0,
     ];
     $vals['recurrence_type']  ??= 'none';
     $vals['recurrence_until'] ??= '';
+    $vals['image_path']       ??= '';
+    $hasImage = !empty($vals['image_path']);
     ?>
     <div class="card card--padded" style="margin-bottom: var(--sp-6);">
         <h3 class="card__title"><?= $isEdit ? 'Edit event' : 'New event' ?></h3>
-        <form method="post" class="form">
+        <form method="post" enctype="multipart/form-data" class="form">
             <?= csrf_field() ?>
             <input type="hidden" name="form" value="<?= $isEdit ? 'edit' : 'add' ?>">
             <?php if ($isEdit): ?><input type="hidden" name="id" value="<?= (int)$vals['id'] ?>"><?php endif; ?>
@@ -226,16 +264,58 @@ function event_form_card(?array $editing, string $assocSlug, array $activeLocati
                     <div class="field__hint">Leave blank for ongoing — the next 90 days are always shown.</div>
                 </div>
             </div>
+
             <div class="field">
-                <label class="field__label" for="ev-d">Description</label>
-                <textarea class="textarea" id="ev-d" name="description" rows="4"><?= e((string)$vals['description']) ?></textarea>
+                <label class="field__label">Description</label>
+                <div id="ev-editor" style="min-height: 120px; background: #fff;"></div>
+                <input type="hidden" name="description" id="ev-desc-hidden">
             </div>
+
+            <div class="field">
+                <label class="field__label">Event image <span class="muted" style="font-weight: normal;">(optional — PNG/JPG/GIF/WEBP, max 8 MB)</span></label>
+                <?php if ($hasImage): ?>
+                <div style="margin-bottom: var(--sp-2); display: flex; align-items: center; gap: var(--sp-3);">
+                    <img src="/event-image.php?id=<?= (int)$vals['id'] ?>" alt="Event image"
+                         style="height: 80px; max-width: 160px; object-fit: cover; border-radius: var(--r-md); border: 1px solid var(--color-border);">
+                    <label style="display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-sm); cursor: pointer;">
+                        <input type="checkbox" name="delete_image" value="1"> Remove this image
+                    </label>
+                </div>
+                <div class="field__hint" style="margin-bottom: var(--sp-2);">Upload a new image to replace the existing one.</div>
+                <?php endif; ?>
+                <input class="input" type="file" name="image" accept="image/png,image/jpeg,image/gif,image/webp" style="padding: var(--sp-2);">
+            </div>
+
             <div class="row" style="justify-content: flex-end;">
                 <a class="btn btn--ghost" href="/dashboard/events.php">Cancel</a>
                 <button class="btn btn--primary" type="submit"><?= $isEdit ? 'Save changes' : 'Add event' ?></button>
             </div>
         </form>
     </div>
+    <script src="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.js"></script>
+    <script>
+    (function () {
+        if (typeof Quill === 'undefined') return;
+        var editorEl = document.getElementById('ev-editor');
+        var hidden   = document.getElementById('ev-desc-hidden');
+        var form     = editorEl ? editorEl.closest('form') : null;
+        if (!editorEl || !hidden || !form) return;
+        var quill = new Quill('#ev-editor', {
+            theme: 'snow',
+            placeholder: 'Describe this event — agenda, what to bring, parking notes…',
+            modules: { toolbar: [['bold','italic','underline'],[{'list':'ordered'},{'list':'bullet'}],['link'],['clean']] }
+        });
+        var initial = <?= json_encode((string)($vals['description'] ?? '')) ?>;
+        if (initial) {
+            if (initial.indexOf('<') !== -1) {
+                quill.clipboard.dangerouslyPasteHTML(0, initial);
+            } else {
+                quill.setText(initial);
+            }
+        }
+        form.addEventListener('submit', function () { hidden.value = quill.root.innerHTML; });
+    })();
+    </script>
     <?php
 }
 ?>
@@ -321,9 +401,15 @@ function event_form_card(?array $editing, string $assocSlug, array $activeLocati
             </div>
             <h3 style="font-size: var(--fs-lg); margin: 0;"><a href="/dashboard/event.php?id=<?= (int)$ev['id'] ?>" style="color: inherit; text-decoration: none;"><?= e((string)$ev['title']) ?></a></h3>
             <?php if (!empty($ev['description'])): ?>
-                <p class="muted" style="margin: var(--sp-2) 0 0; font-size: var(--fs-sm); white-space: pre-wrap;"><?= e(mb_strimwidth((string)$ev['description'], 0, 200, '…')) ?></p>
+                <p class="muted" style="margin: var(--sp-2) 0 0; font-size: var(--fs-sm);"><?= e(mb_strimwidth(strip_tags((string)$ev['description']), 0, 200, '…')) ?></p>
             <?php endif; ?>
         </div>
+        <?php if (!empty($ev['image_path'])): ?>
+        <a href="/dashboard/event.php?id=<?= (int)$ev['id'] ?>" style="flex: 0 0 72px; display:block;">
+            <img src="/event-image.php?id=<?= (int)$ev['id'] ?>" alt=""
+                 style="width: 72px; height: 72px; object-fit: cover; border-radius: var(--r-md); border: 1px solid var(--color-border); display:block;">
+        </a>
+        <?php endif; ?>
         <?php if ($canManage): ?>
         <div class="row" style="gap: var(--sp-2); flex: 0 0 auto;">
             <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="?action=edit&id=<?= (int)$ev['id'] ?>">Edit</a>

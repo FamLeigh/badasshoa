@@ -18,7 +18,7 @@ require __DIR__ . '/includes/header.php';
             <span class="hero__eyebrow">Modern HOA software</span>
             <h1>Transparent, Simplified and Built for Your Community.</h1>
             <p class="hero__lede">
-                Rules, documents, announcements, work orders, architectural review, committees, events, and a real resident directory &mdash; every feature on every plan, in one portal your board can actually run.
+                Rules, documents, announcements, work orders, architectural review, electronic signatures, committees, events, and a real resident directory &mdash; every feature on every plan, in one portal your board can actually run.
             </p>
             <div class="hero__ctas">
                 <a class="btn btn--primary btn--lg" href="/signup.php">Get started free</a>
@@ -44,6 +44,12 @@ require __DIR__ . '/includes/header.php';
         </div>
 
         <div class="grid grid--3">
+
+            <div class="feature">
+                <div class="feature__icon" aria-hidden="true">✍️</div>
+                <h3>Electronic Signatures</h3>
+                <p>Members sign 14 pre-built forms directly in the browser — guest registration, parking permits, pet registration, service animal disclosures, move-in/out, and more. Every signature captures intent, timestamp, IP address, and association context. E-SIGN / UETA audit trail. No paper, no printer, no scanning docs and emailing them back.</p>
+            </div>
 
             <div class="feature">
                 <div class="feature__icon" aria-hidden="true">📜</div>
@@ -191,7 +197,7 @@ require __DIR__ . '/includes/header.php';
                     <li>🤝 Committees (chairs, members, printable flyers)</li>
                     <li>👥 Resident &amp; board directory with officer titles</li>
                     <li>🌐 Branded public landing page at <code>badasshoa.com/{slug}/</code></li>
-                    <li>📝 Forms library (14 types) with electronic signatures</li>
+                    <li>✍️ <strong>Electronic signatures</strong> — E-SIGN/UETA audit trail, 14 built-in form types</li>
                     <li>📋 Insurance &amp; COI tracker · 🅿️ parking · 💼 employees · ☎️ contacts · ❓ FAQ</li>
                     <li>🔎 Global search · 🛡 audit log · 🎨 custom branding</li>
                     <li>💾 1 GB of storage included — plenty to get started, add more only if needed</li>
@@ -201,8 +207,8 @@ require __DIR__ . '/includes/header.php';
 
             <div class="price-card price-card--featured">
                 <div class="price-card__name">Growth</div>
-                <div class="price-card__price">$20<small> + $0.50/unit over 20</small></div>
-                <div class="price-card__limit">21+ units · any size</div>
+                <div class="price-card__price">+$0.50<small>/unit over 20</small></div>
+                <div class="price-card__limit">21+ units · any size &nbsp;<a href="/pricing.php" style="font-size: var(--fs-xs); font-weight: 600; color: var(--color-navy); background: rgba(15,31,61,0.08); border-radius: 4px; padding: 2px 8px; white-space: nowrap; text-decoration: none;">Calculate →</a></div>
                 <ul>
                     <li>📜 Rules &amp; bylaws · suggestions · category filter · print all / filtered</li>
                     <li>📄 Documents (versioned, scoped per unit / per member, access-controlled)</li>
@@ -214,7 +220,7 @@ require __DIR__ . '/includes/header.php';
                     <li>🤝 Committees (chairs, members, printable flyers)</li>
                     <li>👥 Resident &amp; board directory with officer titles</li>
                     <li>🌐 Branded public landing page at <code>badasshoa.com/{slug}/</code></li>
-                    <li>📝 Forms library (14 types) with electronic signatures</li>
+                    <li>✍️ <strong>Electronic signatures</strong> — E-SIGN/UETA audit trail, 14 built-in form types</li>
                     <li>📋 Insurance &amp; COI tracker · 🅿️ parking · 💼 employees · ☎️ contacts · ❓ FAQ</li>
                     <li>🔎 Global search · 🛡 audit log · 🎨 custom branding</li>
                     <li>💾 1 GB of storage included — plenty to get started, add more only if needed</li>

@@ -114,11 +114,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'end_now
     redirect('/dashboard/communications.php?id=' . $id);
 }
 
-$qType = $_GET['type'] ?? '';
-$qAud  = $_GET['audience'] ?? '';
+$qType   = $_GET['type']   ?? '';
+$qAud    = $_GET['audience'] ?? '';
+$qPeriod = $_GET['period']   ?? '';
+if (!in_array($qPeriod, ['today','week','month'], true)) $qPeriod = '';
+
 // Managers can flip a "Show expired / scheduled" toggle; members never see
 // either (expired = past expires_at, scheduled = future published_at).
 $showAll = $canPost && isset($_GET['show_all']);
+
+// Compute period window (UTC — all DB timestamps are UTC, CLAUDE.md).
+$periodLabel = '';
+$periodStart = $periodEnd = null;
+if ($qPeriod !== '') {
+    $todayStart = strtotime(date('Y-m-d') . ' 00:00:00');
+    if ($qPeriod === 'today') {
+        $periodStart = $todayStart;
+        $periodEnd   = $todayStart + 86400 - 1;
+        $periodLabel = 'Today — ' . date('l, F j, Y', $todayStart);
+    } elseif ($qPeriod === 'week') {
+        $dow         = (int)date('w', $todayStart);
+        $periodStart = $todayStart - $dow * 86400;
+        $periodEnd   = $periodStart + 7 * 86400 - 1;
+        $periodLabel = 'Week of ' . date('M j', $periodStart) . ' – ' . date('M j, Y', $periodEnd);
+    } elseif ($qPeriod === 'month') {
+        $periodStart = strtotime(date('Y-m-01') . ' 00:00:00');
+        $periodEnd   = strtotime(date('Y-m-t') . ' 23:59:59');
+        $periodLabel = date('F Y', $periodStart);
+    }
+}
 
 $sql = 'SELECT a.*, CONCAT(IFNULL(u.first_name,""), " ", IFNULL(u.last_name,"")) AS author
         FROM announcements a LEFT JOIN users u ON u.id = a.author_id
@@ -126,10 +150,15 @@ $sql = 'SELECT a.*, CONCAT(IFNULL(u.first_name,""), " ", IFNULL(u.last_name,""))
 $params = [$assocId];
 if (in_array($qType, ['general','emergency','event','maintenance','beautification'], true)) { $sql .= ' AND a.type = ?'; $params[] = $qType; }
 if (in_array($qAud,  ['all','owners','renters','board'], true))           { $sql .= ' AND a.audience = ?'; $params[] = $qAud; }
+if ($periodStart !== null) {
+    $sql .= ' AND a.published_at >= ? AND a.published_at <= ?';
+    $params[] = date('Y-m-d H:i:s', $periodStart);
+    $params[] = date('Y-m-d H:i:s', $periodEnd);
+}
 if (!$showAll) {
     $sql .= ' AND a.published_at <= NOW() AND (a.expires_at IS NULL OR a.expires_at >= NOW())';
 }
-$sql .= ' ORDER BY a.published_at DESC LIMIT 100';
+$sql .= ' ORDER BY a.published_at DESC LIMIT 200';
 $stmt = db()->prepare($sql);
 $stmt->execute($params);
 $rows = $stmt->fetchAll();
@@ -281,17 +310,41 @@ require __DIR__ . '/../includes/header.php';
 
     <?php else: /* ---------- LISTING VIEW ---------- */ ?>
 
-    <div class="row row--between" style="margin-bottom: var(--sp-6);">
+    <div class="row row--between" style="margin-bottom: var(--sp-4); flex-wrap: wrap; gap: var(--sp-3);">
         <div>
             <h1 style="font-size: var(--fs-3xl); margin: 0;">Announcements</h1>
-            <p class="muted">Announcements, alerts, events, maintenance notices.</p>
+            <?php if ($periodLabel !== ''): ?>
+                <p class="muted" style="margin: var(--sp-1) 0 0;"><?= e($periodLabel) ?> &middot; <?= count($rows) ?> announcement<?= count($rows) === 1 ? '' : 's' ?></p>
+            <?php else: ?>
+                <p class="muted" style="margin: var(--sp-1) 0 0;">Announcements, alerts, events, maintenance notices.</p>
+            <?php endif; ?>
         </div>
         <?php if ($canPost): ?>
             <div class="row" style="gap: var(--sp-2);">
-                <a class="btn btn--ghost" href="?<?= $showAll ? '' : 'show_all=1' ?>" title="<?= $showAll ? 'Hide expired & scheduled' : 'Show expired & scheduled' ?>"><?= $showAll ? '👁 Live only' : '👁 Show all' ?></a>
-                <a class="btn btn--primary" href="?action=new">+ Post announcement</a>
+                <a class="btn btn--ghost" href="?<?= $showAll ? '' : 'show_all=1' ?><?= $qType !== '' ? '&type='.urlencode($qType) : '' ?><?= $qAud !== '' ? '&audience='.urlencode($qAud) : '' ?>" title="<?= $showAll ? 'Hide expired & scheduled' : 'Show expired & scheduled' ?>"><?= $showAll ? '👁 Live only' : '👁 Show all' ?></a>
+                <a class="btn btn--primary" href="?action=new">+ Post</a>
             </div>
         <?php endif; ?>
+    </div>
+
+    <?php
+    // Build a clean query string for filter links (no action/id bleed-through).
+    $filterBase = array_filter(['type' => $qType, 'audience' => $qAud, 'show_all' => ($showAll ? '1' : '')], fn($v) => $v !== '');
+    $periodLink = function(string $p) use ($filterBase): string {
+        $q = array_filter(array_merge($filterBase, ['period' => $p]), fn($v) => $v !== '');
+        return '/dashboard/communications.php' . ($q ? '?' . http_build_query($q) : '');
+    };
+    $printParams = array_filter(['period' => $qPeriod, 'type' => $qType, 'audience' => $qAud], fn($v) => $v !== '');
+    $printUrl = '/dashboard/announcements-print.php' . ($printParams ? '?' . http_build_query($printParams) : '');
+    $activeStyle = 'background: var(--color-navy); color: #fff; border-color: var(--color-navy);';
+    ?>
+    <div class="row" style="margin-bottom: var(--sp-4); gap: var(--sp-2); flex-wrap: wrap; align-items: center;">
+        <a class="btn btn--ghost" href="<?= e($periodLink('')) ?>" style="<?= $qPeriod === '' ? $activeStyle : '' ?>">All</a>
+        <a class="btn btn--ghost" href="<?= e($periodLink('today')) ?>" style="<?= $qPeriod === 'today' ? $activeStyle : '' ?>">Today</a>
+        <a class="btn btn--ghost" href="<?= e($periodLink('week')) ?>"  style="<?= $qPeriod === 'week'  ? $activeStyle : '' ?>">This week</a>
+        <a class="btn btn--ghost" href="<?= e($periodLink('month')) ?>" style="<?= $qPeriod === 'month' ? $activeStyle : '' ?>">This month</a>
+        <div style="flex: 1;"></div>
+        <a class="btn btn--ghost" href="<?= e($printUrl) ?>" target="_blank" rel="noopener" title="Print current view">🖨 Print</a>
     </div>
 
     <?php if ($flashError): ?><div class="flash flash--error"><?= e($flashError) ?></div><?php endif; ?>
@@ -373,6 +426,9 @@ require __DIR__ . '/../includes/header.php';
     <?php endif; ?>
 
     <form method="get" class="row" style="margin-bottom: var(--sp-4);">
+        <?php if ($qPeriod !== ''): ?>
+            <input type="hidden" name="period" value="<?= e($qPeriod) ?>">
+        <?php endif; ?>
         <select class="select" name="type" style="max-width: 200px;">
             <option value="">All types</option>
             <?php foreach (['general','event','maintenance','beautification','emergency'] as $t): ?>
@@ -386,6 +442,9 @@ require __DIR__ . '/../includes/header.php';
             <?php endforeach; ?>
         </select>
         <button class="btn btn--ghost" type="submit">Filter</button>
+        <?php if ($qType !== '' || $qAud !== ''): ?>
+            <a class="muted" href="/dashboard/communications.php<?= $qPeriod !== '' ? '?period='.urlencode($qPeriod) : '' ?>" style="font-size: var(--fs-sm); align-self: center;">clear</a>
+        <?php endif; ?>
     </form>
 
     <?php if (!$rows): ?>

@@ -265,8 +265,9 @@
         var num   = calc.querySelector('input[type="number"]');
         var price = calc.querySelector('[data-calc-price]');
         var tier  = calc.querySelector('[data-calc-tier]');
-        var crumb = calc.querySelector('[data-calc-breakdown]');
-        var ctaBtn = calc.querySelector('[data-calc-cta]');
+        var crumb     = calc.querySelector('[data-calc-breakdown]');
+        var ctaBtn    = calc.querySelector('[data-calc-cta]');
+        var unitCount = calc.querySelector('[data-calc-unit-count]');
 
         // 30-day free trial. Two pricing bands (Professional removed
         // 2026-05-13 — was superfluous):
@@ -289,6 +290,8 @@
 
         function render(units) {
             var t = tierFor(units);
+            if (unitCount) unitCount.textContent = units;
+            calc.setAttribute('data-plan', units <= 20 ? 'starter' : 'growth');
             if (tier)   tier.textContent  = t.name;
             if (price)  price.textContent = fmt(t.price) + '/mo';
             if (ctaBtn) ctaBtn.textContent = t.cta;

@@ -136,8 +136,7 @@ require __DIR__ . '/../includes/header.php';
 
     <div class="row row--between" style="margin-bottom: var(--sp-6); align-items: flex-start; gap: var(--sp-4); flex-wrap: wrap;">
         <div>
-            <span class="badge badge--orange"><?= e($association['name']) ?></span>
-            <h1 style="font-size: var(--fs-3xl); margin: var(--sp-3) 0 var(--sp-1);"><span data-greet><?= e($greet) ?></span>, <?= e($user['first_name'] ?: 'there') ?>.</h1>
+            <h1 style="font-size: var(--fs-3xl); margin: 0 0 var(--sp-1);"><span data-greet><?= e($greet) ?></span>, <?= e($user['first_name'] ?: 'there') ?>.</h1>
             <p class="muted" style="margin: 0;">Here&rsquo;s what&rsquo;s happening at <?= e($association['name']) ?> today.</p>
         </div>
         <div style="text-align: right;">
@@ -179,8 +178,8 @@ require __DIR__ . '/../includes/header.php';
             setInterval(tick, 30000);
         })();
 
-        // Weather widget — click to fetch. Open-Meteo (free, no key).
-        // Result cached 30 min in sessionStorage; re-clicking within TTL skips the fetch.
+        // Weather widget — auto-loads on page open, persists in localStorage,
+        // auto-refreshes every 30 min. Clicking when loaded opens NWS forecast.
         (function () {
             var btn  = document.getElementById('weather-btn');
             var val  = document.getElementById('weather-val');
@@ -189,6 +188,7 @@ require __DIR__ . '/../includes/header.php';
 
             var STORE = 'bhoa_weather', TTL = 30 * 60 * 1000;
             var loaded = false;
+            var lat = btn.dataset.lat, lon = btn.dataset.lon;
 
             var WMO_ICON = {
                 0:'☀️', 1:'🌤️', 2:'⛅', 3:'🌥️',
@@ -214,42 +214,44 @@ require __DIR__ . '/../includes/header.php';
                 var code = cur.weather_code;
                 var ico  = WMO_ICON[code]  || '🌡️';
                 var lbl  = WMO_LABEL[code] || 'Unknown';
-                // Update the button: swap emoji + temperature
                 btn.querySelector('span').textContent = ico;
                 val.textContent = Math.round(cur.temperature_2m) + '°F';
                 if (desc) desc.textContent = lbl;
-                btn.title = lbl;
+                btn.title = lbl + ' — click for full forecast';
                 loaded = true;
             }
 
-            // On load: check cache and silently pre-fill if fresh
-            try {
-                var hit = JSON.parse(sessionStorage.getItem(STORE) || 'null');
-                if (hit && (Date.now() - hit.ts) < TTL) {
-                    render(hit.data);
-                    btn.title = 'Click for full forecast';
-                }
-            } catch (_) {}
-
-            btn.addEventListener('click', function () {
-                var lat = btn.dataset.lat, lon = btn.dataset.lon;
-                if (loaded) {
-                    // Weather already showing — open forecast
-                    window.open('https://forecast.weather.gov/MapClick.php?lat=' + encodeURIComponent(lat) + '&lon=' + encodeURIComponent(lon), '_blank', 'noopener');
-                    return;
-                }
-                val.textContent = '…';
+            function fetchWeather() {
                 fetch('https://api.open-meteo.com/v1/forecast?latitude=' + encodeURIComponent(lat)
                     + '&longitude=' + encodeURIComponent(lon)
                     + '&current=temperature_2m,weather_code&temperature_unit=fahrenheit&forecast_days=1')
                     .then(function (r) { return r.json(); })
                     .then(function (d) {
                         render(d);
-                        try { sessionStorage.setItem(STORE, JSON.stringify({ ts: Date.now(), data: d })); } catch (_) {}
-                        // Update tooltip to indicate second click opens forecast
-                        btn.title = (btn.querySelector('span').textContent || '') + ' — click for full forecast';
+                        try { localStorage.setItem(STORE, JSON.stringify({ ts: Date.now(), data: d })); } catch (_) {}
                     })
-                    .catch(function () { val.textContent = '—°'; });
+                    .catch(function () { if (!loaded) val.textContent = '—°'; });
+            }
+
+            // On load: render from localStorage if fresh, else fetch immediately.
+            var fromCache = false;
+            try {
+                var hit = JSON.parse(localStorage.getItem(STORE) || 'null');
+                if (hit && (Date.now() - hit.ts) < TTL) { render(hit.data); fromCache = true; }
+            } catch (_) {}
+            if (!fromCache) fetchWeather();
+
+            // Auto-refresh every 30 min regardless of user interaction.
+            setInterval(fetchWeather, TTL);
+
+            // Click: if loaded open forecast; if not yet loaded trigger fetch.
+            btn.addEventListener('click', function () {
+                if (loaded) {
+                    window.open('https://forecast.weather.gov/MapClick.php?lat=' + encodeURIComponent(lat) + '&lon=' + encodeURIComponent(lon), '_blank', 'noopener');
+                } else {
+                    val.textContent = '…';
+                    fetchWeather();
+                }
             });
         })();
     </script>
@@ -265,8 +267,8 @@ require __DIR__ . '/../includes/header.php';
         .stat:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(15,31,61,0.10); }
         .stat__icon { font-size: 20px; line-height: 1; flex: 0 0 24px; }
         .stat__body { display:flex; flex-direction: column; min-width: 0; }
-        .stat__label { font-size: 10px; color: var(--color-text-soft); text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .stat__value { font-size: var(--fs-lg); font-weight: 800; color: var(--color-navy); line-height: 1.1; font-variant-numeric: tabular-nums; }
+        .stat__label { font-size: var(--fs-xs); color: var(--color-text-soft); text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .stat__value { font-size: var(--fs-xl); font-weight: 800; color: var(--color-navy); line-height: 1.1; font-variant-numeric: tabular-nums; }
         .stat__hint  { font-size: var(--fs-xs); color: var(--color-text-soft); margin-top: 2px; }
         .stat--alert { border-left: 3px solid var(--color-orange); }
     </style>

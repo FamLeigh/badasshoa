@@ -155,6 +155,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'invite'
     if (!in_array($role, $allowedRoles, true)) $role = 'owner';
     $showOnLanding = isset($_POST['show_on_public_landing']) ? 1 : 0;
 
+    $raContactId = ($_POST['rental_agent_contact_id'] ?? '') !== '' ? (int)$_POST['rental_agent_contact_id'] : null;
+
     $office = $_POST['board_office'] ?? '';
     if ($office !== '' && !array_key_exists($office, board_offices())) $office = '';
     // If a board office is selected but the role is currently resident/renter,
@@ -196,10 +198,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'invite'
                 // Status = active so they can log in immediately and change password via /forgot.php
                 // or /dashboard/settings.php.
                 $stmt = db()->prepare(
-                    'INSERT INTO users (association_id, first_name, last_name, email, phone, password_hash, role, board_office, unit_number, is_owner, show_on_public_landing, status)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "active")'
+                    'INSERT INTO users (association_id, first_name, last_name, email, phone, password_hash, role, board_office, unit_number, is_owner, show_on_public_landing, rental_agent_contact_id, status)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "active")'
                 );
-                $stmt->execute([$assocId, $first, $last, $email, $phone ?: null, $hash, $role, $office ?: null, $unit ?: null, $isOwner, $showOnLanding]);
+                $stmt->execute([$assocId, $first, $last, $email, $phone ?: null, $hash, $role, $office ?: null, $unit ?: null, $isOwner, $showOnLanding, $raContactId]);
                 $newId = (int)db()->lastInsertId();
 
                 $pwLine = $customPassword
@@ -266,6 +268,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit') 
     if (!in_array($status, $allowedStatus, true)) $status = 'active';
     $showOnLanding = isset($_POST['show_on_public_landing']) ? 1 : 0;
 
+    $raContactId = ($_POST['rental_agent_contact_id'] ?? '') !== '' ? (int)$_POST['rental_agent_contact_id'] : null;
+
+    $editPw1 = (string)($_POST['new_password'] ?? '');
+    $editPw2 = (string)($_POST['new_password_confirm'] ?? '');
+    $newHash = null;
+    if ($editPw1 !== '' || $editPw2 !== '') {
+        if ($editPw1 !== $editPw2) {
+            $flashError = "Passwords don't match.";
+        } elseif (strlen($editPw1) < 8) {
+            $flashError = 'Password must be at least 8 characters.';
+        } else {
+            $newHash = password_hash($editPw1, PASSWORD_BCRYPT, ['cost' => 12]);
+        }
+    }
+
     $office = $_POST['board_office'] ?? '';
     if ($office !== '' && !array_key_exists($office, board_offices())) $office = '';
     $autoPromoted = false;
@@ -308,14 +325,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit') 
                                            mailing_address = ?, mailing_city = ?, mailing_state_region = ?,
                                            mailing_postal_code = ?, mailing_country = ?,
                                            unit_number = ?, role = ?, board_office = ?, is_owner = ?, status = ?,
-                                           show_on_public_landing = ?
+                                           show_on_public_landing = ?, rental_agent_contact_id = ?
                          WHERE id = ? AND association_id = ?'
                     )->execute([
                         $first, $last, $email, $email2 ?: null, $phone ?: null, $phone2 ?: null,
                         $mAddr ?: null, $mCity ?: null, $mState ?: null, $mPostal ?: null, $mCtry ?: null,
                         $unit ?: null, $role, $office ?: null, $isOwner, $status, $showOnLanding,
+                        $raContactId,
                         $id, $assocId,
                     ]);
+
+                    if ($newHash !== null) {
+                        db()->prepare('UPDATE users SET password_hash = ? WHERE id = ? AND association_id = ?')
+                            ->execute([$newHash, $id, $assocId]);
+                        // Invalidate any pending reset tokens for this user.
+                        db()->prepare('DELETE FROM password_resets WHERE user_id = ?')->execute([$id]);
+                    }
 
                     // Upsert per-unit details. Saved against $assocId + $unit.
                     if ($unit !== '') {
@@ -376,19 +401,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit') 
 // Board members. Sort by office seniority first (President → ... → Director),
 // then anyone without an office (NULL bubbles to the end via FIELD()), then by
 // role tier as the previous secondary sort, then by name.
-$boardStmt = db()->prepare(
-    "SELECT * FROM users
-     WHERE association_id = ? AND role IN ('board_admin','board_member','property_manager') AND status <> 'inactive'
-     ORDER BY FIELD(board_office,
+// When a search is active, filter the board section to only matching members.
+$boardSql    = "SELECT * FROM users
+     WHERE association_id = ? AND role IN ('board_admin','board_member','property_manager') AND status <> 'inactive'";
+$boardParams = [$assocId];
+if ($qSearch !== '') {
+    $boardSql .= " AND (first_name LIKE ? OR last_name LIKE ? OR email LIKE ? OR unit_number LIKE ?)";
+    $boardLike = "%$qSearch%";
+    array_push($boardParams, $boardLike, $boardLike, $boardLike, $boardLike);
+}
+$boardSql .= " ORDER BY FIELD(board_office,
                     'president','vice_president','secretary','treasurer',
                     'secretary_treasurer','director') = 0,
               FIELD(board_office,
                     'president','vice_president','secretary','treasurer',
                     'secretary_treasurer','director'),
               FIELD(role,'board_admin','board_member','property_manager'),
-              last_name, first_name"
-);
-$boardStmt->execute([$assocId]);
+              last_name, first_name";
+$boardStmt = db()->prepare($boardSql);
+$boardStmt->execute($boardParams);
 $board = $boardStmt->fetchAll();
 
 // Residents
@@ -434,6 +465,13 @@ if ($rentersOnly) {
     $residents = $stmt->fetchAll();
 }
 
+// Rental agents for dropdowns and list display
+$rentalAgents = [];
+$raStmt = db()->prepare("SELECT id, label FROM association_contacts WHERE association_id = ? AND kind = 'rental_agent' ORDER BY label");
+$raStmt->execute([$assocId]);
+$rentalAgents = $raStmt->fetchAll();
+$rentalAgentMap = array_column($rentalAgents, 'label', 'id'); // id => label
+
 $showInvite = ($_GET['action'] ?? '') === 'invite' && $canManage;
 $showImport = ($_GET['action'] ?? '') === 'import' && $canManage;
 
@@ -451,56 +489,6 @@ if (($_GET['action'] ?? '') === 'edit' && $canManage) {
         $u->execute([$assocId, $editUser['unit_number']]);
         $editUnit = $u->fetch() ?: null;
     }
-}
-
-// Activity stats — board_admin only
-$activityStats = null;
-if (viewing_role() === 'board_admin' || viewing_role() === 'super_admin') {
-    $aStmt = db()->prepare(
-        "SELECT
-             COUNT(*) AS total_active,
-             SUM(CASE WHEN last_login_at IS NOT NULL THEN 1 ELSE 0 END) AS ever_logged_in,
-             SUM(CASE WHEN last_login_at IS NULL THEN 1 ELSE 0 END) AS never_logged_in,
-             SUM(CASE WHEN email LIKE 'noemail.%@badasshoa.placeholder' THEN 1 ELSE 0 END) AS no_email
-           FROM users
-          WHERE association_id = ? AND status = 'active' AND role NOT IN ('super_admin')"
-    );
-    $aStmt->execute([$assocId]);
-    $activityStats = $aStmt->fetch();
-
-    // Members with no real email (placeholder)
-    $noEmailStmt = db()->prepare(
-        "SELECT id, first_name, last_name, unit_number, role
-           FROM users
-          WHERE association_id = ? AND status = 'active'
-            AND email LIKE 'noemail.%@badasshoa.placeholder'
-          ORDER BY last_name, first_name LIMIT 50"
-    );
-    $noEmailStmt->execute([$assocId]);
-    $noEmailMembers = $noEmailStmt->fetchAll();
-
-    // Members who have never logged in (have a real email but never authenticated)
-    $neverStmt = db()->prepare(
-        "SELECT id, first_name, last_name, email, unit_number, role, created_at
-           FROM users
-          WHERE association_id = ? AND status = 'active'
-            AND last_login_at IS NULL
-            AND email NOT LIKE 'noemail.%@badasshoa.placeholder'
-          ORDER BY created_at DESC LIMIT 50"
-    );
-    $neverStmt->execute([$assocId]);
-    $neverLoggedIn = $neverStmt->fetchAll();
-
-    // Recently active (last 30 days)
-    $recentStmt = db()->prepare(
-        "SELECT id, first_name, last_name, email, unit_number, role, last_login_at
-           FROM users
-          WHERE association_id = ? AND status = 'active'
-            AND last_login_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-          ORDER BY last_login_at DESC LIMIT 20"
-    );
-    $recentStmt->execute([$assocId]);
-    $recentlyActive = $recentStmt->fetchAll();
 }
 
 $page_title = 'Directory — ' . $association['name'];
@@ -655,6 +643,18 @@ require __DIR__ . '/../includes/header.php';
                 </div>
             </div>
 
+            <?php if ($rentalAgents && $editUser['role'] === 'renter'): ?>
+            <div class="field" style="margin-top: var(--sp-2);">
+                <label class="field__label" for="era">Rental agent <span class="muted" style="font-weight:normal;">(optional)</span></label>
+                <select class="select" id="era" name="rental_agent_contact_id">
+                    <option value="">— none —</option>
+                    <?php foreach ($rentalAgents as $ra): ?>
+                        <option value="<?= (int)$ra['id'] ?>" <?= (int)($editUser['rental_agent_contact_id'] ?? 0) === (int)$ra['id'] ? 'selected' : '' ?>><?= e($ra['label']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <?php endif; ?>
+
             <?php if (in_array($editUser['role'], ['board_admin','board_member','property_manager'], true)): ?>
             <div class="field" style="margin-top: var(--sp-2); padding: var(--sp-3); background: var(--color-info-bg); border: 1px solid rgba(38,96,168,0.2); border-radius: var(--r-md);">
                 <label style="display:flex; align-items:center; gap: var(--sp-3); cursor: pointer;">
@@ -719,6 +719,39 @@ require __DIR__ . '/../includes/header.php';
                     <div class="field"><!-- spacer --></div>
                 </div>
             </div>
+
+            <div style="margin-top: var(--sp-4); padding: var(--sp-4); background: var(--color-warning-bg); border: 1px solid rgba(182,130,42,0.25); border-radius: var(--r-md);">
+                <div class="row row--between" style="margin-bottom: var(--sp-2); flex-wrap: wrap;">
+                    <strong style="color: var(--color-warning);">🔑 Change password (optional)</strong>
+                    <button type="button" class="btn btn--ghost" id="edit-gen-pw" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);">Generate random</button>
+                </div>
+                <p class="muted" style="font-size: var(--fs-sm); margin: 0 0 var(--sp-3);">Leave blank to keep the current password. If you set one, share it with them via a secure channel.</p>
+                <div class="form-row form-row--2">
+                    <div class="field">
+                        <label class="field__label" for="edit-pw1">New password</label>
+                        <input class="input" type="text" id="edit-pw1" name="new_password" minlength="8" autocomplete="new-password" placeholder="At least 8 characters" spellcheck="false">
+                    </div>
+                    <div class="field">
+                        <label class="field__label" for="edit-pw2">Confirm</label>
+                        <input class="input" type="text" id="edit-pw2" name="new_password_confirm" minlength="8" autocomplete="new-password" spellcheck="false">
+                    </div>
+                </div>
+            </div>
+            <script>
+            document.getElementById('edit-gen-pw')?.addEventListener('click', function () {
+                var chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789!@#$%';
+                var pw = '';
+                if (window.crypto && window.crypto.getRandomValues) {
+                    var b = new Uint8Array(14);
+                    crypto.getRandomValues(b);
+                    for (var i = 0; i < b.length; i++) pw += chars.charAt(b[i] % chars.length);
+                } else {
+                    for (var i = 0; i < 14; i++) pw += chars.charAt(Math.floor(Math.random() * chars.length));
+                }
+                document.getElementById('edit-pw1').value = pw;
+                document.getElementById('edit-pw2').value = pw;
+            });
+            </script>
 
             <div class="row" style="justify-content: space-between; gap: var(--sp-2); flex-wrap: wrap;">
                 <a class="btn btn--ghost" href="/dashboard/directory.php">Cancel</a>
@@ -823,6 +856,28 @@ B2,Sam,Garcia,sam@example.com,,,,0</pre>
                 <div class="field"><!-- spacer --></div>
             </div>
 
+            <?php if ($rentalAgents): ?>
+            <div class="field" id="add-ra-field" style="display:none;">
+                <label class="field__label" for="iara">Rental agent <span class="muted" style="font-weight:normal;">(optional)</span></label>
+                <select class="select" id="iara" name="rental_agent_contact_id">
+                    <option value="">— none —</option>
+                    <?php foreach ($rentalAgents as $ra): ?>
+                        <option value="<?= (int)$ra['id'] ?>"><?= e($ra['label']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <script>
+            (function () {
+                var roleEl  = document.getElementById('irole');
+                var raField = document.getElementById('add-ra-field');
+                if (!roleEl || !raField) return;
+                function sync() { raField.style.display = roleEl.value === 'renter' ? '' : 'none'; }
+                roleEl.addEventListener('change', sync);
+                sync();
+            })();
+            </script>
+            <?php endif; ?>
+
             <!-- Optional password override -->
             <div style="margin-top: var(--sp-2); padding: var(--sp-4); background: var(--color-warning-bg); border: 1px solid rgba(182,130,42,0.25); border-radius: var(--r-md);">
                 <div class="row row--between" style="margin-bottom: var(--sp-2); flex-wrap: wrap;">
@@ -869,121 +924,84 @@ B2,Sam,Garcia,sam@example.com,,,,0</pre>
 
     <?php if (!$editUser && !$showInvite && !$showImport): /* hide the full directory while editing a single member */ ?>
 
-    <?php if ($activityStats): ?>
-    <div class="card card--padded" style="margin-bottom: var(--sp-6); background: var(--color-surface-2);">
-        <div class="row row--between" style="align-items: center; margin-bottom: var(--sp-4);">
-            <h3 style="margin: 0; font-size: var(--fs-lg);">Member activity</h3>
-            <div class="row" style="gap: var(--sp-4); font-size: var(--fs-sm);">
-                <span class="muted"><?= (int)$activityStats['total_active'] ?> active members</span>
-                <span style="color: var(--color-success);"><?= (int)$activityStats['ever_logged_in'] ?> have logged in</span>
-                <?php if ($activityStats['never_logged_in'] > 0): ?>
-                    <span style="color: var(--color-warning);"><?= (int)$activityStats['never_logged_in'] ?> never logged in</span>
-                <?php endif; ?>
-                <?php if ($activityStats['no_email'] > 0): ?>
-                    <span style="color: var(--color-error);"><?= (int)$activityStats['no_email'] ?> no email on file</span>
-                <?php endif; ?>
-            </div>
-        </div>
-
-        <?php if ($noEmailMembers): ?>
-        <details style="margin-bottom: var(--sp-3);">
-            <summary style="cursor: pointer; font-weight: 600; font-size: var(--fs-sm); color: var(--color-error); margin-bottom: var(--sp-2);">
-                ⚠ <?= count($noEmailMembers) ?> member<?= count($noEmailMembers) === 1 ? '' : 's' ?> with no email — cannot log in
-            </summary>
-            <div style="margin-top: var(--sp-2); overflow-x: auto;">
-            <table class="table" style="font-size: var(--fs-sm);">
-                <thead><tr><th>Name</th><th>Unit</th><th>Role</th><th></th></tr></thead>
-                <tbody>
-                <?php foreach ($noEmailMembers as $m): ?>
-                    <tr>
-                        <td><?= e(trim($m['first_name'] . ' ' . $m['last_name']) ?: '—') ?></td>
-                        <td><?= e($m['unit_number'] ?: '—') ?></td>
-                        <td><?= e(str_replace('_', ' ', (string)$m['role'])) ?></td>
-                        <td style="text-align:right;"><a class="btn btn--ghost" style="padding: 0.3rem 0.6rem; font-size: var(--fs-xs);" href="?action=edit&id=<?= (int)$m['id'] ?>">Add email</a></td>
-                    </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
-            </div>
-        </details>
-        <?php endif; ?>
-
-        <?php if ($neverLoggedIn): ?>
-        <details style="margin-bottom: var(--sp-3);">
-            <summary style="cursor: pointer; font-weight: 600; font-size: var(--fs-sm); color: var(--color-warning); margin-bottom: var(--sp-2);">
-                👋 <?= count($neverLoggedIn) ?> member<?= count($neverLoggedIn) === 1 ? '' : 's' ?> have never logged in
-            </summary>
-            <div style="margin-top: var(--sp-2); overflow-x: auto;">
-            <table class="table" style="font-size: var(--fs-sm);">
-                <thead><tr><th>Name</th><th>Unit</th><th>Email</th><th>Added</th><th></th></tr></thead>
-                <tbody>
-                <?php foreach ($neverLoggedIn as $m): ?>
-                    <tr>
-                        <td><?= e(trim($m['first_name'] . ' ' . $m['last_name']) ?: '—') ?></td>
-                        <td><?= e($m['unit_number'] ?: '—') ?></td>
-                        <td><?= e((string)$m['email']) ?></td>
-                        <td class="muted"><?= e(date('M j, Y', strtotime((string)$m['created_at']))) ?></td>
-                        <td style="text-align:right;"><a class="btn btn--ghost" style="padding: 0.3rem 0.6rem; font-size: var(--fs-xs);" href="?action=edit&id=<?= (int)$m['id'] ?>">Edit</a></td>
-                    </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
-            </div>
-        </details>
-        <?php endif; ?>
-
-        <?php if ($recentlyActive): ?>
-        <details>
-            <summary style="cursor: pointer; font-weight: 600; font-size: var(--fs-sm); color: var(--color-success); margin-bottom: var(--sp-2);">
-                ✓ <?= count($recentlyActive) ?> active in the last 30 days
-            </summary>
-            <div style="margin-top: var(--sp-2); overflow-x: auto;">
-            <table class="table" style="font-size: var(--fs-sm);">
-                <thead><tr><th>Name</th><th>Unit</th><th>Role</th><th>Last login</th></tr></thead>
-                <tbody>
-                <?php foreach ($recentlyActive as $m): ?>
-                    <tr>
-                        <td><?= e(trim($m['first_name'] . ' ' . $m['last_name']) ?: '—') ?></td>
-                        <td><?= e($m['unit_number'] ?: '—') ?></td>
-                        <td><?= e(str_replace('_', ' ', (string)$m['role'])) ?></td>
-                        <td class="muted"><?= e(date('M j, Y g:i a', strtotime((string)$m['last_login_at']))) ?></td>
-                    </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
-            </div>
-        </details>
-        <?php endif; ?>
-    </div>
-    <?php endif; ?>
-
     <h2 id="board" style="font-size: var(--fs-xl); margin-top: var(--sp-2); scroll-margin-top: 80px;">Board</h2>
     <?php if (!$board): ?>
         <p class="muted">No board members on file yet.</p>
     <?php else: ?>
-    <div class="grid grid--3" style="margin-bottom: var(--sp-8);">
+    <style>
+        .board-list { display: flex; flex-direction: column; margin-bottom: var(--sp-8); border: 1px solid var(--color-border); border-radius: var(--r-md); overflow: hidden; }
+        .board-list__item { border-bottom: 1px solid var(--color-border); }
+        .board-list__item:last-child { border-bottom: none; }
+        .board-list__item > summary { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); cursor: pointer; list-style: none; background: #fff; }
+        .board-list__item > summary::-webkit-details-marker { display: none; }
+        .board-list__item > summary::marker { display: none; }
+        .board-list__item > summary:hover { background: var(--color-surface-2); }
+        .board-list__item[open] > summary { background: var(--color-surface-2); }
+        .board-list__chevron { margin-left: auto; color: var(--color-text-soft); font-size: var(--fs-xs); transition: transform 200ms ease; display: inline-block; }
+        .board-list__item[open] .board-list__chevron { transform: rotate(180deg); }
+        .board-list__detail { padding: var(--sp-5); background: var(--color-surface); border-top: 1px solid var(--color-border); }
+    </style>
+    <div class="board-list">
         <?php foreach ($board as $b): $officeLbl = board_office_label((string)($b['board_office'] ?? '')); ?>
-            <div class="card" style="text-align: center; padding: var(--sp-5);">
+        <details class="board-list__item">
+            <summary>
                 <?php if (!empty($b['avatar_path'])): ?>
-                    <img src="/user-avatar.php?id=<?= (int)$b['id'] ?>"
-                         alt="<?= e(trim((string)$b['first_name'] . ' ' . (string)$b['last_name'])) ?>"
-                         style="width: 88px; height: 88px; border-radius: 50%; object-fit: cover; margin: 0 auto var(--sp-3); display: block; border: 3px solid var(--color-border);">
+                    <img src="/user-avatar.php?id=<?= (int)$b['id'] ?>" alt=""
+                         style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex: 0 0 40px; border: 2px solid var(--color-border);">
                 <?php else: ?>
-                    <div style="width: 88px; height: 88px; border-radius: 50%; background: var(--color-navy); color: #fff; display: flex; align-items: center; justify-content: center; font-size: var(--fs-2xl); font-weight: 700; margin: 0 auto var(--sp-3);">
+                    <div style="width: 40px; height: 40px; border-radius: 50%; background: var(--color-navy); color: #fff; display: flex; align-items: center; justify-content: center; font-size: var(--fs-md); font-weight: 700; flex: 0 0 40px;">
                         <?= e(strtoupper(mb_substr((string)($b['first_name'] ?? '?'), 0, 1))) ?>
                     </div>
                 <?php endif; ?>
-                <div class="row" style="justify-content: center; margin-bottom: var(--sp-2); gap: var(--sp-2); flex-wrap: wrap;">
-                    <?php if ($officeLbl !== ''): ?>
-                        <span class="badge badge--orange"><?= e($officeLbl) ?></span>
-                    <?php endif; ?>
-                    <span class="badge badge--navy"><?= e(str_replace('_',' ',$b['role'])) ?></span>
+                <div style="flex: 1; min-width: 0;">
+                    <div class="row" style="gap: var(--sp-2); align-items: center; flex-wrap: wrap;">
+                        <strong><?= e(trim($b['first_name'] . ' ' . $b['last_name']) ?: $b['email']) ?></strong>
+                        <?php if ($officeLbl !== ''): ?>
+                            <span class="badge badge--orange"><?= e($officeLbl) ?></span>
+                        <?php endif; ?>
+                        <span class="badge badge--navy"><?= e(str_replace('_',' ',$b['role'])) ?></span>
+                    </div>
+                    <div class="muted" style="font-size: var(--fs-sm); margin-top: 2px;">
+                        <?= is_placeholder_email((string)$b['email']) ? '<em>no email on file</em>' : e((string)$b['email']) ?>
+                        <?php if ($b['phone']): ?> &middot; <?= e($b['phone']) ?><?php endif; ?>
+                    </div>
                 </div>
-                <strong><?= e(trim($b['first_name'] . ' ' . $b['last_name']) ?: $b['email']) ?></strong>
-                <div class="muted" style="font-size: var(--fs-sm); margin-top: var(--sp-1);">
-                    <?= is_placeholder_email((string)$b['email']) ? '<em class="muted">— no email on file —</em>' : e((string)$b['email']) ?><?php if ($b['phone']): ?> &middot; <?= e($b['phone']) ?><?php endif; ?>
+                <span class="board-list__chevron">▼</span>
+            </summary>
+            <div class="board-list__detail">
+                <div style="display: flex; gap: var(--sp-5); align-items: flex-start; flex-wrap: wrap;">
+                    <?php if (!empty($b['avatar_path'])): ?>
+                        <img src="/user-avatar.php?id=<?= (int)$b['id'] ?>" alt=""
+                             style="width: 88px; height: 88px; border-radius: 50%; object-fit: cover; flex: 0 0 88px; border: 3px solid var(--color-border);">
+                    <?php else: ?>
+                        <div style="width: 88px; height: 88px; border-radius: 50%; background: var(--color-navy); color: #fff; display: flex; align-items: center; justify-content: center; font-size: var(--fs-2xl); font-weight: 700; flex: 0 0 88px;">
+                            <?= e(strtoupper(mb_substr((string)($b['first_name'] ?? '?'), 0, 1))) ?>
+                        </div>
+                    <?php endif; ?>
+                    <div>
+                        <strong style="font-size: var(--fs-lg);"><?= e(trim($b['first_name'] . ' ' . $b['last_name']) ?: $b['email']) ?></strong>
+                        <div class="row" style="gap: var(--sp-2); margin: var(--sp-2) 0; flex-wrap: wrap;">
+                            <?php if ($officeLbl !== ''): ?>
+                                <span class="badge badge--orange"><?= e($officeLbl) ?></span>
+                            <?php endif; ?>
+                            <span class="badge badge--navy"><?= e(str_replace('_',' ',$b['role'])) ?></span>
+                        </div>
+                        <div class="muted" style="font-size: var(--fs-sm);">
+                            <?= is_placeholder_email((string)$b['email']) ? '<em class="muted">— no email on file —</em>' : e((string)$b['email']) ?>
+                            <?php if ($b['phone']): ?><br><?= e($b['phone']) ?><?php endif; ?>
+                        </div>
+                        <?php if ($b['unit_number']): ?>
+                            <div class="muted" style="font-size: var(--fs-sm); margin-top: var(--sp-1);">Unit <?= e($b['unit_number']) ?></div>
+                        <?php endif; ?>
+                        <?php if ($canManage): ?>
+                            <div style="margin-top: var(--sp-3);">
+                                <a class="btn btn--ghost" style="padding: 0.3rem 0.7rem; font-size: var(--fs-sm);" href="?action=edit&id=<?= (int)$b['id'] ?>">Edit</a>
+                            </div>
+                        <?php endif; ?>
+                    </div>
                 </div>
             </div>
+        </details>
         <?php endforeach; ?>
     </div>
     <?php endif; ?>
@@ -1050,6 +1068,12 @@ B2,Sam,Garcia,sam@example.com,,,,0</pre>
                     <?= $r['is_owner'] ? '<span class="badge badge--success">Owner</span>' : '<span class="badge">Renter</span>' ?>
                     <?php if (!empty($r['employee_job_title'])): ?>
                         <span class="badge" style="background: #efe7d1; color: #6b4a06; border: 1px solid #d9c97a; font-size: var(--fs-xs);" title="<?= e((string)$r['employee_job_title']) ?>">💼 <?= e(mb_strimwidth((string)$r['employee_job_title'], 0, 22, '…')) ?></span>
+                    <?php endif; ?>
+                    <?php
+                    $raId    = (int)($r['rental_agent_contact_id'] ?? 0);
+                    $raLabel = $raId ? ($rentalAgentMap[$raId] ?? null) : null;
+                    if ($raLabel): ?>
+                        <div class="muted" style="font-size: var(--fs-xs); margin-top: 2px;">via <?= e($raLabel) ?></div>
                     <?php endif; ?>
                 </td>
                 <td><?= is_placeholder_email((string)$r['email']) ? '<em class="muted">—</em>' : e((string)$r['email']) ?></td>

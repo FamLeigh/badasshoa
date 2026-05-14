@@ -34,19 +34,22 @@ if ($singleId > 0) {
     <title><?= e((string)$ev['title']) ?> — <?= e((string)$association['name']) ?></title>
     <style>
         @page { size: letter; margin: 0.5in; }
-        body { font-family: Inter, system-ui, sans-serif; color: #111; margin: 0; line-height: 1.5; }
-        .date-block { display:inline-block; text-align:center; padding: 6pt 12pt; border: 2px solid #0f1f3d; border-radius: 6pt; background: #f8f7f4; vertical-align: middle; margin-right: 14pt; }
-        .date-block .m { font-size: 9pt; text-transform: uppercase; letter-spacing: 0.08em; color: #555; font-weight: 700; }
-        .date-block .d { font-size: 30pt; line-height: 1; font-weight: 800; color: #0f1f3d; margin: 2pt 0; }
+        body { font-family: Inter, system-ui, sans-serif; color: #111; margin: 0; line-height: 1.4; font-size: 10pt; }
+        .date-block { display:inline-block; text-align:center; padding: 5pt 10pt; border: 2px solid #0f1f3d; border-radius: 6pt; background: #f8f7f4; vertical-align: middle; margin-right: 12pt; }
+        .date-block .m { font-size: 8pt; text-transform: uppercase; letter-spacing: 0.08em; color: #555; font-weight: 700; }
+        .date-block .d { font-size: 26pt; line-height: 1; font-weight: 800; color: #0f1f3d; margin: 2pt 0; }
         .date-block .dow { font-size: 8pt; color: #555; }
-        .head { display:flex; gap: 14pt; align-items: center; margin: 14pt 0 18pt; padding-bottom: 12pt; border-bottom: 2px solid #0f1f3d; }
-        h1 { font-size: 22pt; margin: 0 0 6pt; }
-        .pill { display:inline-block; padding: 2pt 8pt; border-radius: 999pt; color: #fff; font-size: 9pt; text-transform: uppercase; letter-spacing: 0.06em; margin-right: 5pt; }
-        .recur { display:inline-block; padding: 2pt 8pt; border-radius: 999pt; background: #f3edd9; color: #6b4a06; font-size: 9pt; }
-        .when { color: #555; font-size: 11pt; margin-top: 4pt; }
-        .desc { font-size: 12pt; white-space: pre-wrap; margin-bottom: 14pt; }
-        .occ h2 { font-size: 12pt; margin: 18pt 0 6pt; padding-bottom: 4pt; border-bottom: 1px solid #ccc; color: #0f1f3d; }
-        .occ ul { padding-left: 1.2em; font-size: 10pt; }
+        .head { display:flex; gap: 12pt; align-items: center; margin: 10pt 0 14pt; padding-bottom: 10pt; border-bottom: 2px solid #0f1f3d; }
+        h1 { font-size: 18pt; margin: 0 0 4pt; }
+        .pill { display:inline-block; padding: 2pt 7pt; border-radius: 999pt; color: #fff; font-size: 8pt; text-transform: uppercase; letter-spacing: 0.06em; margin-right: 4pt; }
+        .recur { display:inline-block; padding: 2pt 7pt; border-radius: 999pt; background: #f3edd9; color: #6b4a06; font-size: 8pt; }
+        .when { color: #555; font-size: 10pt; margin-top: 3pt; }
+        .ev-img { float: right; margin: 0 0 10pt 14pt; max-width: 2.6in; max-height: 2.6in; object-fit: contain; border: 1px solid #ddd; border-radius: 4pt; }
+        .desc { font-size: 10pt; margin-bottom: 12pt; }
+        .desc p { margin: 0 0 6pt; } .desc ul, .desc ol { margin: 0 0 6pt; padding-left: 1.2em; }
+        .clearfix::after { content: ''; display: table; clear: both; }
+        .occ h2 { font-size: 10pt; margin: 12pt 0 4pt; padding-bottom: 3pt; border-bottom: 1px solid #ccc; color: #0f1f3d; }
+        .occ ul { padding-left: 1.2em; font-size: 9pt; columns: 2; column-gap: 1em; }
         @media print { a { color: inherit; text-decoration: none; } }
     </style>
     </head><body style="padding: 0.5in;">
@@ -77,9 +80,19 @@ if ($singleId > 0) {
         </div>
     </div>
 
-    <?php if (!empty($ev['description'])): ?>
-        <div class="desc"><?= e((string)$ev['description']) ?></div>
-    <?php endif; ?>
+    <div class="desc clearfix">
+        <?php if (!empty($ev['image_path'])): ?>
+            <img class="ev-img" src="/event-image.php?id=<?= (int)$ev['id'] ?>" alt="">
+        <?php endif; ?>
+        <?php if (!empty($ev['description'])): ?>
+            <?php $desc = (string)$ev['description'];
+                  if (strpos($desc, '<') !== false): ?>
+                <?= $desc /* Quill HTML — board-authored */ ?>
+            <?php else: ?>
+                <?= nl2br(htmlspecialchars($desc, ENT_QUOTES, 'UTF-8')) ?>
+            <?php endif; ?>
+        <?php endif; ?>
+    </div>
 
     <?php if ($occurrences): ?>
         <div class="occ">

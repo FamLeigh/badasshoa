@@ -30,6 +30,7 @@ function nav_icon(string $name): string
         case 'violations':     return "<svg $base><path d='M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z'/><line x1='12' y1='9' x2='12' y2='13'/><line x1='12' y1='17' x2='12.01' y2='17'/></svg>";
         case 'minutes':        return "<svg $base><path d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'/><polyline points='14 2 14 8 20 8'/><line x1='16' y1='13' x2='8' y2='13'/><line x1='16' y1='17' x2='8' y2='17'/><line x1='10' y1='9' x2='8' y2='9'/></svg>";
         case 'permissions':    return "<svg $base><rect x='3' y='11' width='18' height='11' rx='2' ry='2'/><path d='M7 11V7a5 5 0 0 1 10 0v4'/></svg>";
+        case 'voting':         return "<svg $base><circle cx='12' cy='12' r='10'/><polyline points='8 12 11 15 16 9'/></svg>";
         case 'contacts':       return "<svg $base><path d='M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z'/></svg>";
         case 'parking':        return "<svg $base><rect x='3' y='3' width='18' height='18' rx='2' ry='2'/><path d='M9 17V7h4a3 3 0 0 1 0 6H9'/></svg>";
         case 'menu':           return "<svg $base><line x1='3' y1='12' x2='21' y2='12'/><line x1='3' y1='6' x2='21' y2='6'/><line x1='3' y1='18' x2='21' y2='18'/></svg>";
@@ -60,7 +61,9 @@ function active_nav_key(): string
         '/dashboard/settings.php'       => 'settings',
         '/dashboard/violations.php'     => 'violations',
         '/dashboard/minutes.php'        => 'minutes',
-        '/dashboard/permissions.php'    => 'permissions',
+        '/dashboard/voting.php'         => 'voting',
+        '/dashboard/permissions.php'    => 'settings',
+        '/dashboard/locations.php'      => 'settings',
         '/admin'                        => 'overview',
         '/admin/index.php'              => 'overview',
         '/admin/associations.php'       => 'associations',
@@ -92,11 +95,42 @@ $_groupForActive = [
     'documents' => 'resources', 'forms' => 'resources', 'rules' => 'resources',
     'minutes' => 'resources', 'media' => 'resources', 'directory' => 'resources', 'contacts' => 'resources',
     'committees' => 'governance', 'concerns' => 'governance', 'arc' => 'governance',
-    'violations' => 'governance', 'work-orders' => 'governance',
+    'violations' => 'governance', 'work-orders' => 'governance', 'voting' => 'governance',
     'units' => 'operations', 'parking' => 'operations', 'employees' => 'operations', 'insurance' => 'operations',
-    'locations' => 'configuration', 'permissions' => 'configuration',
     'activity' => 'configuration', 'settings' => 'configuration',
 ][$active] ?? '';
+
+// Active emergency announcements — queried once here, rendered as full-width
+// banner(s) before the nav so they're visible on every dashboard page.
+$_emergencies = [];
+if ($page_layout === 'app' && isset($assocId) && function_exists('db')) {
+    try {
+        $role = function_exists('viewing_role') ? (string)viewing_role() : (string)($_SESSION['role'] ?? '');
+        $allowedAud = ['all'];
+        if ($role === 'renter') {
+            $allowedAud[] = 'renters';
+        } elseif ($role === 'owner' || $role === 'staff') {
+            $allowedAud[] = 'owners';
+        } elseif (in_array($role, ['board_member','board_admin','super_admin','property_manager'], true)) {
+            $allowedAud[] = 'owners';
+            $allowedAud[] = 'renters';
+            $allowedAud[] = 'board';
+        }
+        $_audPh = implode(',', array_fill(0, count($allowedAud), '?'));
+        $_emStmt = db()->prepare(
+            "SELECT id, title, body FROM announcements
+              WHERE association_id = ?
+                AND type = 'emergency'
+                AND published_at <= NOW()
+                AND (expires_at IS NULL OR expires_at > NOW())
+                AND audience IN ($_audPh)
+              ORDER BY published_at DESC
+              LIMIT 3"
+        );
+        $_emStmt->execute(array_merge([$assocId], $allowedAud));
+        $_emergencies = $_emStmt->fetchAll();
+    } catch (Throwable $_) {}
+}
 ?><!doctype html>
 <html lang="en">
 <head>
@@ -112,6 +146,19 @@ $_groupForActive = [
     <link rel="stylesheet" href="/assets/css/app.css?v=<?= e((string)(@filemtime("$cssDir/app.css") ?: '')) ?>">
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230f1f3d'/%3E%3Cpath d='M9 7h9a5 5 0 0 1 3.5 8.5A5.5 5.5 0 0 1 17.5 25H9V7zm4 4v4h4a2 2 0 0 0 0-4h-4zm0 8v4h4.5a2 2 0 0 0 0-4H13z' fill='%23f05a28'/%3E%3C/svg%3E">
     <?= $page_extra_head ?? '' ?>
+    <style>
+    .emergency-banner{background:#b91c1c;color:#fff;padding:11px 20px;position:relative;z-index:1100}
+    .emergency-banner+.emergency-banner{border-top:1px solid rgba(255,255,255,.2)}
+    .emergency-banner__inner{max-width:1500px;margin:0 auto;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+    .emergency-banner__icon{font-size:20px;flex-shrink:0;animation:emerg-pulse 1.6s ease-in-out infinite}
+    @keyframes emerg-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.25)}}
+    .emergency-banner__content{flex:1;min-width:0}
+    .emergency-banner__title{font-weight:800;font-size:14px;font-family:inherit;letter-spacing:.01em}
+    .emergency-banner__sep{opacity:.55;margin:0 4px}
+    .emergency-banner__body{font-size:13px;opacity:.9}
+    .emergency-banner__link{flex-shrink:0;color:#fff;font-size:12px;font-weight:700;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.3);border-radius:4px;padding:5px 12px;text-decoration:none;white-space:nowrap;letter-spacing:.02em}
+    .emergency-banner__link:hover{background:rgba(0,0,0,.4);text-decoration:none}
+    </style>
     <?php if ($shellClass): ?>
     <!-- Pre-paint sidebar collapsed-state hint (avoids flash) -->
     <script>
@@ -187,6 +234,22 @@ if ($_envProd && $_mailDriver === 'log' && ($_SESSION['role'] ?? '') === 'super_
     </div>
 </div>
 <?php endif; ?>
+
+<?php foreach ($_emergencies as $_emerg): ?>
+<div class="emergency-banner" role="alert" aria-live="assertive">
+    <div class="emergency-banner__inner">
+        <span class="emergency-banner__icon" aria-hidden="true">🚨</span>
+        <div class="emergency-banner__content">
+            <span class="emergency-banner__title"><?= e((string)$_emerg['title']) ?></span>
+            <?php $_body = trim(strip_tags((string)$_emerg['body'])); if ($_body !== ''): ?>
+                <span class="emergency-banner__sep" aria-hidden="true">—</span>
+                <span class="emergency-banner__body"><?= e(mb_strimwidth($_body, 0, 220, '…')) ?></span>
+            <?php endif; ?>
+        </div>
+        <a href="/dashboard/communications.php?type=emergency" class="emergency-banner__link">Full announcement →</a>
+    </div>
+</div>
+<?php endforeach; ?>
 
 <?php if ($page_layout === 'public'): ?>
 <header class="site-nav">
@@ -470,6 +533,9 @@ if ($page_layout === 'app' && isset($association) && $association):
                 <?php if (role_can_manage(viewing_role()) || can_do('read_work_orders')): ?>
                     <?= nav_link('/dashboard/work-orders.php', 'concerns', 'Work orders', 'work-orders', $active) ?>
                 <?php endif; ?>
+                <?php if (!in_array(viewing_role(), ['renter', 'staff'], true)): ?>
+                    <?= nav_link('/dashboard/voting.php', 'voting', 'Voting', 'voting', $active) ?>
+                <?php endif; ?>
             <?php $navGroup('governance', 'Governance', ob_get_clean()); ?>
 
             <?php if (role_can_manage(viewing_role())): ?>
@@ -481,10 +547,8 @@ if ($page_layout === 'app' && isset($association) && $association):
             <?php $navGroup('operations', 'Operations', ob_get_clean()); ?>
 
             <?php ob_start(); ?>
-                <?= nav_link('/dashboard/locations.php',   'locations',   'Locations',   'locations',   $active) ?>
-                <?= nav_link('/dashboard/permissions.php', 'permissions', 'Permissions', 'permissions', $active) ?>
-                <?= nav_link('/dashboard/activity.php',    'activity',    'Activity',    'activity',    $active) ?>
-                <?= nav_link('/dashboard/settings.php',    'settings',    'Settings',    'settings',    $active) ?>
+                <?= nav_link('/dashboard/activity.php', 'activity', 'Activity', 'activity', $active) ?>
+                <?= nav_link('/dashboard/settings.php',   'settings', 'Settings', 'settings', $active) ?>
                 <?php if (!empty($association['subdomain'])): ?>
                 <a class="side-nav__link" href="/<?= e((string)$association['subdomain']) ?>/" target="_blank" rel="noopener" title="Open the public community landing in a new tab">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>

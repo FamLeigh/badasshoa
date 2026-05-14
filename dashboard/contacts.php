@@ -24,6 +24,7 @@ $KINDS = [
     'non_emergency' => ['label' => 'Non-emergency',   'cls' => 'badge--warning'],
     'contractor'    => ['label' => 'Contractor',      'cls' => 'badge--info'],
     'utility'       => ['label' => 'Utility',         'cls' => 'badge--navy'],
+    'rental_agent'  => ['label' => 'Rental agent',    'cls' => 'badge--success'],
     'other'         => ['label' => 'Other',           'cls' => ''],
 ];
 
@@ -105,14 +106,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'delete'
     redirect('/dashboard/contacts.php');
 }
 
-// --- Load all (single flat list, sorted by kind priority then alpha) ---
-$rows = db()->prepare(
-    "SELECT * FROM association_contacts
-      WHERE association_id = ?
-      ORDER BY FIELD(kind, 'emergency','non_emergency','utility','contractor','other'),
-               sort_order, label"
-);
-$rows->execute([$assocId]);
+// --- Filters ---
+$qSearch    = trim((string)($_GET['q']    ?? ''));
+$kindFilter = (string)($_GET['kind'] ?? '');
+if ($kindFilter !== '' && !array_key_exists($kindFilter, $KINDS)) $kindFilter = '';
+
+// --- Load (filtered) ---
+$sql    = "SELECT * FROM association_contacts WHERE association_id = ?";
+$params = [$assocId];
+if ($kindFilter !== '') {
+    $sql .= " AND kind = ?";
+    $params[] = $kindFilter;
+}
+if ($qSearch !== '') {
+    $sql .= " AND (label LIKE ? OR trade LIKE ? OR phone LIKE ? OR email LIKE ? OR notes LIKE ?)";
+    $like = "%$qSearch%";
+    array_push($params, $like, $like, $like, $like, $like);
+}
+$sql .= " ORDER BY FIELD(kind, 'emergency','non_emergency','utility','contractor','rental_agent','other'), sort_order, label";
+$rows = db()->prepare($sql);
+$rows->execute($params);
 $all = $rows->fetchAll();
 
 $showAdd = $canManageContacts && ($_GET['action'] ?? '') === 'new';
@@ -148,6 +161,22 @@ require __DIR__ . '/../includes/header.php';
     </div>
 
     <?php if ($flashError): ?><div class="flash flash--error"><?= e($flashError) ?></div><?php endif; ?>
+
+    <?php if (!$showAdd && !$editContact): ?>
+    <form method="get" style="display:flex; gap: var(--sp-2); flex-wrap:wrap; align-items:center; margin-bottom: var(--sp-4);">
+        <input class="input" type="search" name="q" value="<?= e($qSearch) ?>" placeholder="Search contacts…" style="flex:1; min-width: 180px; max-width: 340px;">
+        <select class="select" name="kind" style="width: auto;" onchange="this.form.submit()">
+            <option value="">All types</option>
+            <?php foreach ($KINDS as $k => $meta): ?>
+                <option value="<?= e($k) ?>" <?= $kindFilter === $k ? 'selected' : '' ?>><?= e($meta['label']) ?></option>
+            <?php endforeach; ?>
+        </select>
+        <button class="btn btn--ghost" type="submit">Search</button>
+        <?php if ($qSearch !== '' || $kindFilter !== ''): ?>
+            <a class="btn btn--ghost" href="/dashboard/contacts.php">Clear</a>
+        <?php endif; ?>
+    </form>
+    <?php endif; ?>
 
     <?php if ($showAdd || $editContact):
         $isEdit = $editContact !== null;
@@ -242,8 +271,13 @@ require __DIR__ . '/../includes/header.php';
 
     <?php if (!$all): ?>
         <div class="card card--padded center" style="padding: var(--sp-12) var(--sp-6);">
-            <p class="muted">No contacts on file yet.</p>
-            <p style="margin-top: var(--sp-4);"><a class="btn btn--primary" href="?action=new">+ Add the first one</a></p>
+            <?php if ($qSearch !== '' || $kindFilter !== ''): ?>
+                <p class="muted">No contacts match your filter.</p>
+                <p style="margin-top: var(--sp-4);"><a class="btn btn--ghost" href="/dashboard/contacts.php">Clear filter</a></p>
+            <?php else: ?>
+                <p class="muted">No contacts on file yet.</p>
+                <p style="margin-top: var(--sp-4);"><a class="btn btn--primary" href="?action=new">+ Add the first one</a></p>
+            <?php endif; ?>
         </div>
     <?php else: ?>
     <div style="overflow-x:auto;">
@@ -262,7 +296,7 @@ require __DIR__ . '/../includes/header.php';
         <?php foreach ($all as $r):
             $kmeta = $KINDS[$r['kind']] ?? ['label' => $r['kind'], 'cls' => ''];
         ?>
-            <tr>
+            <tr id="contact-<?= (int)$r['id'] ?>">
                 <td><span class="badge <?= e($kmeta['cls']) ?>"><?= e($kmeta['label']) ?></span></td>
                 <td>
                     <strong><?= e((string)$r['label']) ?></strong>
@@ -297,5 +331,16 @@ require __DIR__ . '/../includes/header.php';
     <?php endif; ?>
 
 </div>
-
+<script>
+(function () {
+    var hash = window.location.hash;
+    if (!hash) return;
+    var el = document.querySelector(hash);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.style.transition = 'background-color 0.3s';
+    el.style.backgroundColor = 'rgba(240, 90, 40, 0.12)';
+    setTimeout(function () { el.style.backgroundColor = ''; }, 2000);
+})();
+</script>
 <?php require __DIR__ . '/../includes/footer.php'; ?>

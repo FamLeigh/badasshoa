@@ -310,6 +310,7 @@ This file (CLAUDE.md) keeps an internal-only summary in the section below for cr
 7. **Per-user TZ preference** — all server-rendered timestamps are UTC right now; add a TZ field to user settings and wrap display formatters.
 8. **Per-association logo upload** — use it in the dashboard nav instead of the text name.
 9. **Rental agents as contacts** — add `rental_agent` to `association_contacts.kind` ENUM; add `rental_agent_contact_id` FK on `users`; show a "Rental agent" dropdown in the renter add/edit form (directory.php) so renters can be linked to their agent.
+10. **Community marketplace** — members post items for sale/free within the association. New table `marketplace_listings` (id, association_id, seller_user_id, title, description, price_cents NULL=free, condition, status ENUM draft/active/sold/removed, photos, created_at). Members browse, contact seller via internal message or email. Board can remove listings. Scope: residents only (not public). Moderation: listings visible immediately, board can flag/remove.
 
 **Big-ticket comms / outreach features (queued — likely a Phase 3 batch):**
 

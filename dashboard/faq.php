@@ -241,7 +241,7 @@ require __DIR__ . '/../includes/header.php';
     <?php else: ?>
     <div class="stack-lg">
     <?php foreach ($rows as $f): ?>
-        <div class="card card--padded">
+        <div class="card card--padded" id="faq-<?= (int)$f['id'] ?>">
             <div class="row row--between" style="align-items:flex-start; margin-bottom: var(--sp-3);">
                 <div style="flex: 1; min-width: 0;">
                     <h3 style="font-size: var(--fs-lg); margin: 0;"><?= e((string)$f['question']) ?></h3>
@@ -271,5 +271,16 @@ require __DIR__ . '/../includes/header.php';
     <?php endif; ?>
 
 </div>
-
+<script>
+(function () {
+    var hash = window.location.hash;
+    if (!hash) return;
+    var el = document.querySelector(hash);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.style.transition = 'outline 0s, box-shadow 0.3s';
+    el.style.boxShadow = '0 0 0 3px var(--color-orange)';
+    setTimeout(function () { el.style.boxShadow = ''; }, 2000);
+})();
+</script>
 <?php require __DIR__ . '/../includes/footer.php'; ?>

@@ -375,7 +375,7 @@ $page_layout = 'public_landing'; // Avoids the public marketing nav; landing has
                         <?php endif; ?>
                     </div>
                     <?php if (!empty($ev['description'])): ?>
-                        <p style="margin: 0; color: var(--color-text-soft); white-space: pre-wrap;"><?= e(mb_strimwidth((string)$ev['description'], 0, 280, '…')) ?></p>
+                        <p style="margin: 0; color: var(--color-text-soft);"><?= e(mb_strimwidth(strip_tags((string)$ev['description']), 0, 280, '…')) ?></p>
                     <?php endif; ?>
                 </div>
             </article>
