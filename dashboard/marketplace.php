@@ -71,15 +71,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($title === '')  $errors[] = 'Title is required.';
         if ($desc  === '')  $errors[] = 'Description is required.';
 
-        // photo upload (optional, max 2 MB)
+        // photo upload (optional, max 15 MB)
         $photoPath = null;
         if (!empty($_FILES['photo']['tmp_name'])) {
             $ext    = strtolower(pathinfo((string)($_FILES['photo']['name'] ?? ''), PATHINFO_EXTENSION));
             $allowed= ['jpg','jpeg','png','gif','webp'];
             if (!in_array($ext, $allowed, true)) {
                 $errors[] = 'Photo must be JPG, PNG, GIF, or WebP.';
-            } elseif ((int)($_FILES['photo']['size'] ?? 0) > 2 * 1024 * 1024) {
-                $errors[] = 'Photo must be under 2 MB.';
+            } elseif ((int)($_FILES['photo']['size'] ?? 0) > 15 * 1024 * 1024) {
+                $errors[] = 'Photo must be under 15 MB.';
             } else {
                 $dir = __DIR__ . '/../storage/uploads/' . $assocId . '/marketplace';
                 if (!is_dir($dir)) mkdir($dir, 0755, true);
@@ -234,7 +234,7 @@ $page_layout = 'app';
 require __DIR__ . '/../includes/header.php';
 ?>
 
-<main class="main-content" style="max-width: 1100px;">
+<div class="container" style="padding: var(--sp-8) var(--sp-6) var(--sp-12); max-width: 1100px;">
 
 <?php if ($editRow): ?>
 <!-- ═══════════════════════════════════════════════ EDIT LISTING ═════════ -->
@@ -313,7 +313,7 @@ require __DIR__ . '/../includes/header.php';
             <input class="input" id="npr" name="price" placeholder="e.g. 25 or 125.00">
         </div>
         <div class="field">
-            <label class="field__label">Photo (optional, max 2 MB)</label>
+            <label class="field__label">Photo (optional, max 15 MB)</label>
             <input type="file" name="photo" accept="image/*" class="input" style="padding: var(--sp-1);">
         </div>
         <div class="row">
@@ -326,7 +326,7 @@ require __DIR__ . '/../includes/header.php';
 <!-- ═══════════════════════════════════════════════ BROWSE ════════════════ -->
 
 <div class="row" style="justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--sp-3); margin-bottom: var(--sp-5);">
-    <h1 class="page-title" style="margin:0;">Community Marketplace</h1>
+    <h1 style="font-size: var(--fs-3xl); margin:0;">Community Marketplace</h1>
     <a class="btn btn--primary" href="?post=1">+ Post a listing</a>
 </div>
 
@@ -438,6 +438,6 @@ require __DIR__ . '/../includes/header.php';
 <?php endif; ?>
 <?php endif; ?>
 
-</main>
+</div>
 
 <?php require __DIR__ . '/../includes/footer.php'; ?>

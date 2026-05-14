@@ -80,6 +80,21 @@ $faqStmt = db()->prepare('SELECT COUNT(*) FROM faqs WHERE association_id = ?');
 $faqStmt->execute([$assocId]);
 $stats['faqs'] = (int)$faqStmt->fetchColumn();
 
+$mkCountStmt = db()->prepare("SELECT COUNT(*) FROM marketplace_listings WHERE association_id = ? AND status = 'active'");
+$mkCountStmt->execute([$assocId]);
+$stats['marketplace'] = (int)$mkCountStmt->fetchColumn();
+
+$mkRecentStmt = db()->prepare(
+    "SELECT ml.id, ml.title, ml.price_cents, ml.category, ml.created_at,
+            CONCAT(IFNULL(u.first_name,''), ' ', IFNULL(u.last_name,'')) AS seller
+       FROM marketplace_listings ml
+       JOIN users u ON u.id = ml.seller_user_id
+      WHERE ml.association_id = ? AND ml.status = 'active'
+      ORDER BY ml.created_at DESC LIMIT 5"
+);
+$mkRecentStmt->execute([$assocId]);
+$mkListings = $mkRecentStmt->fetchAll();
+
 // Latest 5 announcements.
 $annStmt = db()->prepare(
     'SELECT a.id, a.title, a.body, a.type, a.published_at,
@@ -305,25 +320,27 @@ require __DIR__ . '/../includes/header.php';
         </a>
         <?php if (can_do('read_documents')): ?>
         <a class="stat" href="/dashboard/documents.php">
-            <div class="stat__icon">📄</div>
+            <div class="stat__icon">📁</div>
             <div class="stat__body">
-                <div class="stat__label">Documents</div>
-                <div class="stat__value"><?= (int)$stats['documents'] ?></div>
+                <div class="stat__label">Docs &amp; media</div>
+                <div class="stat__value"><?= (int)$stats['documents'] ?> <span style="font-size: var(--fs-sm); font-weight: 500; color: var(--color-text-soft);">/ <?= (int)$stats['photos'] ?></span></div>
+                <div class="stat__hint">docs / photos</div>
             </div>
         </a>
         <?php endif; ?>
-        <a class="stat" href="/dashboard/media.php">
-            <div class="stat__icon">📷</div>
-            <div class="stat__body">
-                <div class="stat__label">Photos</div>
-                <div class="stat__value"><?= (int)$stats['photos'] ?></div>
-            </div>
-        </a>
         <a class="stat" href="/dashboard/communications.php">
             <div class="stat__icon">📣</div>
             <div class="stat__body">
                 <div class="stat__label">Announcements</div>
                 <div class="stat__value"><?= (int)$stats['announcements'] ?></div>
+            </div>
+        </a>
+        <a class="stat" href="/dashboard/marketplace.php">
+            <div class="stat__icon">🛒</div>
+            <div class="stat__body">
+                <div class="stat__label">Marketplace</div>
+                <div class="stat__value"><?= (int)$stats['marketplace'] ?></div>
+                <div class="stat__hint">active listings</div>
             </div>
         </a>
         <a class="stat" href="/dashboard/committees.php">
@@ -370,7 +387,7 @@ require __DIR__ . '/../includes/header.php';
         </a>
     </div>
 
-    <div class="dash-split" style="display:grid; grid-template-columns: 1fr 1fr; gap: var(--sp-5); align-items: start;">
+    <div class="dash-split" style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--sp-5); align-items: start;">
 
         <div class="card card--padded">
             <div class="card__head">
@@ -397,6 +414,38 @@ require __DIR__ . '/../includes/header.php';
                             </div>
                             <strong><?= e($a['title']) ?></strong>
                             <p class="muted" style="margin: 2px 0 0; font-size: var(--fs-sm);"><?= e(mb_strimwidth(strip_tags($a['body']), 0, 120, '…')) ?></p>
+                        </div>
+                    </a>
+                <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+        </div>
+
+        <div class="card card--padded">
+            <div class="card__head">
+                <h2 class="card__title">Marketplace</h2>
+                <a href="/dashboard/marketplace.php" class="muted" style="font-size: var(--fs-sm);">View all →</a>
+            </div>
+            <?php if (!$mkListings): ?>
+                <p class="muted">No active listings yet. <a href="/dashboard/marketplace.php?post=1">Post the first one</a>.</p>
+            <?php else: ?>
+                <div class="dash-list">
+                <?php foreach ($mkListings as $mk):
+                    $mkTs = strtotime((string)$mk['created_at']);
+                    $price = $mk['price_cents'] === null ? 'Free' : '$' . number_format($mk['price_cents'] / 100, 0);
+                ?>
+                    <a class="dash-row" href="/dashboard/marketplace.php?id=<?= (int)$mk['id'] ?>">
+                        <div class="dash-date">
+                            <div class="m"><?= e(udate('M', $mkTs)) ?></div>
+                            <div class="d"><?= e(udate('j', $mkTs)) ?></div>
+                        </div>
+                        <div class="dash-body">
+                            <div class="row" style="gap: var(--sp-2); margin-bottom: 2px; flex-wrap: wrap;">
+                                <span class="badge badge--success" style="font-size: var(--fs-xs);"><?= e($price) ?></span>
+                                <span class="muted" style="font-size: var(--fs-xs);"><?= e(trim($mk['seller'])) ?></span>
+                            </div>
+                            <strong><?= e($mk['title']) ?></strong>
+                            <p class="muted" style="margin: 2px 0 0; font-size: var(--fs-sm);"><?= e(ucfirst(str_replace('_',' ',(string)$mk['category']))) ?></p>
                         </div>
                     </a>
                 <?php endforeach; ?>
@@ -491,7 +540,8 @@ require __DIR__ . '/../includes/header.php';
 </div>
 
 <style>
-    @media (max-width: 800px) { .dash-split { grid-template-columns: 1fr !important; } }
+    @media (max-width: 1050px) { .dash-split { grid-template-columns: 1fr 1fr !important; } }
+    @media (max-width: 700px) { .dash-split { grid-template-columns: 1fr !important; } }
     /* Date-first clickable cards in dashboard columns */
     .dash-list { display:flex; flex-direction: column; gap: var(--sp-3); }
     .dash-row {

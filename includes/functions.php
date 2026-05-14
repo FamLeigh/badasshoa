@@ -774,6 +774,72 @@ function udate(string $format, int|string|null $ts = null): string
     return (new DateTime('@' . $ts))->setTimezone(user_tz())->format($format);
 }
 
+// --- attachment upload helper -------------------------------------------
+// Processes a single file upload from $_FILES[$field] and saves it under
+// storage/uploads/{assocId}/{subdir}/{uuid}.{ext}.
+// Returns ['file_path'=>..., 'file_name'=>..., 'file_type'=>..., 'file_size'=>...]
+// or null when no file was selected or the field is absent.
+// Throws RuntimeException on validation or save failure.
+function save_attachment(int $assocId, string $subdir, string $field = 'attachment'): ?array
+{
+    if (!isset($_FILES[$field]) || $_FILES[$field]['error'] === UPLOAD_ERR_NO_FILE) {
+        return null;
+    }
+    if ($_FILES[$field]['error'] !== UPLOAD_ERR_OK) {
+        throw new RuntimeException('Upload error: ' . $_FILES[$field]['error']);
+    }
+
+    $allowedMimes = [
+        'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+        'application/pdf',
+    ];
+    $maxBytes = 20 * 1024 * 1024; // 20 MB
+
+    $tmpPath  = (string)$_FILES[$field]['tmp_name'];
+    $origName = basename((string)$_FILES[$field]['name']);
+    $size     = (int)$_FILES[$field]['size'];
+
+    if ($size > $maxBytes) {
+        throw new RuntimeException('File is too large. Max 20 MB.');
+    }
+
+    // Use finfo for reliable MIME detection; ignore the browser-supplied value.
+    $finfo = new finfo(FILEINFO_MIME_TYPE);
+    $mime  = (string)$finfo->file($tmpPath);
+    if (!in_array($mime, $allowedMimes, true)) {
+        throw new RuntimeException('Only images (JPEG, PNG, GIF, WebP) and PDFs are allowed.');
+    }
+
+    $ext = match ($mime) {
+        'image/jpeg'     => 'jpg',
+        'image/png'      => 'png',
+        'image/gif'      => 'gif',
+        'image/webp'     => 'webp',
+        'application/pdf'=> 'pdf',
+        default          => 'bin',
+    };
+
+    $dir = __DIR__ . '/../storage/uploads/' . $assocId . '/' . $subdir;
+    if (!is_dir($dir) && !mkdir($dir, 0755, true)) {
+        throw new RuntimeException('Could not create upload directory.');
+    }
+
+    $uuid     = bin2hex(random_bytes(16));
+    $filename = $uuid . '.' . $ext;
+    $dest     = $dir . '/' . $filename;
+
+    if (!move_uploaded_file($tmpPath, $dest)) {
+        throw new RuntimeException('Could not save uploaded file.');
+    }
+
+    return [
+        'file_path' => $assocId . '/' . $subdir . '/' . $filename,
+        'file_name' => $origName,
+        'file_type' => $mime,
+        'file_size' => $size,
+    ];
+}
+
 // --- pricing calc (single source of truth) ------------------------------
 // 30-day free trial on every paid tier. Two pricing bands (Professional was
 // dropped 2026-05-13 — superfluous):

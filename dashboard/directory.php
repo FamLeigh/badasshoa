@@ -924,6 +924,7 @@ B2,Sam,Garcia,sam@example.com,,,,0</pre>
 
     <?php if (!$editUser && !$showInvite && !$showImport): /* hide the full directory while editing a single member */ ?>
 
+    <?php if ($rentersOnly || ($qSearch === '' && $roleFilter === '' && !$ownersOnly)): ?>
     <h2 id="board" style="font-size: var(--fs-xl); margin-top: var(--sp-2); scroll-margin-top: 80px;">Board</h2>
     <?php if (!$board): ?>
         <p class="muted">No board members on file yet.</p>
@@ -1005,6 +1006,7 @@ B2,Sam,Garcia,sam@example.com,,,,0</pre>
         <?php endforeach; ?>
     </div>
     <?php endif; ?>
+    <?php endif; /* board section: hide when filter/search active for non-renters */ ?>
 
     <?php if ($rentersOnly): ?>
         <div class="card card--padded muted" style="margin-bottom: var(--sp-4);">

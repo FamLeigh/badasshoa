@@ -107,6 +107,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array(($_POST['form'] ?? ''), ['
             if ($sourceFormId !== null) {
                 audit('form.converted_to_work_order', ['work_order_id' => $newId, 'title' => $title], $sourceFormId, 'form_submission');
             }
+            try {
+                $att = save_attachment($assocId, 'work-orders');
+                if ($att) {
+                    db()->prepare(
+                        'INSERT INTO work_order_attachments (work_order_id, uploaded_by, file_path, file_name, file_type, file_size)
+                         VALUES (?, ?, ?, ?, ?, ?)'
+                    )->execute([$newId, (int)$user['id'], $att['file_path'], $att['file_name'], $att['file_type'], $att['file_size']]);
+                }
+            } catch (RuntimeException $e) {
+                flash('warning', 'Work order created but attachment failed: ' . $e->getMessage());
+            }
             flash('success', "Work order \"$title\" created.");
             redirect('/dashboard/work-orders.php?id=' . $newId);
         }
@@ -140,6 +151,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'set_sta
         'INSERT INTO work_order_notes (work_order_id, author_id, body, is_status_change, new_status)
          VALUES (?, ?, ?, 1, ?)'
     )->execute([$woId, (int)$user['id'], $note ?: null, $status]);
+
+    try {
+        $att = save_attachment($assocId, 'work-orders');
+        if ($att) {
+            db()->prepare(
+                'INSERT INTO work_order_attachments (work_order_id, uploaded_by, file_path, file_name, file_type, file_size)
+                 VALUES (?, ?, ?, ?, ?, ?)'
+            )->execute([$woId, (int)$user['id'], $att['file_path'], $att['file_name'], $att['file_type'], $att['file_size']]);
+        }
+    } catch (RuntimeException $e) {
+        flash('warning', 'Status updated but attachment failed: ' . $e->getMessage());
+    }
 
     audit('work_order.status_changed', ['status' => $status], $woId, 'work_order');
 
@@ -180,6 +203,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'note') 
         audit('work_order.note_added', [], $woId, 'work_order');
         flash('success', 'Note added.');
     }
+    try {
+        $att = save_attachment($assocId, 'work-orders');
+        if ($att) {
+            db()->prepare(
+                'INSERT INTO work_order_attachments (work_order_id, uploaded_by, file_path, file_name, file_type, file_size)
+                 VALUES (?, ?, ?, ?, ?, ?)'
+            )->execute([$woId, (int)$user['id'], $att['file_path'], $att['file_name'], $att['file_type'], $att['file_size']]);
+            if ($body === '') flash('success', 'Attachment added.');
+        }
+    } catch (RuntimeException $e) {
+        flash('warning', 'Attachment failed: ' . $e->getMessage());
+    }
     redirect('/dashboard/work-orders.php?id=' . $woId);
 }
 
@@ -197,6 +232,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'delete'
         flash('success', "Work order \"{$r['title']}\" deleted.");
     }
     redirect('/dashboard/work-orders.php');
+}
+
+// --- Delete attachment --------------------------------------------------
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'delete_wo_attachment') {
+    csrf_check();
+    if (!$canManageWO) { http_response_code(403); die('Forbidden'); }
+    $attId = (int)($_POST['att_id'] ?? 0);
+    $woId  = (int)($_POST['wo_id'] ?? 0);
+    $stmt = db()->prepare(
+        'SELECT a.file_path FROM work_order_attachments a
+           JOIN work_orders w ON w.id = a.work_order_id
+          WHERE a.id = ? AND w.id = ? AND w.association_id = ?'
+    );
+    $stmt->execute([$attId, $woId, $assocId]);
+    $row = $stmt->fetch();
+    if ($row) {
+        db()->prepare('DELETE FROM work_order_attachments WHERE id = ?')->execute([$attId]);
+        $path = __DIR__ . '/storage/uploads/' . ltrim((string)$row['file_path'], '/');
+        if (is_file($path)) unlink($path);
+        flash('success', 'Attachment removed.');
+    }
+    redirect('/dashboard/work-orders.php?id=' . $woId);
 }
 
 // --- View routing -------------------------------------------------------
@@ -262,6 +319,7 @@ if ($detailId > 0) {
     $stmt->execute([$detailId, $assocId]);
     $detail = $stmt->fetch() ?: null;
 
+    $woAttachments = [];
     if ($detail) {
         $stmt = db()->prepare(
             "SELECT n.*,
@@ -272,6 +330,15 @@ if ($detailId > 0) {
         );
         $stmt->execute([$detailId]);
         $timeline = $stmt->fetchAll();
+
+        $attStmt = db()->prepare(
+            "SELECT a.*, TRIM(CONCAT(IFNULL(u.first_name,''), ' ', IFNULL(u.last_name,''))) AS uploader_name
+               FROM work_order_attachments a LEFT JOIN users u ON u.id = a.uploaded_by
+              WHERE a.work_order_id = ?
+              ORDER BY a.created_at"
+        );
+        $attStmt->execute([$detailId]);
+        $woAttachments = $attStmt->fetchAll();
     }
 }
 
@@ -394,7 +461,7 @@ function wo_form_card(?array $editing, ?array $prefill, ?array $arcPrefill, arra
         <?php elseif (!$isEdit && $formPrefill): ?>
             <p class="muted" style="font-size: var(--fs-sm);">Pre-filled from <a href="/dashboard/forms.php?id=<?= (int)$formPrefill['id'] ?>">🔧 maintenance form #<?= (int)$formPrefill['id'] ?> · <?= e((string)$formPrefill['title']) ?></a><?php if (!empty($formPrefill['unit_number'])): ?> · Unit <?= e((string)$formPrefill['unit_number']) ?><?php endif; ?>.</p>
         <?php endif; ?>
-        <form method="post" class="form">
+        <form method="post" enctype="multipart/form-data" class="form">
             <?= csrf_field() ?>
             <input type="hidden" name="form" value="<?= $isEdit ? 'edit' : 'add' ?>">
             <?php if ($isEdit): ?><input type="hidden" name="id" value="<?= (int)$vals['id'] ?>"><?php endif; ?>
@@ -487,6 +554,12 @@ function wo_form_card(?array $editing, ?array $prefill, ?array $arcPrefill, arra
                 <label class="field__label" for="w-b">Description</label>
                 <textarea class="textarea" id="w-b" name="body" rows="5" placeholder="What needs doing, what's been observed, any access notes…"><?= e((string)($vals['body'] ?? '')) ?></textarea>
             </div>
+            <?php if (!$isEdit): ?>
+            <div class="field">
+                <label class="field__label">Attachment <span class="muted" style="font-weight: 400;">(optional — image or PDF, max 20 MB)</span></label>
+                <input class="input" type="file" name="attachment" accept="image/*,application/pdf">
+            </div>
+            <?php endif; ?>
             <div class="row" style="justify-content: flex-end;">
                 <a class="btn btn--ghost" href="/dashboard/work-orders.php<?= $isEdit ? '?id=' . (int)$vals['id'] : '' ?>">Cancel</a>
                 <button class="btn btn--primary" type="submit"><?= $isEdit ? 'Save changes' : 'Create work order' ?></button>
@@ -594,6 +667,39 @@ function wo_form_card(?array $editing, ?array $prefill, ?array $arcPrefill, arra
             <article class="card card--padded" style="margin-bottom: var(--sp-4); white-space: pre-wrap;"><?= e((string)$detail['body']) ?></article>
         <?php endif; ?>
 
+        <?php if ($woAttachments): ?>
+        <h3 style="font-size: var(--fs-lg); margin: var(--sp-6) 0 var(--sp-3);">Attachments</h3>
+        <div style="display: flex; flex-wrap: wrap; gap: var(--sp-3); margin-bottom: var(--sp-4);">
+        <?php foreach ($woAttachments as $wa):
+            $isPdf = ($wa['file_type'] === 'application/pdf');
+            $attUrl = '/attachment.php?type=wo&id=' . (int)$wa['id'];
+        ?>
+            <div style="border: 1px solid var(--color-border); border-radius: var(--r-md); overflow: hidden; width: 160px; flex-shrink: 0;">
+                <?php if (!$isPdf): ?>
+                    <a href="<?= $attUrl ?>" target="_blank" rel="noopener">
+                        <img src="<?= $attUrl ?>" alt="<?= e((string)$wa['file_name']) ?>" style="width: 160px; height: 110px; object-fit: cover; display: block;">
+                    </a>
+                <?php else: ?>
+                    <a href="<?= $attUrl ?>" target="_blank" rel="noopener" style="display:flex; align-items:center; justify-content:center; height: 110px; background: var(--color-surface); text-decoration:none; font-size: 2rem;">📄</a>
+                <?php endif; ?>
+                <div style="padding: var(--sp-2) var(--sp-2) var(--sp-1); font-size: var(--fs-xs);">
+                    <div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="<?= e((string)$wa['file_name']) ?>"><?= e((string)$wa['file_name']) ?></div>
+                    <div class="muted"><?= e(udate('M j', strtotime((string)$wa['created_at']))) ?> · <?= e(trim((string)$wa['uploader_name']) ?: '—') ?></div>
+                </div>
+                <?php if ($canManageWO): ?>
+                <form method="post" style="padding: 0 var(--sp-2) var(--sp-2);" onsubmit="return confirm('Remove this attachment?');">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="form" value="delete_wo_attachment">
+                    <input type="hidden" name="att_id" value="<?= (int)$wa['id'] ?>">
+                    <input type="hidden" name="wo_id" value="<?= (int)$detail['id'] ?>">
+                    <button class="btn btn--ghost" style="font-size: var(--fs-xs); padding: 2px 6px; color: var(--color-error); width: 100%;" type="submit">Remove</button>
+                </form>
+                <?php endif; ?>
+            </div>
+        <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
+
         <h3 style="font-size: var(--fs-lg); margin: var(--sp-6) 0 var(--sp-3);">Timeline</h3>
         <?php if (!$timeline): ?>
             <p class="muted">No notes or status changes yet.</p>
@@ -620,13 +726,17 @@ function wo_form_card(?array $editing, ?array $prefill, ?array $arcPrefill, arra
         <?php endif; ?>
 
         <!-- Add a note -->
-        <form method="post" class="form card card--padded" style="margin-bottom: var(--sp-4);">
+        <form method="post" enctype="multipart/form-data" class="form card card--padded" style="margin-bottom: var(--sp-4);">
             <?= csrf_field() ?>
             <input type="hidden" name="form" value="note">
             <input type="hidden" name="id" value="<?= (int)$detail['id'] ?>">
             <div class="field">
                 <label class="field__label" for="n-body">Add a note</label>
-                <textarea class="textarea" id="n-body" name="body" rows="3" required placeholder="Talked to Alice from ABC Plumbing — she can come Tuesday."></textarea>
+                <textarea class="textarea" id="n-body" name="body" rows="3" placeholder="Talked to Alice from ABC Plumbing — she can come Tuesday."></textarea>
+            </div>
+            <div class="field">
+                <label class="field__label">Attachment <span class="muted" style="font-weight: 400;">(image or PDF, max 20 MB)</span></label>
+                <input class="input" type="file" name="attachment" accept="image/*,application/pdf">
             </div>
             <div class="row" style="justify-content: flex-end;">
                 <button class="btn btn--primary" type="submit">Post note</button>
@@ -634,7 +744,7 @@ function wo_form_card(?array $editing, ?array $prefill, ?array $arcPrefill, arra
         </form>
 
         <!-- Status controls -->
-        <form method="post" class="form card card--padded">
+        <form method="post" enctype="multipart/form-data" class="form card card--padded">
             <?= csrf_field() ?>
             <input type="hidden" name="form" value="set_status">
             <input type="hidden" name="id" value="<?= (int)$detail['id'] ?>">
@@ -681,6 +791,11 @@ function wo_form_card(?array $editing, ?array $prefill, ?array $arcPrefill, arra
                         <textarea class="textarea" id="ann-body" name="ann_body" rows="3" placeholder="Brief description of what was done or is in progress…"></textarea>
                     </div>
                 </div>
+            </div>
+
+            <div class="field">
+                <label class="field__label">Attachment <span class="muted" style="font-weight: 400;">(image or PDF, max 20 MB)</span></label>
+                <input class="input" type="file" name="attachment" accept="image/*,application/pdf">
             </div>
 
             <div class="row" style="justify-content: flex-end;">

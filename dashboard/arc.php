@@ -85,6 +85,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'submit'
             $cost,
         ]);
         $newId = (int)db()->lastInsertId();
+
+        try {
+            $att = save_attachment($assocId, 'arc-requests');
+            if ($att) {
+                db()->prepare(
+                    'INSERT INTO arc_request_attachments (request_id, uploaded_by, file_path, file_name, file_type, file_size)
+                     VALUES (?, ?, ?, ?, ?, ?)'
+                )->execute([$newId, (int)$user['id'], $att['file_path'], $att['file_name'], $att['file_type'], $att['file_size']]);
+            }
+        } catch (RuntimeException $e) {
+            flash('warning', 'Request submitted but attachment failed: ' . $e->getMessage());
+        }
+
         audit('arc_request.submitted', ['title' => $title, 'category' => $cat], $newId, 'arc_request');
 
         $name = trim((string)$user['first_name'] . ' ' . (string)$user['last_name']) ?: (string)$user['email'];
@@ -115,13 +128,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'comment
     $r = $stmt->fetch();
     if (!$r) { http_response_code(404); die('Not found'); }
     if (!$canManage && (int)$r['submitter_user_id'] !== (int)$user['id']) { http_response_code(403); die('Forbidden'); }
-    if ($body === '') {
-        $flashError = 'Comment body is required.';
+    $hasFile = !empty($_FILES['attachment']['tmp_name']) && $_FILES['attachment']['error'] === UPLOAD_ERR_OK;
+    if ($body === '' && !$hasFile) {
+        $flashError = 'Enter a reply or attach a file.';
     } else {
-        db()->prepare(
-            'INSERT INTO arc_request_comments (request_id, author_user_id, body, is_internal)
-             VALUES (?, ?, ?, ?)'
-        )->execute([$rid, (int)$user['id'], $body, $internal]);
+        if ($body !== '') {
+            db()->prepare(
+                'INSERT INTO arc_request_comments (request_id, author_user_id, body, is_internal)
+                 VALUES (?, ?, ?, ?)'
+            )->execute([$rid, (int)$user['id'], $body, $internal]);
+        }
+
+        try {
+            $att = save_attachment($assocId, 'arc-requests');
+            if ($att) {
+                db()->prepare(
+                    'INSERT INTO arc_request_attachments (request_id, uploaded_by, file_path, file_name, file_type, file_size)
+                     VALUES (?, ?, ?, ?, ?, ?)'
+                )->execute([$rid, (int)$user['id'], $att['file_path'], $att['file_name'], $att['file_type'], $att['file_size']]);
+            }
+        } catch (RuntimeException $e) {
+            flash('warning', 'Reply posted but attachment failed: ' . $e->getMessage());
+        }
+
         audit('arc_request.commented', ['internal' => (bool)$internal], $rid, 'arc_request');
         $authorName = trim((string)$user['first_name'] . ' ' . (string)$user['last_name']) ?: (string)$user['email'];
         if (!$canManage) {
@@ -215,6 +244,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'withdra
     redirect('/dashboard/arc.php?id=' . $rid);
 }
 
+// ---------- Delete attachment ----------
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'delete_arc_attachment') {
+    csrf_check();
+    if (!$canManage) { http_response_code(403); die('Forbidden'); }
+    $attId = (int)($_POST['att_id'] ?? 0);
+    $rid   = (int)($_POST['rid'] ?? 0);
+    $stmt = db()->prepare(
+        'SELECT a.file_path FROM arc_request_attachments a
+           JOIN arc_requests r ON r.id = a.request_id
+          WHERE a.id = ? AND r.id = ? AND r.association_id = ?'
+    );
+    $stmt->execute([$attId, $rid, $assocId]);
+    $row = $stmt->fetch();
+    if ($row) {
+        db()->prepare('DELETE FROM arc_request_attachments WHERE id = ?')->execute([$attId]);
+        $path = __DIR__ . '/../storage/uploads/' . ltrim((string)$row['file_path'], '/');
+        if (is_file($path)) unlink($path);
+        flash('success', 'Attachment removed.');
+    }
+    redirect('/dashboard/arc.php?id=' . $rid);
+}
+
 // ---------- Detail + list ----------
 $detailId = (int)($_GET['id'] ?? 0);
 $detail = null;
@@ -237,6 +288,7 @@ if ($detailId > 0) {
     if ($detail && !$canManage && (int)$detail['submitter_user_id'] !== (int)$user['id']) {
         $detail = null;
     }
+    $arcAttachments = [];
     if ($detail) {
         $cSql = 'SELECT c.*,
                         TRIM(CONCAT(IFNULL(u.first_name,""), " ", IFNULL(u.last_name,""))) AS author_name,
@@ -249,6 +301,15 @@ if ($detailId > 0) {
         $cStmt = db()->prepare($cSql);
         $cStmt->execute([$detailId]);
         $comments = $cStmt->fetchAll();
+
+        $attStmt = db()->prepare(
+            "SELECT a.*, TRIM(CONCAT(IFNULL(u.first_name,''), ' ', IFNULL(u.last_name,''))) AS uploader_name
+               FROM arc_request_attachments a LEFT JOIN users u ON u.id = a.uploaded_by
+              WHERE a.request_id = ?
+              ORDER BY a.created_at"
+        );
+        $attStmt->execute([$detailId]);
+        $arcAttachments = $attStmt->fetchAll();
     }
 }
 
@@ -383,6 +444,39 @@ require __DIR__ . '/../includes/header.php';
 
         <?php if ($flashError): ?><div class="flash flash--error"><?= e($flashError) ?></div><?php endif; ?>
 
+        <?php if ($arcAttachments): ?>
+        <h3 style="font-size: var(--fs-lg); margin: var(--sp-6) 0 var(--sp-3);">Attachments</h3>
+        <div style="display: flex; flex-wrap: wrap; gap: var(--sp-3); margin-bottom: var(--sp-4);">
+        <?php foreach ($arcAttachments as $aa):
+            $isPdf  = ($aa['file_type'] === 'application/pdf');
+            $attUrl = '/attachment.php?type=arc&id=' . (int)$aa['id'];
+        ?>
+            <div style="border: 1px solid var(--color-border); border-radius: var(--r-md); overflow: hidden; width: 160px; flex-shrink: 0;">
+                <?php if (!$isPdf): ?>
+                    <a href="<?= $attUrl ?>" target="_blank" rel="noopener">
+                        <img src="<?= $attUrl ?>" alt="<?= e((string)$aa['file_name']) ?>" style="width: 160px; height: 110px; object-fit: cover; display: block;">
+                    </a>
+                <?php else: ?>
+                    <a href="<?= $attUrl ?>" target="_blank" rel="noopener" style="display:flex; align-items:center; justify-content:center; height: 110px; background: var(--color-surface); text-decoration:none; font-size: 2rem;">📄</a>
+                <?php endif; ?>
+                <div style="padding: var(--sp-2) var(--sp-2) var(--sp-1); font-size: var(--fs-xs);">
+                    <div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="<?= e((string)$aa['file_name']) ?>"><?= e((string)$aa['file_name']) ?></div>
+                    <div class="muted"><?= e(udate('M j', strtotime((string)$aa['created_at']))) ?> · <?= e(trim((string)$aa['uploader_name']) ?: '—') ?></div>
+                </div>
+                <?php if ($canManage): ?>
+                <form method="post" style="padding: 0 var(--sp-2) var(--sp-2);" onsubmit="return confirm('Remove this attachment?');">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="form" value="delete_arc_attachment">
+                    <input type="hidden" name="att_id" value="<?= (int)$aa['id'] ?>">
+                    <input type="hidden" name="rid" value="<?= (int)$detail['id'] ?>">
+                    <button class="btn btn--ghost" style="font-size: var(--fs-xs); padding: 2px 6px; color: var(--color-error); width: 100%;" type="submit">Remove</button>
+                </form>
+                <?php endif; ?>
+            </div>
+        <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
+
         <h3 style="font-size: var(--fs-lg); margin: var(--sp-6) 0 var(--sp-3);">Discussion</h3>
         <?php if (!$comments): ?>
             <p class="muted">No replies yet.</p>
@@ -406,13 +500,17 @@ require __DIR__ . '/../includes/header.php';
             </div>
         <?php endif; ?>
 
-        <form method="post" class="form card card--padded" style="margin-bottom: var(--sp-6);">
+        <form method="post" enctype="multipart/form-data" class="form card card--padded" style="margin-bottom: var(--sp-6);">
             <?= csrf_field() ?>
             <input type="hidden" name="form" value="comment">
             <input type="hidden" name="id" value="<?= (int)$detail['id'] ?>">
             <div class="field">
                 <label class="field__label" for="cmt-body"><?= $canManage ? 'Reply / add a note' : 'Reply' ?></label>
-                <textarea class="textarea" id="cmt-body" name="body" rows="3" required></textarea>
+                <textarea class="textarea" id="cmt-body" name="body" rows="3"></textarea>
+            </div>
+            <div class="field">
+                <label class="field__label">Attachment <span class="muted" style="font-weight: 400;">(optional — image or PDF, max 20 MB)</span></label>
+                <input class="input" type="file" name="attachment" accept="image/*,application/pdf">
             </div>
             <?php if ($canManage): ?>
             <label style="display:flex; align-items:center; gap: var(--sp-2); margin-bottom: var(--sp-2);">
@@ -475,7 +573,7 @@ require __DIR__ . '/../includes/header.php';
 
         <?php if ($flashError): ?><div class="flash flash--error"><?= e($flashError) ?></div><?php endif; ?>
 
-        <form method="post" class="form card card--padded">
+        <form method="post" enctype="multipart/form-data" class="form card card--padded">
             <?= csrf_field() ?>
             <input type="hidden" name="form" value="submit">
             <div class="form-row form-row--2">
@@ -526,6 +624,11 @@ require __DIR__ . '/../includes/header.php';
                     <input class="input" type="number" step="0.01" min="0" id="acost" name="estimated_cost">
                 </div>
                 <div class="field"></div>
+            </div>
+            <div class="field">
+                <label class="field__label">Attachment <span class="muted" style="font-weight: 400;">(optional — photo or PDF, max 20 MB)</span></label>
+                <input class="input" type="file" name="attachment" accept="image/*,application/pdf">
+                <div class="field__hint">Add a photo of the current state, a sketch, or a contractor document.</div>
             </div>
             <div class="row" style="justify-content: flex-end;">
                 <a class="btn btn--ghost" href="/dashboard/arc.php">Cancel</a>
