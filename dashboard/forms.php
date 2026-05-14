@@ -777,7 +777,7 @@ require __DIR__ . '/../includes/header.php';
             <div class="form-row form-row--2">
                 <div class="field">
                     <label class="field__label" for="fu">Unit</label>
-                    <select class="select" id="fu" name="unit_id" required>
+                    <select class="select js-searchable-select" id="fu" name="unit_id" required>
                         <?php foreach ($unitOptions as $u): ?>
                             <option value="<?= (int)$u['id'] ?>" <?= $prefUnitId === (int)$u['id'] ? 'selected' : '' ?>>Unit <?= e((string)$u['unit_number']) ?></option>
                         <?php endforeach; ?>

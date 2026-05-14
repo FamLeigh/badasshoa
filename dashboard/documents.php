@@ -512,7 +512,7 @@ require __DIR__ . '/../includes/header.php';
             <div class="form-row form-row--2">
                 <div class="field">
                     <label class="field__label" for="ed-unit">Attach to unit</label>
-                    <select class="select" id="ed-unit" name="unit_id">
+                    <select class="select js-searchable-select" id="ed-unit" name="unit_id">
                         <option value="">— Not unit-specific —</option>
                         <?php foreach ($unitsList as $u_): ?>
                             <option value="<?= (int)$u_['id'] ?>" <?= (int)($editDoc['unit_id'] ?? 0) === (int)$u_['id'] ? 'selected' : '' ?>>Unit <?= e((string)$u_['unit_number']) ?></option>
@@ -521,7 +521,7 @@ require __DIR__ . '/../includes/header.php';
                 </div>
                 <div class="field">
                     <label class="field__label" for="ed-mem">Attach to member</label>
-                    <select class="select" id="ed-mem" name="user_id">
+                    <select class="select js-searchable-select" id="ed-mem" name="user_id">
                         <option value="">— Not member-specific —</option>
                         <?php foreach ($membersList as $m_):
                             $nm = trim($m_['first_name'] . ' ' . $m_['last_name']);
@@ -753,7 +753,7 @@ require __DIR__ . '/../includes/header.php';
             <div class="form-row form-row--2">
                 <div class="field">
                     <label class="field__label" for="unit_id">Attach to unit (optional)</label>
-                    <select class="select" id="unit_id" name="unit_id">
+                    <select class="select js-searchable-select" id="unit_id" name="unit_id">
                         <option value="">— Not unit-specific —</option>
                         <?php foreach ($unitsList as $u_): ?>
                             <option value="<?= (int)$u_['id'] ?>" <?= $preselectUnitId === (int)$u_['id'] ? 'selected' : '' ?>>Unit <?= e((string)$u_['unit_number']) ?></option>
@@ -763,7 +763,7 @@ require __DIR__ . '/../includes/header.php';
                 </div>
                 <div class="field">
                     <label class="field__label" for="user_id">Attach to member (optional)</label>
-                    <select class="select" id="user_id" name="user_id">
+                    <select class="select js-searchable-select" id="user_id" name="user_id">
                         <option value="">— Not member-specific —</option>
                         <?php foreach ($membersList as $m_):
                             $nm = trim($m_['first_name'] . ' ' . $m_['last_name']);
@@ -817,7 +817,7 @@ require __DIR__ . '/../includes/header.php';
             <?php endforeach; ?>
         </select>
         <?php if ($canManage && $unitsList): ?>
-            <select class="select" name="filter_unit_id" style="max-width: 200px;">
+            <select class="select js-searchable-select" name="filter_unit_id" style="max-width: 200px;">
                 <option value="0">All units</option>
                 <?php foreach ($unitsList as $u_): ?>
                     <option value="<?= (int)$u_['id'] ?>" <?= $qUnitId === (int)$u_['id'] ? 'selected' : '' ?>>Unit <?= e((string)$u_['unit_number']) ?></option>
