@@ -8,7 +8,7 @@ require_once __DIR__ . '/includes/auth.php';
 $token = trim((string)($_GET['token'] ?? ''));
 if ($token === '') { http_response_code(404); die('Not found.'); }
 
-$stmt = db()->prepare('SELECT * FROM associations WHERE tv_token = ? AND status = "active" LIMIT 1');
+$stmt = db()->prepare('SELECT * FROM associations WHERE tv_token = ? AND status IN ("active","trial") LIMIT 1');
 $stmt->execute([$token]);
 $assoc = $stmt->fetch();
 if (!$assoc) { http_response_code(404); die('Not found.'); }
