@@ -15,7 +15,7 @@ ErrorDocument 404 /404.php
     RewriteEngine On
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
-    RewriteCond %{REQUEST_URI}      !^/(landing|branding|public-media|public-document|contact|user-avatar)\.php
+    RewriteCond %{REQUEST_URI}      !^/(landing|branding|public-media|public-document|contact|user-avatar|newsletter-signup|newsletter-unsubscribe|tv)\.php
     RewriteRule ^([a-z0-9][a-z0-9-]*)/?$  /landing.php?slug=$1  [QSA,L]
 </IfModule>
 

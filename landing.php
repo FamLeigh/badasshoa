@@ -567,6 +567,36 @@ $page_layout = 'public_landing'; // Avoids the public marketing nav; landing has
 </section>
 <?php endif; ?>
 
+<!-- ════════════════════════════════════════════════ NEWSLETTER SIGNUP ═══ -->
+<section style="background: <?= e($primary) ?>; padding: var(--sp-12) 0;">
+    <div class="container container--narrow" style="text-align:center;">
+        <h2 style="color:#fff; font-size: var(--fs-3xl); margin: 0 0 var(--sp-3);">Stay in the loop</h2>
+        <p style="color: rgba(255,255,255,.75); margin: 0 0 var(--sp-6); max-width: 480px; margin-left: auto; margin-right: auto;">
+            Get community news and updates from <?= e($assoc['name']) ?> delivered to your inbox.
+        </p>
+        <?php
+        $nlMessages = flash_take();
+        if ($nlMessages): foreach ($nlMessages as $nlMsg): ?>
+            <div class="flash flash--<?= e($nlMsg['type']) ?>" style="margin-bottom: var(--sp-4); display: inline-block; text-align:left;">
+                <?= e($nlMsg['message']) ?>
+            </div>
+        <?php endforeach; endif; ?>
+        <form method="post" action="/newsletter-signup.php" style="display:flex; flex-direction:column; gap: var(--sp-3); max-width: 420px; margin: 0 auto;">
+            <?= csrf_field() ?>
+            <input type="hidden" name="association_id" value="<?= (int)$assoc['id'] ?>">
+            <input type="hidden" name="back_url" value="/<?= e($slug) ?>/">
+            <!-- Honeypot -->
+            <input type="text" name="website" style="display:none;" tabindex="-1" autocomplete="off">
+            <input class="input" type="text" name="name" placeholder="Your name (optional)" style="background:#fff;">
+            <input class="input" type="email" name="email" required placeholder="Your email address" style="background:#fff;">
+            <button class="btn btn--primary" type="submit" style="background:#fff; color: <?= e($primary) ?>; font-weight: 700; border-color: #fff;">Subscribe</button>
+        </form>
+        <p style="color: rgba(255,255,255,.5); font-size: var(--fs-xs); margin: var(--sp-4) 0 0;">
+            No spam. Unsubscribe anytime.
+        </p>
+    </div>
+</section>
+
 <?php
 $socialLinks = [
     'website'   => ['url' => $assoc['website_url']   ?? null, 'label' => 'Website',   'icon' => 'globe'],

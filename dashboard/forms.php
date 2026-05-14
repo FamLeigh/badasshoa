@@ -242,6 +242,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'submit'
             ];
             $title = ucfirst($payload['item_kind'] ?: 'Key/fob') . ' request';
             break;
+        case 'service_animal':
+            $animalType = $_POST['animal_type'] ?? 'service_animal';
+            if (!in_array($animalType, ['service_animal','emotional_support','other'], true)) $animalType = 'other';
+            $payload = [
+                'animal_type'      => $animalType,
+                'animal_name'      => trim((string)($_POST['animal_name'] ?? '')),
+                'species'          => trim((string)($_POST['species'] ?? '')),
+                'breed'            => trim((string)($_POST['breed'] ?? '')),
+                'color'            => trim((string)($_POST['color'] ?? '')),
+                'trained_task'     => trim((string)($_POST['trained_task'] ?? '')),
+                'vaccinations'     => isset($_POST['vaccinations']) ? 1 : 0,
+                'vet_name'         => trim((string)($_POST['vet_name'] ?? '')),
+                'vet_phone'        => trim((string)($_POST['vet_phone'] ?? '')),
+                'handler_name'     => trim((string)($_POST['handler_name'] ?? '')),
+            ];
+            $title = 'Service/assist animal: ' . ($payload['animal_name'] ?: 'unnamed');
+            if ($payload['animal_name'] === '') $flashError = $flashError ?: 'Animal name is required.';
+            if ($payload['trained_task'] === '') $flashError = $flashError ?: 'Trained task or accommodation need is required.';
+            break;
         default:
             $payload = [
                 'description' => trim((string)($_POST['description'] ?? '')),
@@ -1054,6 +1073,44 @@ require __DIR__ . '/../includes/header.php';
                     <label class="field__label" for="rsn">Reason</label>
                     <textarea class="textarea" id="rsn" name="reason" rows="3" placeholder="Lost / additional resident / replacement / …"></textarea>
                 </div>
+            <?php elseif ($newType === 'service_animal'): ?>
+                <p class="muted" style="font-size: var(--fs-sm); margin: 0 0 var(--sp-3);">
+                    Under the Fair Housing Act, residents may request a reasonable accommodation for an assistance animal. This form creates a signed record for the association's files. The board cannot require specific certification documents — however, for emotional support animals they may request written verification from a licensed healthcare provider.
+                </p>
+                <div class="field">
+                    <label class="field__label">Type of animal</label>
+                    <div style="display:flex; gap: var(--sp-4); padding: var(--sp-2) 0; flex-wrap: wrap;">
+                        <label style="display:flex; align-items:center; gap:6px;"><input type="radio" name="animal_type" value="service_animal" checked> Service animal (task-trained)</label>
+                        <label style="display:flex; align-items:center; gap:6px;"><input type="radio" name="animal_type" value="emotional_support"> Emotional support animal (ESA)</label>
+                        <label style="display:flex; align-items:center; gap:6px;"><input type="radio" name="animal_type" value="other"> Other assistance animal</label>
+                    </div>
+                </div>
+                <div class="form-row form-row--2">
+                    <div class="field"><label class="field__label" for="san">Animal name</label><input class="input" id="san" name="animal_name" required></div>
+                    <div class="field"><label class="field__label" for="sas">Species</label><input class="input" id="sas" name="species" placeholder="Dog · Miniature horse · Cat…" required></div>
+                </div>
+                <div class="form-row form-row--2">
+                    <div class="field"><label class="field__label" for="sabr">Breed</label><input class="input" id="sabr" name="breed"></div>
+                    <div class="field"><label class="field__label" for="sacl">Color / markings</label><input class="input" id="sacl" name="color"></div>
+                </div>
+                <div class="field">
+                    <label class="field__label" for="satt">Trained task / accommodation need</label>
+                    <textarea class="textarea" id="satt" name="trained_task" rows="2" required placeholder="e.g. Alerts to seizures · Provides emotional support for PTSD · Guides handler with visual impairment"></textarea>
+                </div>
+                <div class="form-row form-row--2">
+                    <div class="field"><label class="field__label" for="sahn">Handler name (if different from resident)</label><input class="input" id="sahn" name="handler_name"></div>
+                    <div class="field" style="display:flex; flex-direction: column; justify-content: flex-end;">
+                        <label style="display:flex; align-items:center; gap: var(--sp-2); padding: var(--sp-2);">
+                            <input type="checkbox" name="vaccinations">
+                            Vaccinations current — proof available on request
+                        </label>
+                    </div>
+                </div>
+                <div class="form-row form-row--2">
+                    <div class="field"><label class="field__label" for="savv">Veterinarian name / clinic</label><input class="input" id="savv" name="vet_name"></div>
+                    <div class="field"><label class="field__label" for="savp">Veterinarian phone</label><input class="input" id="savp" name="vet_phone"></div>
+                </div>
+
             <?php else: /* other */ ?>
                 <div class="field"><label class="field__label" for="ot">Title</label><input class="input" id="ot" name="title" required maxlength="255"></div>
                 <div class="field"><label class="field__label" for="od">Description</label><textarea class="textarea" id="od" name="description" rows="5" required></textarea></div>

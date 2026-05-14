@@ -58,6 +58,7 @@ function form_types(): array
         'move_out'             => ['label' => 'Move-out notice',        'icon' => '📤', 'submit_url' => '/dashboard/forms.php?action=new&type=move_out'],
         'key_request'          => ['label' => 'Key / fob request',      'icon' => '🔑', 'submit_url' => '/dashboard/forms.php?action=new&type=key_request'],
         'estoppel_request'     => ['label' => 'Estoppel / sale',        'icon' => '📨', 'submit_url' => '/dashboard/forms.php?action=new&type=estoppel_request'],
+        'service_animal'       => ['label' => 'Service / assist animal','icon' => '🦮', 'submit_url' => '/dashboard/forms.php?action=new&type=service_animal'],
         'other'                => ['label' => 'Other',                  'icon' => '📝', 'submit_url' => '/dashboard/forms.php?action=new&type=other'],
     ];
 }
@@ -78,6 +79,7 @@ function forms_requiring_signature(): array
         'amenity_reservation' => true,  // deposit acknowledgement
         'estoppel_request'    => true,  // title-company-driven; legal weight
         'hurricane_checklist' => true,  // attestation owner did the prep
+        'service_animal'      => true,  // FHA accommodation request; board needs signed record
     ];
 }
 

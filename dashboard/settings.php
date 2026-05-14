@@ -56,6 +56,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'save_ti
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// POST: TV token (board admin only)
+// ──────────────────────────────────────────────────────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'tv_token' && $canEdit) {
+    csrf_check();
+    $assocId = (int)($_SESSION['association_id'] ?? 0);
+    $action  = (string)($_POST['tv_action'] ?? '');
+    if ($action === 'generate') {
+        $token = bin2hex(random_bytes(24));
+        db()->prepare('UPDATE associations SET tv_token=? WHERE id=?')->execute([$token, $assocId]);
+        flash('success', 'TV link generated.');
+    } elseif ($action === 'revoke') {
+        db()->prepare('UPDATE associations SET tv_token=NULL WHERE id=?')->execute([$assocId]);
+        flash('success', 'TV link revoked. The old URL will no longer work.');
+    }
+    redirect('/dashboard/settings.php#tv');
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // POST: Save permissions
 // ──────────────────────────────────────────────────────────────────────────
 $PERM_ROLES = [
@@ -751,6 +769,104 @@ require __DIR__ . '/../includes/header.php';
             </form>
         </div>
     </details>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         LOBBY TV
+    ════════════════════════════════════════════════════════════════════ -->
+    <?php if ($canEdit):
+        $tvToken = (string)($association['tv_token'] ?? '');
+        $tvUrl   = (strlen($tvToken) > 0) ? 'https://badasshoa.com/tv.php?token=' . rawurlencode($tvToken) : '';
+    ?>
+    <details id="section-tv" class="acc-panel" <?= $openSection === 'tv' ? 'open' : '' ?>>
+        <summary>
+            <span class="acc-icon">📺</span>
+            <div>
+                <span class="acc-title">Lobby TV</span>
+                <span class="acc-hint">Digital signage URL for your lobby display</span>
+            </div>
+            <svg class="acc-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <div class="acc-body">
+            <p class="muted" style="font-size: var(--fs-sm); margin: 0 0 var(--sp-4);">
+                Generate a private URL and open it in any browser on your lobby TV. The display shows active announcements, upcoming events, and a live clock. No login required — the token in the URL is the key. Regenerate or revoke any time.
+            </p>
+            <?php if ($tvUrl): ?>
+                <div style="background: var(--color-navy-10, #f0f3f8); border-radius: var(--r-md); padding: var(--sp-3) var(--sp-4); font-family: monospace; font-size: var(--fs-sm); word-break: break-all; margin-bottom: var(--sp-4); display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); flex-wrap: wrap;">
+                    <span><?= e($tvUrl) ?></span>
+                    <button type="button" onclick="navigator.clipboard.writeText('<?= e($tvUrl) ?>').then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)})" class="btn btn--sm">Copy</button>
+                </div>
+                <div class="row" style="gap: var(--sp-3); flex-wrap: wrap;">
+                    <a class="btn btn--primary" href="<?= e($tvUrl) ?>" target="_blank" rel="noopener">Open TV display ↗</a>
+                    <form method="post" style="display:inline;">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="form" value="tv_token">
+                        <input type="hidden" name="tv_action" value="generate">
+                        <button class="btn" type="submit">Regenerate URL</button>
+                    </form>
+                    <form method="post" style="display:inline;" onsubmit="return confirm('Revoke the TV URL? The display will stop working until you generate a new one.')">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="form" value="tv_token">
+                        <input type="hidden" name="tv_action" value="revoke">
+                        <button class="btn btn--error" type="submit">Revoke</button>
+                    </form>
+                </div>
+            <?php else: ?>
+                <form method="post">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="form" value="tv_token">
+                    <input type="hidden" name="tv_action" value="generate">
+                    <button class="btn btn--primary" type="submit">Generate TV URL</button>
+                </form>
+            <?php endif; ?>
+        </div>
+    </details>
+    <?php endif; ?>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         NEWSLETTER SUBSCRIBERS
+    ════════════════════════════════════════════════════════════════════ -->
+    <?php if ($canEdit):
+        $nlStmt = db()->prepare('SELECT COUNT(*) FROM newsletter_subscribers WHERE association_id=? AND status="active"');
+        $nlStmt->execute([$assocId]);
+        $nlCount = (int)$nlStmt->fetchColumn();
+    ?>
+    <details id="section-newsletter" class="acc-panel" <?= $openSection === 'newsletter' ? 'open' : '' ?>>
+        <summary>
+            <span class="acc-icon">📧</span>
+            <div>
+                <span class="acc-title">Newsletter subscribers</span>
+                <span class="acc-hint"><?= $nlCount ?> active subscriber<?= $nlCount !== 1 ? 's' : '' ?></span>
+            </div>
+            <svg class="acc-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <div class="acc-body">
+            <?php
+            $nlRows = db()->prepare('SELECT email, name, subscribed_at FROM newsletter_subscribers WHERE association_id=? AND status="active" ORDER BY subscribed_at DESC');
+            $nlRows->execute([$assocId]);
+            $nlList = $nlRows->fetchAll();
+            ?>
+            <?php if (empty($nlList)): ?>
+                <p class="muted" style="font-size: var(--fs-sm);">No subscribers yet. The signup form appears on your public community landing page.</p>
+            <?php else: ?>
+                <p class="muted" style="font-size: var(--fs-sm); margin: 0 0 var(--sp-4);"><?= count($nlList) ?> resident<?= count($nlList) !== 1 ? 's' : '' ?> subscribed to community updates via the public landing page.</p>
+                <div style="overflow-x:auto; margin-bottom: var(--sp-4);">
+                <table class="table">
+                    <thead><tr><th>Email</th><th>Name</th><th>Subscribed</th></tr></thead>
+                    <tbody>
+                    <?php foreach ($nlList as $nl): ?>
+                        <tr>
+                            <td><?= e((string)$nl['email']) ?></td>
+                            <td class="muted"><?= e((string)($nl['name'] ?? '')) ?></td>
+                            <td class="muted"><?= udate('M j, Y', strtotime((string)$nl['subscribed_at'])) ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+                </div>
+            <?php endif; ?>
+        </div>
+    </details>
+    <?php endif; ?>
 
     <!-- ═══════════════════════════════════════════════════════════════════
          PERMISSIONS
