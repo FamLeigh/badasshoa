@@ -191,23 +191,34 @@ require __DIR__ . '/../includes/header.php';
 }
 .statute-card__meta { font-size: var(--fs-sm); color: var(--color-text-soft); margin-bottom: var(--sp-2); }
 .statute-card__summary { font-size: 14px; line-height: 1.6; }
-.statute-card__full { margin-top: var(--sp-3); }
-.statute-card__full summary {
-    cursor: pointer; font-size: 13px; font-weight: 600; color: var(--color-navy);
-    user-select: none; list-style: none; display: flex; align-items: center; gap: 6px;
+.statute-card__actions {
+    margin-top: var(--sp-3); display: flex; gap: var(--sp-2); flex-wrap: wrap; align-items: center;
 }
-.statute-card__full summary::-webkit-details-marker { display: none; }
-.statute-card__full summary::before { content: '▶'; font-size: 10px; transition: transform 120ms; }
-.statute-card__full[open] summary::before { transform: rotate(90deg); }
+.statute-card__expand-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: #f3edd9; color: #5d4a00; border: 1px solid #d8c98a;
+    border-radius: 6px; padding: 6px 14px; font: inherit; font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: background 120ms;
+}
+.statute-card__expand-btn:hover { background: #e8de9e; }
+.statute-card__expand-btn .chevron { font-size: 10px; transition: transform 150ms; }
+.statute-card__expand-btn[aria-expanded="true"] .chevron { transform: rotate(90deg); }
+.statute-card__source-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: #fff; color: var(--color-navy); border: 1px solid var(--color-border);
+    border-radius: 6px; padding: 6px 14px; font: inherit; font-size: 13px; font-weight: 600;
+    text-decoration: none; transition: border-color 120ms, background 120ms;
+}
+.statute-card__source-btn:hover { background: #f3f4f8; border-color: var(--color-navy); text-decoration: none; }
 .statute-card__full-text {
-    margin-top: var(--sp-3); padding: var(--sp-3); background: #f8f7f4;
-    border-left: 3px solid var(--color-border); border-radius: 4px;
-    font-size: 13px; line-height: 1.7; white-space: pre-wrap; word-break: break-word;
-    max-height: 480px; overflow-y: auto;
+    margin-top: var(--sp-3); padding: var(--sp-4); background: #f8f7f4;
+    border: 1px solid var(--color-border); border-left: 3px solid var(--color-navy);
+    border-radius: 6px;
+    font-size: 13.5px; line-height: 1.75; white-space: pre-wrap; word-break: break-word;
+    max-height: 520px; overflow-y: auto;
+    display: none;
 }
-.statute-card__footer { margin-top: var(--sp-3); display: flex; gap: var(--sp-3); flex-wrap: wrap; align-items: center; }
-.statute-card__source { font-size: 12px; color: var(--color-text-soft); }
-.statute-card__source a { color: var(--color-navy); text-decoration: underline; }
+.statute-card__full-text.is-open { display: block; }
 
 .legal-empty {
     text-align: center; padding: var(--sp-8) var(--sp-4);
@@ -364,23 +375,30 @@ if (!empty($r['chapter_title'])) {
 
     <div class="statute-card__summary"><?= e($r['summary']) ?></div>
 
-    <?php if ($r['has_full_text'] && !empty($r['full_text'])): ?>
-    <div class="statute-card__full">
-        <details class="statute-card__full">
-            <summary>Full statutory text</summary>
-            <div class="statute-card__full-text"><?= e((string)$r['full_text']) ?></div>
-        </details>
+    <?php
+    $hasFullText = $r['has_full_text'] && !empty($r['full_text']);
+    $hasUrl      = !empty($r['source_url']);
+    if ($hasFullText || $hasUrl):
+        $uid = 'ft-' . e($r['id']);
+    ?>
+    <div class="statute-card__actions">
+        <?php if ($hasFullText): ?>
+        <button type="button" class="statute-card__expand-btn"
+                aria-expanded="false" aria-controls="<?= $uid ?>"
+                onclick="toggleFullText(this,'<?= $uid ?>')">
+            <span class="chevron">▶</span> Full statutory text
+        </button>
+        <?php endif; ?>
+        <?php if ($hasUrl): ?>
+        <a class="statute-card__source-btn" href="<?= e($r['source_url']) ?>"
+           target="_blank" rel="noopener noreferrer">
+            Official site ↗
+        </a>
+        <?php endif; ?>
     </div>
+    <?php if ($hasFullText): ?>
+    <div class="statute-card__full-text" id="<?= $uid ?>"><?= e((string)$r['full_text']) ?></div>
     <?php endif; ?>
-
-    <?php if (!empty($r['source_url'])): ?>
-    <div class="statute-card__footer">
-        <span class="statute-card__source">
-            <a href="<?= e($r['source_url']) ?>" target="_blank" rel="noopener noreferrer">
-                View on official site ↗
-            </a>
-        </span>
-    </div>
     <?php endif; ?>
 </div>
 <?php endforeach; ?>
@@ -397,6 +415,14 @@ if (!empty($r['chapter_title'])) {
 </div>
 
 <script>
+function toggleFullText(btn, id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    var open = el.classList.toggle('is-open');
+    btn.setAttribute('aria-expanded', String(open));
+    if (open) el.scrollTop = 0;
+}
+
 // Auto-focus search on page load (only if q is empty, avoid interrupting filter changes)
 (function () {
     var inp = document.getElementById('legal-q');
