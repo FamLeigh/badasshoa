@@ -136,8 +136,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'delete'
     redirect('/dashboard/events.php');
 }
 
-// Filter: upcoming vs past
-$showPast = isset($_GET['past']);
+// Filter: upcoming vs past vs all (managers only)
+$showAll  = $canManage && isset($_GET['all']);
+$showPast = !$showAll && isset($_GET['past']);
 $audienceFilter = $_GET['audience'] ?? '';
 
 // Tenants only see what they're allowed to see (uses viewing_role so view-as
@@ -152,11 +153,15 @@ $placeholders = implode(',', array_fill(0, count($allowedAudiences), '?'));
 // in PHP because recurring series have a single starts_at but many
 // occurrences, so SQL date filters can't narrow them correctly.
 // Prune obviously-stale data with a coarse SQL filter first to keep volume low.
-$pruneSql = $showPast
-    ? "(recurrence_type = 'none' AND starts_at < NOW())
-       OR (recurrence_type <> 'none' AND COALESCE(recurrence_until, NOW() - INTERVAL 1 DAY) < CURDATE())"
-    : "(recurrence_type = 'none' AND starts_at >= NOW())
+if ($showAll) {
+    $pruneSql = '1'; // no date filter — show everything
+} elseif ($showPast) {
+    $pruneSql = "(recurrence_type = 'none' AND starts_at < NOW())
+       OR (recurrence_type <> 'none' AND COALESCE(recurrence_until, NOW() - INTERVAL 1 DAY) < CURDATE())";
+} else {
+    $pruneSql = "(recurrence_type = 'none' AND starts_at >= NOW())
        OR (recurrence_type <> 'none' AND (recurrence_until IS NULL OR recurrence_until >= CURDATE()))";
+}
 
 $sql = "SELECT * FROM events
          WHERE association_id = ? AND audience IN ($placeholders) AND ($pruneSql)";
@@ -169,7 +174,8 @@ $sql .= " LIMIT 200"; // raw rows; occurrences are computed below
 $stmt = db()->prepare($sql);
 $stmt->execute($params);
 $rawRows = $stmt->fetchAll();
-$rows = expand_events($rawRows, $showPast, 90);
+$expandMode = $showAll ? null : $showPast;
+$rows = expand_events($rawRows, $expandMode, 90);
 if (count($rows) > 100) $rows = array_slice($rows, 0, 100);
 
 // Active building locations for the location picker autocomplete.
@@ -338,8 +344,12 @@ function event_form_card(?array $editing, string $assocSlug, array $activeLocati
     <?php if ($showCreate || $editEvent) event_form_card($editEvent, (string)$association['subdomain'], $activeLocations); ?>
 
     <div class="row" style="gap: var(--sp-2); margin-bottom: var(--sp-5); flex-wrap: wrap;">
-        <a class="badge <?= !$showPast ? 'badge--orange' : '' ?>" href="?<?= $audienceFilter ? 'audience=' . e($audienceFilter) : '' ?>" style="text-decoration:none; <?= $showPast ? 'opacity: 0.6;' : '' ?>">Upcoming</a>
-        <a class="badge <?= $showPast ? 'badge--navy' : '' ?>" href="?past=1<?= $audienceFilter ? '&audience=' . e($audienceFilter) : '' ?>" style="text-decoration:none; <?= !$showPast ? 'opacity: 0.6;' : '' ?>">Past</a>
+        <?php $aqp = $audienceFilter ? '&audience=' . e($audienceFilter) : ''; ?>
+        <a class="badge <?= (!$showPast && !$showAll) ? 'badge--orange' : '' ?>" href="?<?= ltrim($aqp,'&') ?>" style="text-decoration:none;">Upcoming</a>
+        <a class="badge <?= $showPast ? 'badge--navy' : '' ?>" href="?past=1<?= $aqp ?>" style="text-decoration:none;">Past</a>
+        <?php if ($canManage): ?>
+        <a class="badge <?= $showAll ? 'badge--info' : '' ?>" href="?all=1<?= $aqp ?>" style="text-decoration:none;" title="All events — edit or fix any event regardless of date">All</a>
+        <?php endif; ?>
         <span class="muted" style="font-size: var(--fs-xs); align-self:center; margin-left: var(--sp-3);">Audience:</span>
         <?php foreach (['all'=>'Public','members'=>'Members','board'=>'Board'] as $val => $lbl):
             $href = '?' . ($showPast ? 'past=1&' : '') . 'audience=' . $val;
@@ -358,8 +368,8 @@ function event_form_card(?array $editing, string $assocSlug, array $activeLocati
 
     <?php if (!$rows): ?>
         <div class="card card--padded center" style="padding: var(--sp-12) var(--sp-6);">
-            <p class="muted">No <?= $showPast ? 'past' : 'upcoming' ?> events.</p>
-            <?php if ($canManage && !$showPast): ?>
+            <p class="muted">No <?= $showAll ? '' : ($showPast ? 'past' : 'upcoming') ?> events.</p>
+            <?php if ($canManage && !$showPast && !$showAll): ?>
                 <p style="margin-top: var(--sp-4);"><a class="btn btn--primary" href="?action=new">Add your first event</a></p>
             <?php endif; ?>
         </div>

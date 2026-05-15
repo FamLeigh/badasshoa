@@ -322,8 +322,8 @@ function expand_event(array $event, int $windowDays = 90): array
 }
 
 // Expand a list of raw events into occurrences and optionally filter by
-// past/upcoming. Returns a flat sorted array.
-function expand_events(array $events, bool $past = false, int $windowDays = 90): array
+// past/upcoming. $past=null means return all occurrences (no date filter).
+function expand_events(array $events, ?bool $past = false, int $windowDays = 90): array
 {
     $out = [];
     $now = time();
@@ -331,13 +331,13 @@ function expand_events(array $events, bool $past = false, int $windowDays = 90):
         foreach (expand_event($e, $windowDays) as $occ) {
             $occTs = strtotime((string)$occ['starts_at']);
             if ($occTs === false) continue;
-            if ($past && $occTs >= $now) continue;
-            if (!$past && $occTs < $now) continue;
+            if ($past === true  && $occTs >= $now) continue;
+            if ($past === false && $occTs < $now) continue;
             $out[] = $occ;
         }
     }
     usort($out, fn($a, $b) => strtotime((string)$a['starts_at']) <=> strtotime((string)$b['starts_at']));
-    if ($past) $out = array_reverse($out);
+    if ($past === true) $out = array_reverse($out);
     return $out;
 }
 
