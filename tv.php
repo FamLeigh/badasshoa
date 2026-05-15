@@ -111,6 +111,9 @@ $listings = $mkt->fetchAll();
 
 $hasLogo  = !empty($assoc['logo_path']);
 $primary  = preg_match('/^#[0-9a-f]{6}$/i', (string)$assoc['primary_color']) ? $assoc['primary_color'] : '#0f1f3d';
+$hasWeather = !empty($assoc['latitude']) && !empty($assoc['longitude']);
+$lat = $hasWeather ? (float)$assoc['latitude'] : null;
+$lon = $hasWeather ? (float)$assoc['longitude'] : null;
 $refreshSec = 60;
 
 $CONDITION_LABELS = [
@@ -164,14 +167,15 @@ body {
 /* ── Header ───────────────────────────────────────────────── */
 header {
     grid-column: 1 / -1;
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
     align-items: center;
-    justify-content: space-between;
     border-bottom: 1px solid var(--border);
     padding-bottom: 16px;
+    gap: 24px;
 }
 .brand { display: flex; align-items: center; gap: 18px; }
-.brand img { max-height: 60px; object-fit: contain; }
+.brand img { max-height: 110px; object-fit: contain; }
 .brand-name { font-size: clamp(1.6rem, 2.4vw, 2.4rem); font-weight: 900; letter-spacing: -0.03em; }
 .brand-tag {
     font-size: clamp(.75rem, 1.1vw, 1rem);
@@ -181,6 +185,36 @@ header {
     text-transform: uppercase;
     padding-left: 2px;
 }
+
+/* ── Weather (center of header) ───────────────────────────── */
+.weather-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+.weather-main {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.weather-icon { font-size: clamp(2rem, 4vw, 3.6rem); line-height: 1; }
+.weather-temp {
+    font-size: clamp(2.4rem, 4.5vw, 4.2rem);
+    font-weight: 900;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.03em;
+    color: #fff;
+    line-height: 1;
+}
+.weather-cond {
+    font-size: clamp(.85rem, 1.3vw, 1.2rem);
+    color: var(--muted);
+    font-weight: 600;
+    text-align: center;
+    margin-top: 2px;
+}
+
 .clock-block { text-align: right; }
 .clock {
     font-size: clamp(2.8rem, 5.5vw, 5rem);
@@ -415,6 +449,19 @@ footer {
             </div>
         <?php endif; ?>
     </div>
+
+    <?php if ($hasWeather): ?>
+    <div class="weather-block" id="weather-block">
+        <div class="weather-main">
+            <span class="weather-icon" id="w-icon">🌡️</span>
+            <span class="weather-temp" id="w-temp">—°</span>
+        </div>
+        <div class="weather-cond" id="w-cond"></div>
+    </div>
+    <?php else: ?>
+    <div></div>
+    <?php endif; ?>
+
     <div class="clock-block">
         <div class="clock" id="clock">--:--</div>
         <div class="dateline" id="dateline"></div>
@@ -552,6 +599,47 @@ function tick() {
 }
 tick();
 setInterval(tick, 1000);
+
+// ── Weather ────────────────────────────────────────────────────────────────
+<?php if ($hasWeather): ?>
+(function () {
+    var LAT = <?= json_encode($lat) ?>, LON = <?= json_encode($lon) ?>;
+    var WMO_ICON = {
+        0:'☀️', 1:'🌤️', 2:'⛅', 3:'🌥️',
+        45:'🌫️', 48:'🌫️',
+        51:'🌦️', 53:'🌦️', 55:'🌧️',
+        61:'🌧️', 63:'🌧️', 65:'🌧️',
+        71:'🌨️', 73:'🌨️', 75:'❄️', 77:'🌨️',
+        80:'🌦️', 81:'🌧️', 82:'⛈️',
+        95:'⛈️', 96:'⛈️', 99:'⛈️'
+    };
+    var WMO_LABEL = {
+        0:'Clear', 1:'Mostly clear', 2:'Partly cloudy', 3:'Overcast',
+        45:'Fog', 48:'Icy fog',
+        51:'Light drizzle', 53:'Drizzle', 55:'Heavy drizzle',
+        61:'Light rain', 63:'Rain', 65:'Heavy rain',
+        71:'Light snow', 73:'Snow', 75:'Heavy snow', 77:'Snow grains',
+        80:'Showers', 81:'Heavy showers', 82:'Violent showers',
+        95:'Thunderstorm', 96:'Thunderstorm + hail', 99:'Thunderstorm + hail'
+    };
+    function render(d) {
+        var code = d.current.weather_code;
+        document.getElementById('w-icon').textContent  = WMO_ICON[code]  || '🌡️';
+        document.getElementById('w-temp').textContent  = Math.round(d.current.temperature_2m) + '°F';
+        document.getElementById('w-cond').textContent  = WMO_LABEL[code] || '';
+    }
+    function fetchWeather() {
+        fetch('https://api.open-meteo.com/v1/forecast?latitude=' + LAT
+            + '&longitude=' + LON
+            + '&current=temperature_2m,weather_code&temperature_unit=fahrenheit&forecast_days=1')
+            .then(function (r) { return r.json(); })
+            .then(render)
+            .catch(function () {});
+    }
+    fetchWeather();
+    setInterval(fetchWeather, 30 * 60 * 1000);
+})();
+<?php endif; ?>
 
 // ── Auto-scroll each column independently ─────────────────────────────────
 // Speed: pixels per second. Pause (ms) at top and bottom before resuming.
