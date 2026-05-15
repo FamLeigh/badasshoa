@@ -26,15 +26,75 @@ $anns = db()->prepare(
 $anns->execute([$assocId]);
 $announcements = $anns->fetchAll();
 
-// Upcoming events (next 30 days, all-audience)
+// Upcoming events (next 30 days, all-audience) — expand recurrences in PHP.
 $evts = db()->prepare(
-    "SELECT title, starts_at, ends_at, location FROM events
+    "SELECT title, starts_at, ends_at, location, recurrence_type, recurrence_until
+       FROM events
       WHERE association_id = ? AND audience = 'all'
-        AND starts_at >= NOW() AND starts_at <= NOW() + INTERVAL 30 DAY
-      ORDER BY starts_at LIMIT 20"
+        AND (
+            (recurrence_type = 'none' AND starts_at >= NOW() AND starts_at <= NOW() + INTERVAL 30 DAY)
+            OR
+            (recurrence_type <> 'none' AND (recurrence_until IS NULL OR recurrence_until >= CURDATE()))
+        )
+      ORDER BY starts_at LIMIT 50"
 );
 $evts->execute([$assocId]);
-$events = $evts->fetchAll();
+$rawEvents = $evts->fetchAll();
+
+$now      = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+$horizon  = $now->modify('+30 days');
+$events   = [];
+
+foreach ($rawEvents as $ev) {
+    $start = new DateTimeImmutable((string)$ev['starts_at'], new DateTimeZone('UTC'));
+    $end   = !empty($ev['ends_at']) ? new DateTimeImmutable((string)$ev['ends_at'], new DateTimeZone('UTC')) : null;
+    $until = !empty($ev['recurrence_until'])
+        ? new DateTimeImmutable($ev['recurrence_until'] . ' 23:59:59', new DateTimeZone('UTC'))
+        : $horizon;
+    $rtype = (string)$ev['recurrence_type'];
+
+    if ($rtype === 'none') {
+        if ($start >= $now && $start <= $horizon) {
+            $events[] = [
+                'title'     => $ev['title'],
+                'location'  => $ev['location'],
+                'starts_at' => $start->format('Y-m-d H:i:s'),
+                'ends_at'   => $end ? $end->format('Y-m-d H:i:s') : null,
+            ];
+        }
+        continue;
+    }
+
+    $intervals = [
+        'daily'     => 'P1D',
+        'weekly'    => 'P7D',
+        'biweekly'  => 'P14D',
+        'monthly'   => 'P1M',
+    ];
+    $step = $intervals[$rtype] ?? null;
+    if (!$step) continue;
+
+    // Walk from the series start until we find occurrences in the window.
+    $cur = $start;
+    $endUntil = $until < $horizon ? $until : $horizon;
+    $safety = 0;
+    while ($cur <= $endUntil && $safety++ < 200) {
+        if ($cur >= $now) {
+            $duration = $end ? ($end->getTimestamp() - $start->getTimestamp()) : 0;
+            $events[] = [
+                'title'     => $ev['title'],
+                'location'  => $ev['location'],
+                'starts_at' => $cur->format('Y-m-d H:i:s'),
+                'ends_at'   => $duration > 0 ? $cur->modify("+{$duration} seconds")->format('Y-m-d H:i:s') : null,
+            ];
+        }
+        $cur = $cur->add(new DateInterval($step));
+    }
+}
+
+// Sort by starts_at and cap at 20.
+usort($events, fn($a, $b) => strcmp($a['starts_at'], $b['starts_at']));
+$events = array_slice($events, 0, 20);
 
 // Active marketplace listings
 $mkt = db()->prepare(
