@@ -886,10 +886,11 @@ function tick() {
 tick();
 setInterval(tick, 1000);
 
-// ── Infinite auto-scroll — CSS keyframe animation on GPU compositor ──────────
-// Run after window.load so image heights are settled before measuring.
-// Generate per-column @keyframes with exact pixel distances — no % math
-// that can drift if image heights change between measure and animate.
+// ── Infinite auto-scroll — rAF + translate3d (GPU layer stays alive) ─────────
+// CSS animations on Tizen get throttled when translateY pushes the element
+// partially off-screen — browser considers the layer idle and pauses it.
+// rAF keeps the main thread ticking so the layer is never considered idle.
+// translate3d (not translateY) + backfaceVisibility:hidden = GPU-promoted layer.
 var SPEED = 40; // px per second
 
 function setupScroll(vpId, trId, startDelay) {
@@ -901,27 +902,33 @@ function setupScroll(vpId, trId, startDelay) {
     if (origHeight <= vp.clientHeight + 20) return; // fits without scrolling
 
     // Double the children so the list wraps seamlessly.
-    Array.from(tr.children).forEach(function (c) { tr.appendChild(c.cloneNode(true)); });
+    Array.from(tr.children).forEach(function(c) { tr.appendChild(c.cloneNode(true)); });
 
-    // Inject a unique @keyframes rule using exact pixel distance, not %.
-    var name = 'tvs-' + trId;
-    var rule = '@keyframes ' + name + ' {'
-             + ' from { transform: translateY(0); }'
-             + ' to   { transform: translateY(-' + origHeight + 'px); }'
-             + ' }';
-    var s = document.createElement('style');
-    s.textContent = rule;
-    document.head.appendChild(s);
+    // Promote to GPU layer before the first frame.
+    tr.style.webkitBackfaceVisibility = 'hidden';
+    tr.style.backfaceVisibility       = 'hidden';
+    tr.style.webkitTransform          = 'translate3d(0,0,0)';
+    tr.style.transform                = 'translate3d(0,0,0)';
 
-    var duration = (origHeight / SPEED).toFixed(2) + 's';
-    var delay    = ((startDelay || 0) / 1000).toFixed(2) + 's';
+    var pos  = 0;
+    var prev = null;
 
-    tr.style.willChange = 'transform';
-    tr.style.webkitAnimation = name + ' ' + duration + ' linear ' + delay + ' infinite';
-    tr.style.animation        = name + ' ' + duration + ' linear ' + delay + ' infinite';
+    function frame(ts) {
+        requestAnimationFrame(frame);
+        if (prev === null) { prev = ts; return; } // skip first frame — no dt yet
+        var dt = Math.min(ts - prev, 100);        // cap at 100ms: handles tab/focus gaps
+        prev = ts;
+        pos += SPEED * dt / 1000;
+        if (pos >= origHeight) pos -= origHeight; // seamless wrap
+        var y = -Math.round(pos);
+        tr.style.webkitTransform = 'translate3d(0,' + y + 'px,0)';
+        tr.style.transform       = 'translate3d(0,' + y + 'px,0)';
+    }
+
+    setTimeout(function() { requestAnimationFrame(frame); }, startDelay || 0);
 }
 
-window.addEventListener('load', function () {
+window.addEventListener('load', function() {
     setupScroll('vp-ann', 'tr-ann', 0);
     setupScroll('vp-evt', 'tr-evt', 800);
     setupScroll('vp-mkt', 'tr-mkt', 1600);
