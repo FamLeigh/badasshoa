@@ -1,5 +1,23 @@
 [
     {
+        "id": "cl-20260518-tv-samsung-scroll",
+        "at": "2026-05-18T17:00:00-04:00",
+        "type": "improvement",
+        "title": "Lobby TV: smooth scroll on Samsung Smart TVs",
+        "description": "The lobby TV display now scrolls smoothly on Samsung Smart TVs and other lower-powered browsers. The previous JavaScript requestAnimationFrame loop ran on the main thread and caused choppy, jumpy motion on Tizen WebKit. The new approach uses CSS @keyframes animation, which the browser hands off to the GPU compositor thread — resulting in smooth, continuous scrolling. Also: weather data is now fetched server-side in PHP (no client-side fetch calls, no layout pop when the page loads), Google Fonts removed in favor of the system font stack, and all clamp() values have rem fallbacks for older Tizen versions that don't support clamp().",
+        "author": "Reboooot",
+        "link": "/tv"
+    },
+    {
+        "id": "cl-20260518-help-center",
+        "at": "2026-05-18T16:00:00-04:00",
+        "type": "feature",
+        "title": "In-app help center",
+        "description": "A help center is now built into the dashboard. Every page has a ? button in the top bar and a Help link at the bottom of the sidebar. The help viewer has a searchable sidebar with topics grouped by category, and shows role-appropriate content — a resident only sees topics relevant to residents, while board admins see everything. Topics include getting started, directory privacy, changing your password, announcements, events, marketplace, concerns, architectural review requests, documents, legal reference, and more. The system is designed to grow over time.",
+        "author": "Reboooot",
+        "link": "/dashboard/help.php"
+    },
+    {
         "id": "cl-20260518-directory-opt-out",
         "at": "2026-05-18T14:00:00-04:00",
         "type": "feature",

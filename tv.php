@@ -88,14 +88,12 @@ if (!$assoc) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>BadassHOA — Community TV</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body {
     width: 100%; min-height: 100vh;
     background: #08111f; color: #fff;
-    font-family: 'Inter', sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
     display: flex; align-items: center; justify-content: center;
 }
 .box {
@@ -270,6 +268,50 @@ $lat = $hasWeather ? (float)$assoc['latitude'] : null;
 $lon = $hasWeather ? (float)$assoc['longitude'] : null;
 $refreshSec = 600;
 
+// Fetch weather server-side — TV browser makes no external requests,
+// and the page auto-refreshes every 10 min so data stays current.
+$tvWeather = null;
+if ($hasWeather) {
+    static $WMO_ICONS = [
+        0=>'☀️',1=>'🌤️',2=>'⛅',3=>'🌥️',45=>'🌫️',48=>'🌫️',
+        51=>'🌦️',53=>'🌦️',55=>'🌧️',61=>'🌧️',63=>'🌧️',65=>'🌧️',
+        71=>'🌨️',73=>'🌨️',75=>'❄️',77=>'🌨️',80=>'🌦️',81=>'🌧️',82=>'⛈️',
+        95=>'⛈️',96=>'⛈️',99=>'⛈️',
+    ];
+    static $WMO_LABELS = [
+        0=>'Clear',1=>'Mostly clear',2=>'Partly cloudy',3=>'Overcast',
+        45=>'Fog',48=>'Icy fog',51=>'Light drizzle',53=>'Drizzle',55=>'Heavy drizzle',
+        61=>'Light rain',63=>'Rain',65=>'Heavy rain',71=>'Light snow',73=>'Snow',
+        75=>'Heavy snow',77=>'Snow grains',80=>'Showers',81=>'Heavy showers',82=>'Violent showers',
+        95=>'Thunderstorm',96=>'Thunderstorm + hail',99=>'Thunderstorm + hail',
+    ];
+    $wUrl = 'https://api.open-meteo.com/v1/forecast'
+          . '?latitude=' . $lat . '&longitude=' . $lon
+          . '&current=temperature_2m,weather_code,wind_speed_10m'
+          . '&hourly=precipitation_probability'
+          . '&temperature_unit=fahrenheit&wind_speed_unit=mph&forecast_days=1';
+    $wCtx = stream_context_create(['http' => ['timeout' => 4, 'ignore_errors' => true]]);
+    $wRaw = @file_get_contents($wUrl, false, $wCtx);
+    if ($wRaw) {
+        $wData = json_decode($wRaw, true);
+        if (!empty($wData['current'])) {
+            $wCode   = (int)$wData['current']['weather_code'];
+            $wTemp   = (int)round((float)$wData['current']['temperature_2m']);
+            $wWind   = (int)round((float)$wData['current']['wind_speed_10m']);
+            $wHour   = (int)gmdate('G');
+            $wPrecip = isset($wData['hourly']['precipitation_probability'][$wHour])
+                       ? (int)$wData['hourly']['precipitation_probability'][$wHour] : null;
+            $tvWeather = [
+                'icon'   => $WMO_ICONS[$wCode]  ?? '🌡️',
+                'temp'   => $wTemp,
+                'label'  => $WMO_LABELS[$wCode] ?? '',
+                'wind'   => $wWind,
+                'precip' => $wPrecip,
+            ];
+        }
+    }
+}
+
 // Association local timezone for displaying event times correctly.
 $assocTzName = (string)($assoc['timezone'] ?? 'UTC');
 if (!@timezone_open($assocTzName)) $assocTzName = 'UTC';
@@ -291,8 +333,6 @@ $CONDITION_LABELS = [
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="refresh" content="<?= $refreshSec ?>">
 <title><?= e((string)$assoc['name']) ?> — Community Board</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -314,7 +354,7 @@ html, body {
     width: 100%; height: 100%;
     background: var(--bg);
     color: var(--text);
-    font-family: 'Inter', sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
     overflow: hidden;
 }
 
@@ -340,8 +380,9 @@ header {
 }
 .brand { display: flex; align-items: center; gap: 18px; }
 .brand img { max-height: 110px; object-fit: contain; }
-.brand-name { font-size: clamp(1.6rem, 2.4vw, 2.4rem); font-weight: 900; letter-spacing: -0.03em; }
+.brand-name { font-size: 2rem; font-size: clamp(1.6rem, 2.4vw, 2.4rem); font-weight: 900; letter-spacing: -0.03em; }
 .brand-tag {
+    font-size: .85rem;
     font-size: clamp(.75rem, 1.1vw, 1rem);
     font-weight: 700;
     color: var(--muted);
@@ -362,8 +403,9 @@ header {
     align-items: center;
     gap: 10px;
 }
-.weather-icon { font-size: clamp(2rem, 4vw, 3.6rem); line-height: 1; }
+.weather-icon { font-size: 2.4rem; font-size: clamp(2rem, 4vw, 3.6rem); line-height: 1; }
 .weather-temp {
+    font-size: 3rem;
     font-size: clamp(2.4rem, 4.5vw, 4.2rem);
     font-weight: 900;
     font-variant-numeric: tabular-nums;
@@ -372,6 +414,7 @@ header {
     line-height: 1;
 }
 .weather-cond {
+    font-size: 1rem;
     font-size: clamp(.85rem, 1.3vw, 1.2rem);
     color: var(--muted);
     font-weight: 600;
@@ -379,6 +422,7 @@ header {
     margin-top: 2px;
 }
 .weather-refresh {
+    font-size: .7rem;
     font-size: clamp(.6rem, .85vw, .75rem);
     color: rgba(255,255,255,.25);
     font-weight: 600;
@@ -389,6 +433,7 @@ header {
 
 .clock-block { text-align: right; }
 .clock {
+    font-size: 3.5rem;
     font-size: clamp(2.8rem, 5.5vw, 5rem);
     font-weight: 900;
     font-variant-numeric: tabular-nums;
@@ -397,6 +442,7 @@ header {
     line-height: 1;
 }
 .dateline {
+    font-size: 1rem;
     font-size: clamp(.85rem, 1.3vw, 1.15rem);
     color: var(--muted);
     margin-top: 4px;
@@ -423,6 +469,7 @@ header {
 }
 .col-icon { font-size: 1.4rem; }
 .col-label {
+    font-size: .95rem;
     font-size: clamp(.85rem, 1.2vw, 1.1rem);
     font-weight: 800;
     letter-spacing: .08em;
@@ -451,6 +498,23 @@ header {
     display: flex;
     flex-direction: column;
     gap: 14px;
+    will-change: transform;
+    -webkit-transform: translate3d(0, 0, 0);
+    transform: translate3d(0, 0, 0);
+}
+
+/* ── CSS keyframe scroll — GPU compositor thread ──────────── */
+@-webkit-keyframes tv-scroll {
+    from { -webkit-transform: translate3d(0, 0, 0);    transform: translate3d(0, 0, 0); }
+    to   { -webkit-transform: translate3d(0, -50%, 0); transform: translate3d(0, -50%, 0); }
+}
+@keyframes tv-scroll {
+    from { -webkit-transform: translate3d(0, 0, 0);    transform: translate3d(0, 0, 0); }
+    to   { -webkit-transform: translate3d(0, -50%, 0); transform: translate3d(0, -50%, 0); }
+}
+.scroll-track.scrolling {
+    -webkit-animation: tv-scroll linear infinite both;
+    animation: tv-scroll linear infinite both;
 }
 
 /* ── Cards ────────────────────────────────────────────────── */
@@ -469,6 +533,7 @@ header {
 /* ── Announcement card ────────────────────────────────────── */
 .ann-badge {
     display: inline-block;
+    font-size: .7rem;
     font-size: clamp(.6rem, .9vw, .8rem);
     font-weight: 800;
     letter-spacing: .1em;
@@ -489,12 +554,14 @@ header {
 .ann-badge--death_notice   { background: #4b5563; }
 
 .ann-title {
+    font-size: 1.2rem;
     font-size: clamp(1.1rem, 1.8vw, 1.6rem);
     font-weight: 800;
     line-height: 1.2;
     margin-bottom: 8px;
 }
 .ann-body {
+    font-size: 1rem;
     font-size: clamp(.9rem, 1.3vw, 1.2rem);
     color: var(--muted);
     line-height: 1.55;
@@ -504,6 +571,7 @@ header {
     overflow: hidden;
 }
 .ann-date {
+    font-size: .8rem;
     font-size: clamp(.7rem, 1vw, .9rem);
     color: rgba(255,255,255,.3);
     margin-top: 10px;
@@ -514,6 +582,7 @@ header {
 .evt-item { display: flex; gap: 18px; align-items: flex-start; }
 .evt-cal {
     flex-shrink: 0;
+    width: 60px;
     width: clamp(52px, 7vw, 72px);
     text-align: center;
     background: var(--primary);
@@ -521,6 +590,7 @@ header {
     padding: 8px 6px;
 }
 .evt-cal .m {
+    font-size: .7rem;
     font-size: clamp(.6rem, .9vw, .8rem);
     font-weight: 800;
     text-transform: uppercase;
@@ -528,6 +598,7 @@ header {
     color: rgba(255,255,255,.75);
 }
 .evt-cal .d {
+    font-size: 2rem;
     font-size: clamp(1.7rem, 3vw, 2.6rem);
     font-weight: 900;
     line-height: 1;
@@ -535,30 +606,34 @@ header {
 }
 .evt-info { flex: 1; min-width: 0; }
 .evt-title {
+    font-size: 1.2rem;
     font-size: clamp(1.05rem, 1.7vw, 1.5rem);
     font-weight: 800;
     line-height: 1.2;
     margin-bottom: 6px;
 }
 .evt-meta {
+    font-size: .9rem;
     font-size: clamp(.8rem, 1.15vw, 1.05rem);
     color: var(--muted);
     line-height: 1.4;
 }
 .evt-loc { margin-top: 3px; color: rgba(255,255,255,.35); }
-.ann-thumb { width: 100%; height: clamp(60px, 7vw, 90px); object-fit: cover; border-radius: 6px; margin-bottom: 10px; display: block; }
-.evt-thumb { width: 100%; height: clamp(60px, 7vw, 90px); object-fit: cover; border-radius: 6px; margin-bottom: 10px; display: block; }
+.ann-thumb { width: 100%; height: 72px; height: clamp(60px, 7vw, 90px); object-fit: cover; border-radius: 6px; margin-bottom: 10px; display: block; }
+.evt-thumb { width: 100%; height: 72px; height: clamp(60px, 7vw, 90px); object-fit: cover; border-radius: 6px; margin-bottom: 10px; display: block; }
 
 /* ── Marketplace card ─────────────────────────────────────── */
-.mkt-thumb { width: 100%; height: clamp(70px, 8vw, 100px); object-fit: cover; border-radius: 6px; margin-bottom: 10px; display: block; }
+.mkt-thumb { width: 100%; height: 80px; height: clamp(70px, 8vw, 100px); object-fit: cover; border-radius: 6px; margin-bottom: 10px; display: block; }
 .mkt-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
 .mkt-title {
+    font-size: 1.2rem;
     font-size: clamp(1.05rem, 1.7vw, 1.5rem);
     font-weight: 800;
     line-height: 1.2;
     flex: 1;
 }
 .mkt-price {
+    font-size: 1.1rem;
     font-size: clamp(1rem, 1.6vw, 1.4rem);
     font-weight: 900;
     color: var(--green);
@@ -567,6 +642,7 @@ header {
 }
 .mkt-price--free { color: var(--orange); }
 .mkt-desc {
+    font-size: 1rem;
     font-size: clamp(.85rem, 1.2vw, 1.1rem);
     color: var(--muted);
     line-height: 1.5;
@@ -578,6 +654,7 @@ header {
 }
 .mkt-tags { display: flex; gap: 6px; flex-wrap: wrap; }
 .mkt-tag {
+    font-size: .7rem;
     font-size: clamp(.6rem, .85vw, .75rem);
     font-weight: 700;
     text-transform: uppercase;
@@ -593,6 +670,7 @@ header {
     text-align: center;
     padding: 40px 20px;
     color: var(--muted);
+    font-size: 1.1rem;
     font-size: clamp(1rem, 1.4vw, 1.2rem);
     font-style: italic;
 }
@@ -608,12 +686,14 @@ footer {
     gap: 24px;
 }
 .footer-note {
+    font-size: .7rem;
     font-size: clamp(.6rem, .9vw, .8rem);
     color: rgba(255,255,255,.2);
     font-weight: 600;
     letter-spacing: .04em;
 }
 .footer-cta {
+    font-size: 1rem;
     font-size: clamp(.85rem, 1.3vw, 1.15rem);
     font-weight: 800;
     color: var(--orange);
@@ -653,14 +733,23 @@ if ($tvStoredCustom):
         <?php endif; ?>
     </div>
 
-    <?php if ($hasWeather): ?>
-    <div class="weather-block" id="weather-block">
+    <?php if ($hasWeather && $tvWeather): ?>
+    <div class="weather-block">
         <div class="weather-main">
-            <span class="weather-icon" id="w-icon">🌡️</span>
-            <span class="weather-temp" id="w-temp">—°</span>
+            <span class="weather-icon"><?= e($tvWeather['icon']) ?></span>
+            <span class="weather-temp"><?= $tvWeather['temp'] ?>°F</span>
         </div>
-        <div class="weather-cond" id="w-cond"></div>
+        <div class="weather-cond">
+            <?= e($tvWeather['label']) ?><?php if ($tvWeather['wind']): ?>&nbsp;&nbsp;💨 <?= $tvWeather['wind'] ?> mph<?php endif; ?><?php if ($tvWeather['precip'] !== null): ?>&nbsp;&nbsp;🌧 <?= $tvWeather['precip'] ?>%<?php endif; ?>
+        </div>
         <div class="weather-refresh">Auto-refreshes every 10 minutes</div>
+    </div>
+    <?php elseif ($hasWeather): ?>
+    <div class="weather-block">
+        <div class="weather-main">
+            <span class="weather-icon">🌡️</span>
+            <span class="weather-temp">—°</span>
+        </div>
     </div>
     <?php else: ?>
     <div></div>
@@ -814,96 +903,36 @@ function tick() {
 tick();
 setInterval(tick, 1000);
 
-// ── Weather ────────────────────────────────────────────────────────────────
-<?php if ($hasWeather): ?>
-(function () {
-    var LAT = <?= json_encode($lat) ?>, LON = <?= json_encode($lon) ?>;
-    var WMO_ICON = {
-        0:'☀️', 1:'🌤️', 2:'⛅', 3:'🌥️',
-        45:'🌫️', 48:'🌫️',
-        51:'🌦️', 53:'🌦️', 55:'🌧️',
-        61:'🌧️', 63:'🌧️', 65:'🌧️',
-        71:'🌨️', 73:'🌨️', 75:'❄️', 77:'🌨️',
-        80:'🌦️', 81:'🌧️', 82:'⛈️',
-        95:'⛈️', 96:'⛈️', 99:'⛈️'
-    };
-    var WMO_LABEL = {
-        0:'Clear', 1:'Mostly clear', 2:'Partly cloudy', 3:'Overcast',
-        45:'Fog', 48:'Icy fog',
-        51:'Light drizzle', 53:'Drizzle', 55:'Heavy drizzle',
-        61:'Light rain', 63:'Rain', 65:'Heavy rain',
-        71:'Light snow', 73:'Snow', 75:'Heavy snow', 77:'Snow grains',
-        80:'Showers', 81:'Heavy showers', 82:'Violent showers',
-        95:'Thunderstorm', 96:'Thunderstorm + hail', 99:'Thunderstorm + hail'
-    };
-    function render(d) {
-        var code   = d.current.weather_code;
-        var wind   = Math.round(d.current.wind_speed_10m);
-        var precip = d.hourly ? Math.round(d.hourly.precipitation_probability[new Date().getHours()]) : null;
-        document.getElementById('w-icon').textContent = WMO_ICON[code] || '🌡️';
-        document.getElementById('w-temp').textContent = Math.round(d.current.temperature_2m) + '°F';
-        var cond = WMO_LABEL[code] || '';
-        if (wind)   cond += '  💨 ' + wind + ' mph';
-        if (precip !== null) cond += '  🌧 ' + precip + '%';
-        document.getElementById('w-cond').textContent = cond;
-    }
-    function fetchWeather() {
-        fetch('https://api.open-meteo.com/v1/forecast?latitude=' + LAT
-            + '&longitude=' + LON
-            + '&current=temperature_2m,weather_code,wind_speed_10m'
-            + '&hourly=precipitation_probability&temperature_unit=fahrenheit&wind_speed_unit=mph&forecast_days=1')
-            .then(function (r) { return r.json(); })
-            .then(render)
-            .catch(function () {});
-    }
-    fetchWeather();
-    setInterval(fetchWeather, 30 * 60 * 1000);
-})();
-<?php endif; ?>
+// ── Infinite auto-scroll — CSS keyframe animation on GPU compositor ──────────
+// Measure once in JS, hand the infinite loop to CSS so the Samsung TV
+// compositor thread handles it instead of the main thread.
+var SPEED = 40; // px per second
 
-// ── Infinite auto-scroll — each column loops 1→2→3→…→1 with no jump ───────
-// Clone the track contents so the scroll wraps seamlessly.
-var SPEED         = 40;   // px/sec — comfortable reading speed
-var INITIAL_PAUSE = 3000; // ms to hold at the top before first scroll
-
-function autoScroll(vpId, trId, startDelay) {
+function setupScroll(vpId, trId, startDelay) {
     var vp = document.getElementById(vpId);
     var tr = document.getElementById(trId);
     if (!vp || !tr) return;
 
-    // Measure natural height before cloning.
     var origHeight = tr.scrollHeight;
-    if (origHeight <= vp.clientHeight + 20) return; // fits on screen, no scroll needed
+    if (origHeight <= vp.clientHeight + 20) return; // fits on screen, skip
 
-    // Duplicate every child so the list wraps seamlessly.
+    // Double the children so the list wraps seamlessly at the halfway point.
     Array.from(tr.children).forEach(function (c) { tr.appendChild(c.cloneNode(true)); });
 
-    var pos      = 0;
-    var lastTime = null;
-    var startAt  = Date.now() + (startDelay || 0) + INITIAL_PAUSE;
+    var duration = (origHeight / SPEED).toFixed(2) + 's';
+    var delay    = ((startDelay || 0) / 1000).toFixed(2) + 's';
 
-    function frame(ts) {
-        if (lastTime === null) lastTime = ts;
-        var dt = ts - lastTime;
-        lastTime = ts;
-
-        if (Date.now() >= startAt) {
-            pos += (SPEED * dt) / 1000;
-            // When we reach the end of the original content, silently reset —
-            // the cloned copy is identical so the viewer sees no jump.
-            if (pos >= origHeight) pos -= origHeight;
-            tr.style.transform = 'translateY(-' + Math.round(pos) + 'px)';
-        }
-        requestAnimationFrame(frame);
-    }
-
-    requestAnimationFrame(frame);
+    tr.style.webkitAnimationDuration = duration;
+    tr.style.animationDuration       = duration;
+    tr.style.webkitAnimationDelay    = delay;
+    tr.style.animationDelay          = delay;
+    tr.classList.add('scrolling');
 }
 
 // Stagger start times so columns don't move in perfect lockstep.
-autoScroll('vp-ann', 'tr-ann', 0);
-autoScroll('vp-evt', 'tr-evt', 800);
-autoScroll('vp-mkt', 'tr-mkt', 1600);
+setupScroll('vp-ann', 'tr-ann', 0);
+setupScroll('vp-evt', 'tr-evt', 800);
+setupScroll('vp-mkt', 'tr-mkt', 1600);
 </script>
 </body>
 </html>
