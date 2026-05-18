@@ -498,23 +498,6 @@ header {
     display: flex;
     flex-direction: column;
     gap: 14px;
-    will-change: transform;
-    -webkit-transform: translate3d(0, 0, 0);
-    transform: translate3d(0, 0, 0);
-}
-
-/* ── CSS keyframe scroll — GPU compositor thread ──────────── */
-@-webkit-keyframes tv-scroll {
-    from { -webkit-transform: translate3d(0, 0, 0);    transform: translate3d(0, 0, 0); }
-    to   { -webkit-transform: translate3d(0, -50%, 0); transform: translate3d(0, -50%, 0); }
-}
-@keyframes tv-scroll {
-    from { -webkit-transform: translate3d(0, 0, 0);    transform: translate3d(0, 0, 0); }
-    to   { -webkit-transform: translate3d(0, -50%, 0); transform: translate3d(0, -50%, 0); }
-}
-.scroll-track.scrolling {
-    -webkit-animation: tv-scroll linear infinite both;
-    animation: tv-scroll linear infinite both;
 }
 
 /* ── Cards ────────────────────────────────────────────────── */
@@ -779,7 +762,7 @@ if ($tvStoredCustom):
         ?>
             <div class="card <?= $isEmergency ? 'card--emergency' : '' ?>">
                 <?php if (!empty($a['image_path'])): ?>
-                    <img class="ann-thumb" src="/announcement-image.php?id=<?= (int)$a['id'] ?>" alt="" loading="lazy">
+                    <img class="ann-thumb" src="/announcement-image.php?id=<?= (int)$a['id'] ?>" alt="">
                 <?php endif; ?>
                 <span class="ann-badge ann-badge--<?= e((string)$a['type']) ?>"><?= e(ann_type_label((string)$a['type'])) ?></span>
                 <div class="ann-title"><?= e((string)$a['title']) ?></div>
@@ -812,7 +795,7 @@ if ($tvStoredCustom):
         ?>
             <div class="card">
                 <?php if (!empty($ev['image_path'])): ?>
-                    <img class="evt-thumb" src="/event-image.php?id=<?= (int)$ev['id'] ?>" alt="" loading="lazy">
+                    <img class="evt-thumb" src="/event-image.php?id=<?= (int)$ev['id'] ?>" alt="">
                 <?php endif; ?>
                 <div class="evt-item">
                     <div class="evt-cal">
@@ -857,7 +840,7 @@ if ($tvStoredCustom):
         ?>
             <div class="card">
                 <?php if (!empty($item['photo_path'])): ?>
-                    <img class="mkt-thumb" src="/tv-image.php?token=<?= urlencode($token) ?>&id=<?= (int)$item['id'] ?>" alt="" loading="lazy">
+                    <img class="mkt-thumb" src="/tv-image.php?token=<?= urlencode($token) ?>&id=<?= (int)$item['id'] ?>" alt="">
                 <?php endif; ?>
                 <div class="mkt-head">
                     <div class="mkt-title"><?= e((string)$item['title']) ?></div>
@@ -904,8 +887,9 @@ tick();
 setInterval(tick, 1000);
 
 // ── Infinite auto-scroll — CSS keyframe animation on GPU compositor ──────────
-// Measure once in JS, hand the infinite loop to CSS so the Samsung TV
-// compositor thread handles it instead of the main thread.
+// Run after window.load so image heights are settled before measuring.
+// Generate per-column @keyframes with exact pixel distances — no % math
+// that can drift if image heights change between measure and animate.
 var SPEED = 40; // px per second
 
 function setupScroll(vpId, trId, startDelay) {
@@ -914,25 +898,34 @@ function setupScroll(vpId, trId, startDelay) {
     if (!vp || !tr) return;
 
     var origHeight = tr.scrollHeight;
-    if (origHeight <= vp.clientHeight + 20) return; // fits on screen, skip
+    if (origHeight <= vp.clientHeight + 20) return; // fits without scrolling
 
-    // Double the children so the list wraps seamlessly at the halfway point.
+    // Double the children so the list wraps seamlessly.
     Array.from(tr.children).forEach(function (c) { tr.appendChild(c.cloneNode(true)); });
+
+    // Inject a unique @keyframes rule using exact pixel distance, not %.
+    var name = 'tvs-' + trId;
+    var rule = '@keyframes ' + name + ' {'
+             + ' from { transform: translateY(0); }'
+             + ' to   { transform: translateY(-' + origHeight + 'px); }'
+             + ' }';
+    var s = document.createElement('style');
+    s.textContent = rule;
+    document.head.appendChild(s);
 
     var duration = (origHeight / SPEED).toFixed(2) + 's';
     var delay    = ((startDelay || 0) / 1000).toFixed(2) + 's';
 
-    tr.style.webkitAnimationDuration = duration;
-    tr.style.animationDuration       = duration;
-    tr.style.webkitAnimationDelay    = delay;
-    tr.style.animationDelay          = delay;
-    tr.classList.add('scrolling');
+    tr.style.willChange = 'transform';
+    tr.style.webkitAnimation = name + ' ' + duration + ' linear ' + delay + ' infinite';
+    tr.style.animation        = name + ' ' + duration + ' linear ' + delay + ' infinite';
 }
 
-// Stagger start times so columns don't move in perfect lockstep.
-setupScroll('vp-ann', 'tr-ann', 0);
-setupScroll('vp-evt', 'tr-evt', 800);
-setupScroll('vp-mkt', 'tr-mkt', 1600);
+window.addEventListener('load', function () {
+    setupScroll('vp-ann', 'tr-ann', 0);
+    setupScroll('vp-evt', 'tr-evt', 800);
+    setupScroll('vp-mkt', 'tr-mkt', 1600);
+});
 </script>
 </body>
 </html>
