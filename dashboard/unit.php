@@ -304,6 +304,58 @@ $formStmt = db()->prepare(
 $formStmt->execute([$assocId, $unitId]);
 $unitForms = $formStmt->fetchAll();
 
+// --- Save agents ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'save_agents') {
+    csrf_check();
+
+    $realtorId  = null;
+    $rentalId   = null;
+
+    // Handle "add new realtor" inline
+    if (($_POST['realtor_contact_id'] ?? '') === 'new') {
+        $lbl = trim((string)($_POST['realtor_new_label'] ?? ''));
+        if ($lbl !== '') {
+            db()->prepare('INSERT INTO association_contacts (association_id, kind, label, phone, email) VALUES (?,?,?,?,?)')
+               ->execute([$assocId, 'real_estate_agent', $lbl,
+                          trim((string)($_POST['realtor_new_phone'] ?? '')) ?: null,
+                          trim((string)($_POST['realtor_new_email'] ?? '')) ?: null]);
+            $realtorId = (int)db()->lastInsertId();
+        }
+    } else {
+        $rid = (int)($_POST['realtor_contact_id'] ?? 0);
+        if ($rid) {
+            $chk = db()->prepare('SELECT id FROM association_contacts WHERE id = ? AND association_id = ?');
+            $chk->execute([$rid, $assocId]);
+            if ($chk->fetchColumn()) $realtorId = $rid;
+        }
+    }
+
+    // Handle "add new rental agent" inline
+    if (($_POST['rental_agent_contact_id'] ?? '') === 'new') {
+        $lbl = trim((string)($_POST['rental_new_label'] ?? ''));
+        if ($lbl !== '') {
+            db()->prepare('INSERT INTO association_contacts (association_id, kind, label, phone, email) VALUES (?,?,?,?,?)')
+               ->execute([$assocId, 'rental_agent', $lbl,
+                          trim((string)($_POST['rental_new_phone'] ?? '')) ?: null,
+                          trim((string)($_POST['rental_new_email'] ?? '')) ?: null]);
+            $rentalId = (int)db()->lastInsertId();
+        }
+    } else {
+        $aid = (int)($_POST['rental_agent_contact_id'] ?? 0);
+        if ($aid) {
+            $chk = db()->prepare('SELECT id FROM association_contacts WHERE id = ? AND association_id = ?');
+            $chk->execute([$aid, $assocId]);
+            if ($chk->fetchColumn()) $rentalId = $aid;
+        }
+    }
+
+    db()->prepare('UPDATE units SET realtor_contact_id = ?, rental_agent_contact_id = ? WHERE id = ? AND association_id = ?')
+       ->execute([$realtorId, $rentalId, $unitId, $assocId]);
+    audit('unit.agents_updated', ['realtor_id' => $realtorId, 'rental_id' => $rentalId], $unitId, 'unit');
+    flash('success', 'Agents updated.');
+    redirect('/dashboard/unit.php?id=' . $unitId);
+}
+
 // --- Candidates for "Add occupant" dropdown: active members not already linked ---
 $candStmt = db()->prepare(
     "SELECT id, first_name, last_name, email
@@ -314,6 +366,35 @@ $candStmt = db()->prepare(
 );
 $candStmt->execute([$assocId, $unitId]);
 $candidates = $candStmt->fetchAll();
+
+// --- Load agent contacts for dropdowns ---
+$realtorContacts = db()->prepare(
+    "SELECT id, label, phone, email FROM association_contacts
+      WHERE association_id = ? AND kind = 'real_estate_agent' ORDER BY label"
+);
+$realtorContacts->execute([$assocId]);
+$realtorContacts = $realtorContacts->fetchAll();
+
+$rentalAgentContacts = db()->prepare(
+    "SELECT id, label, phone, email FROM association_contacts
+      WHERE association_id = ? AND kind = 'rental_agent' ORDER BY label"
+);
+$rentalAgentContacts->execute([$assocId]);
+$rentalAgentContacts = $rentalAgentContacts->fetchAll();
+
+// Load currently linked agent detail rows (for display)
+$currentRealtor = null;
+if (!empty($unit['realtor_contact_id'])) {
+    $s = db()->prepare('SELECT id, label, phone, email, url FROM association_contacts WHERE id = ? AND association_id = ?');
+    $s->execute([(int)$unit['realtor_contact_id'], $assocId]);
+    $currentRealtor = $s->fetch() ?: null;
+}
+$currentRentalAgent = null;
+if (!empty($unit['rental_agent_contact_id'])) {
+    $s = db()->prepare('SELECT id, label, phone, email, url FROM association_contacts WHERE id = ? AND association_id = ?');
+    $s->execute([(int)$unit['rental_agent_contact_id'], $assocId]);
+    $currentRentalAgent = $s->fetch() ?: null;
+}
 
 $showEditUnit     = ($_GET['action'] ?? '') === 'edit_unit';
 $showAddOccupant  = ($_GET['action'] ?? '') === 'add_occupant';
@@ -420,6 +501,83 @@ require __DIR__ . '/../includes/header.php';
         </form>
     </div>
     <?php endif; ?>
+
+    <!-- Agents -->
+    <h2 style="font-size: var(--fs-xl); margin-top: var(--sp-6);">Agents <span class="muted" style="font-size: var(--fs-sm); font-weight: 400;">— real estate or rental agent for this unit</span></h2>
+    <div class="card card--padded" style="margin-bottom: var(--sp-6);">
+        <form method="post" class="form">
+            <?= csrf_field() ?>
+            <input type="hidden" name="form" value="save_agents">
+            <div class="form-row form-row--2">
+                <!-- Real estate agent -->
+                <div class="field">
+                    <label class="field__label" for="ag-realtor">Real estate agent</label>
+                    <select class="select" id="ag-realtor" name="realtor_contact_id"
+                            onchange="agentNewToggle('realtor', this.value)">
+                        <option value="">— none —</option>
+                        <?php foreach ($realtorContacts as $c): ?>
+                            <option value="<?= (int)$c['id'] ?>"
+                                <?= (string)$unit['realtor_contact_id'] === (string)$c['id'] ? 'selected' : '' ?>>
+                                <?= e((string)$c['label']) ?><?= $c['phone'] ? ' · ' . e((string)$c['phone']) : '' ?>
+                            </option>
+                        <?php endforeach; ?>
+                        <option value="new">+ Add new agent…</option>
+                    </select>
+                    <?php if ($currentRealtor): ?>
+                    <div style="margin-top: var(--sp-2); font-size: var(--fs-sm); color: var(--color-text-soft);">
+                        <?php if ($currentRealtor['phone']): ?><div>📞 <?= e((string)$currentRealtor['phone']) ?></div><?php endif; ?>
+                        <?php if ($currentRealtor['email']): ?><div>✉ <a href="mailto:<?= e((string)$currentRealtor['email']) ?>"><?= e((string)$currentRealtor['email']) ?></a></div><?php endif; ?>
+                        <?php if ($currentRealtor['url']): ?><div>🔗 <a href="<?= e((string)$currentRealtor['url']) ?>" target="_blank" rel="noopener"><?= e((string)$currentRealtor['url']) ?></a></div><?php endif; ?>
+                    </div>
+                    <?php endif; ?>
+                    <div id="realtor-new-fields" style="display:none; margin-top: var(--sp-3); display:flex; flex-direction:column; gap: var(--sp-2);">
+                        <input class="input" name="realtor_new_label" placeholder="Name or company *" maxlength="120">
+                        <input class="input" name="realtor_new_phone" placeholder="Phone" maxlength="40">
+                        <input class="input" type="email" name="realtor_new_email" placeholder="Email" maxlength="255">
+                    </div>
+                </div>
+                <!-- Rental / property manager -->
+                <div class="field">
+                    <label class="field__label" for="ag-rental">Rental / property manager</label>
+                    <select class="select" id="ag-rental" name="rental_agent_contact_id"
+                            onchange="agentNewToggle('rental', this.value)">
+                        <option value="">— none —</option>
+                        <?php foreach ($rentalAgentContacts as $c): ?>
+                            <option value="<?= (int)$c['id'] ?>"
+                                <?= (string)$unit['rental_agent_contact_id'] === (string)$c['id'] ? 'selected' : '' ?>>
+                                <?= e((string)$c['label']) ?><?= $c['phone'] ? ' · ' . e((string)$c['phone']) : '' ?>
+                            </option>
+                        <?php endforeach; ?>
+                        <option value="new">+ Add new agent…</option>
+                    </select>
+                    <?php if ($currentRentalAgent): ?>
+                    <div style="margin-top: var(--sp-2); font-size: var(--fs-sm); color: var(--color-text-soft);">
+                        <?php if ($currentRentalAgent['phone']): ?><div>📞 <?= e((string)$currentRentalAgent['phone']) ?></div><?php endif; ?>
+                        <?php if ($currentRentalAgent['email']): ?><div>✉ <a href="mailto:<?= e((string)$currentRentalAgent['email']) ?>"><?= e((string)$currentRentalAgent['email']) ?></a></div><?php endif; ?>
+                        <?php if ($currentRentalAgent['url']): ?><div>🔗 <a href="<?= e((string)$currentRentalAgent['url']) ?>" target="_blank" rel="noopener"><?= e((string)$currentRentalAgent['url']) ?></a></div><?php endif; ?>
+                    </div>
+                    <?php endif; ?>
+                    <div id="rental-new-fields" style="display:none; margin-top: var(--sp-3); display:flex; flex-direction:column; gap: var(--sp-2);">
+                        <input class="input" name="rental_new_label" placeholder="Name or company *" maxlength="120">
+                        <input class="input" name="rental_new_phone" placeholder="Phone" maxlength="40">
+                        <input class="input" type="email" name="rental_new_email" placeholder="Email" maxlength="255">
+                    </div>
+                </div>
+            </div>
+            <div class="row" style="justify-content: flex-end; margin-top: var(--sp-2);">
+                <button class="btn btn--primary" type="submit">Save agents</button>
+            </div>
+        </form>
+    </div>
+    <script>
+    function agentNewToggle(prefix, val) {
+        var el = document.getElementById(prefix + '-new-fields');
+        if (!el) return;
+        el.style.display = val === 'new' ? 'flex' : 'none';
+    }
+    agentNewToggle('realtor', document.getElementById('ag-realtor').value);
+    agentNewToggle('rental',  document.getElementById('ag-rental').value);
+    </script>
 
     <!-- Occupants -->
     <h2 style="font-size: var(--fs-xl); margin-top: var(--sp-6);">Occupants <span class="muted" style="font-size: var(--fs-sm); font-weight: 400;">— owners, co-owners, and tenants linked to this unit</span></h2>

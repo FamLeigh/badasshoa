@@ -601,8 +601,10 @@ if ($page_layout === 'app' && isset($association) && $association):
         </a>
         <?php endif; ?>
 
-        <!-- Scroll-fade hint — fades in when links overflow the sidebar; click scrolls down -->
+        <!-- Scroll-fade hint — app layout only; admin doesn't need it and the absolute positioning blocks the sign-out link -->
+        <?php if ($page_layout === 'app'): ?>
         <button type="button" class="side-nav__scroll-hint" id="side-nav-scroll-hint" aria-label="Scroll down for more">↓ more</button>
+        <?php endif; ?>
 
     </div>
 </nav>

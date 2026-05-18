@@ -537,40 +537,6 @@ $page_layout = 'public_landing'; // Avoids the public marketing nav; landing has
 </section>
 <?php endif; ?>
 
-<?php if ($publicAnnouncements): ?>
-<section class="landing-news">
-    <div class="container container--narrow">
-        <h2 class="landing-news__heading">From the board</h2>
-        <p class="muted landing-news__sub">Latest community announcements. Sign in to see board-only updates.</p>
-        <div class="stack-lg" style="margin-top: var(--sp-8);">
-            <?php foreach ($publicAnnouncements as $a):
-                $typeBadgeStyle = ann_badge_style((string)$a['type'], $landingAnnColors);
-            ?>
-            <article class="landing-news__item">
-                <div class="row" style="gap: var(--sp-3); margin-bottom: var(--sp-2); flex-wrap: wrap;">
-                    <span class="badge" style="<?= $typeBadgeStyle ?>"><?= e(ann_type_label((string)$a['type'])) ?></span>
-                    <span class="muted" style="font-size: var(--fs-xs);">
-                        <?= e(date('M j, Y', strtotime((string)$a['published_at']))) ?>
-                        <?php if (trim((string)$a['author']) !== ''): ?>
-                            &middot; posted by <?= e(trim((string)$a['author'])) ?>
-                        <?php endif; ?>
-                    </span>
-                </div>
-                <h3 style="font-size: var(--fs-xl); margin: 0 0 var(--sp-2);"><?= e((string)$a['title']) ?></h3>
-                <?php if (!empty($a['image_path'])): ?>
-                    <img src="/announcement-image.php?id=<?= (int)$a['id'] ?>"
-                         alt=""
-                         style="width: 100%; max-height: 280px; object-fit: cover; border-radius: var(--r-md); margin-bottom: var(--sp-3); display: block;">
-                <?php endif; ?>
-                <p style="margin: 0; white-space: pre-wrap; color: var(--color-text-soft);">
-                    <?= e(mb_strimwidth(strip_tags((string)$a['body']), 0, 360, '…')) ?>
-                </p>
-            </article>
-            <?php endforeach; ?>
-        </div>
-    </div>
-</section>
-<?php endif; ?>
 
 <!-- ════════════════════════════════════════════════ NEWSLETTER SIGNUP ═══ -->
 <section style="background: <?= e($primary) ?>; padding: var(--sp-12) 0;">
