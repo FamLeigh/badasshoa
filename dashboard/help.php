@@ -16,12 +16,12 @@ $visible = array_filter($all, function(array $t) use ($rank): bool {
 
 // Pick the active topic.
 $slug   = trim((string)($_GET['topic'] ?? ''));
-$active = null;
+$activeTopic = null;
 foreach ($visible as $t) {
-    if ($t['slug'] === $slug) { $active = $t; break; }
+    if ($t['slug'] === $slug) { $activeTopic = $t; break; }
 }
-if (!$active) {
-    $active = array_values($visible)[0] ?? null;
+if (!$activeTopic) {
+    $activeTopic = array_values($visible)[0] ?? null;
 }
 
 // Group visible topics by category for the sidebar.
@@ -130,7 +130,7 @@ require __DIR__ . '/../includes/header.php';
         <div class="help-sidebar__group" data-group>
             <div class="help-sidebar__group-label"><?= e($category) ?></div>
             <?php foreach ($topics as $t): ?>
-            <a class="help-sidebar__link<?= $active && $active['slug'] === $t['slug'] ? ' active' : '' ?>"
+            <a class="help-sidebar__link<?= $activeTopic && $activeTopic['slug'] === $t['slug'] ? ' active' : '' ?>"
                href="/dashboard/help.php?topic=<?= e($t['slug']) ?>"
                data-topic-title="<?= e(strtolower(strip_tags($t['title']))) ?>">
                 <?= e($t['title']) ?>
@@ -146,7 +146,7 @@ require __DIR__ . '/../includes/header.php';
             <?php foreach ($grouped as $category => $topics): ?>
             <optgroup label="<?= e($category) ?>">
                 <?php foreach ($topics as $t): ?>
-                <option value="<?= e($t['slug']) ?>"<?= $active && $active['slug'] === $t['slug'] ? ' selected' : '' ?>><?= e($t['title']) ?></option>
+                <option value="<?= e($t['slug']) ?>"<?= $activeTopic && $activeTopic['slug'] === $t['slug'] ? ' selected' : '' ?>><?= e($t['title']) ?></option>
                 <?php endforeach; ?>
             </optgroup>
             <?php endforeach; ?>
@@ -155,11 +155,11 @@ require __DIR__ . '/../includes/header.php';
 
     <!-- Content -->
     <div class="help-content" id="help-content-panel">
-        <?php if ($active): ?>
-        <span class="help-category-tag"><?= e($active['category']) ?></span>
-        <h1><?= e($active['title']) ?></h1>
+        <?php if ($activeTopic): ?>
+        <span class="help-category-tag"><?= e($activeTopic['category']) ?></span>
+        <h1><?= e($activeTopic['title']) ?></h1>
         <hr style="border: 0; border-top: 1px solid var(--color-border); margin: var(--sp-4) 0 var(--sp-6);">
-        <?= $active['body'] ?>
+        <?= $activeTopic['body'] ?>
         <?php else: ?>
         <p class="muted">No help topics available for your role.</p>
         <?php endif; ?>
