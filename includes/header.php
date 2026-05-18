@@ -525,7 +525,7 @@ if ($page_layout === 'app' && isset($association) && $association):
                 <?php endif; ?>
                 <?= nav_link('/dashboard/media.php',     'media',     'Media',     'media',     $active) ?>
                 <?php if (can_do('read_full_directory')): ?>
-                    <?= nav_link('/dashboard/directory.php', 'directory', 'Directory', 'directory', $active) ?>
+                    <?= nav_link('/dashboard/directory.php', 'directory', 'Owners / Renters', 'directory', $active) ?>
                 <?php endif; ?>
                 <?php if (can_do('read_contacts')): ?>
                     <?= nav_link('/dashboard/contacts.php', 'contacts', 'Contacts', 'contacts', $active) ?>

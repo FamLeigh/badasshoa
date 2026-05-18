@@ -303,9 +303,12 @@ require __DIR__ . '/../includes/header.php';
         <a class="stat" href="/dashboard/directory.php">
             <div class="stat__icon">👥</div>
             <div class="stat__body">
-                <div class="stat__label">Members</div>
-                <div class="stat__value"><?= (int)$stats['members'] ?></div>
-                <div class="stat__hint"><?= (int)$stats['members_owners'] ?> owners &middot; <?= (int)$stats['members_renters'] ?> renters &middot; <?= (int)$stats['members_staff'] ?> team</div>
+                <div class="stat__label">Owners / Renters</div>
+                <div style="display:flex; gap:var(--sp-3); align-items:baseline; flex-wrap:wrap;">
+                    <div><span class="stat__value"><?= (int)$stats['members_owners'] ?></span> <span style="font-size:var(--fs-xs);color:var(--color-text-soft);">owners</span></div>
+                    <span style="color:var(--color-text-soft);">/</span>
+                    <div><span class="stat__value"><?= (int)$stats['members_renters'] ?></span> <span style="font-size:var(--fs-xs);color:var(--color-text-soft);">renters</span></div>
+                </div>
             </div>
         </a>
         <?php if ($canManage): ?>

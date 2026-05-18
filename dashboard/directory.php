@@ -154,7 +154,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'invite'
     $phone   = trim((string)($_POST['phone'] ?? ''));
     $role    = $_POST['role'] ?? 'owner';
     $unit    = trim((string)($_POST['unit_number'] ?? ''));
-    $isOwner = isset($_POST['is_owner']) ? 1 : 0;
+    $memberType = $_POST['member_type'] ?? 'owner';
+    if (!in_array($memberType, ['owner','renter','staff'], true)) $memberType = 'owner';
+    $isOwner = $memberType === 'owner' ? 1 : 0;
 
     $allowedRoles = ['owner','renter','board_member','board_admin','property_manager','staff'];
     if (!in_array($role, $allowedRoles, true)) $role = 'owner';
@@ -264,7 +266,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit') 
     if ($mCtry !== '' && !preg_match('/^[A-Z]{2}$/', $mCtry)) $mCtry = '';
     $unit   = trim((string)($_POST['unit_number'] ?? ''));
     $role   = $_POST['role'] ?? 'owner';
-    $isOwner = isset($_POST['is_owner']) ? 1 : 0;
+    $memberType = $_POST['member_type'] ?? 'owner';
+    if (!in_array($memberType, ['owner','renter','staff'], true)) $memberType = 'owner';
+    $isOwner = $memberType === 'owner' ? 1 : 0;
     $status  = $_POST['status'] ?? 'active';
 
     $allowedRoles  = ['owner','renter','board_member','board_admin','property_manager','staff'];
@@ -641,11 +645,20 @@ require __DIR__ . '/../includes/header.php';
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <div class="field" style="justify-content: center;">
-                    <label class="field__label">&nbsp;</label>
-                    <label style="display:flex; align-items:center; gap: var(--sp-2);">
-                        <input type="checkbox" name="is_owner" <?= $editUser['is_owner'] ? 'checked' : '' ?>> Owner (uncheck for renter)
-                    </label>
+                <div class="field">
+                    <label class="field__label">Member type</label>
+                    <?php
+                        $editMemberType = $editUser['role'] === 'staff' ? 'staff'
+                            : ($editUser['is_owner'] ? 'owner' : 'renter');
+                    ?>
+                    <div style="display:flex; gap:var(--sp-4); align-items:center; padding-top:6px;">
+                        <?php foreach (['owner'=>'Owner','renter'=>'Renter','staff'=>'Staff'] as $mv => $ml): ?>
+                        <label style="display:flex;align-items:center;gap:var(--sp-1);cursor:pointer;">
+                            <input type="radio" name="member_type" value="<?= $mv ?>" <?= $editMemberType === $mv ? 'checked' : '' ?>>
+                            <?= $ml ?>
+                        </label>
+                        <?php endforeach; ?>
+                    </div>
                 </div>
             </div>
 
@@ -823,11 +836,13 @@ B2,Sam,Garcia,sam@example.com,,,,0</pre>
             </div>
             <div class="form-row form-row--2">
                 <div class="field"><label class="field__label" for="iunit">Unit #</label><input class="input" id="iunit" name="unit_number" placeholder="101A"></div>
-                <div class="field" style="justify-content: flex-end;">
-                    <label class="field__label">&nbsp;</label>
-                    <label style="display:flex; align-items:center; gap: var(--sp-2);">
-                        <input type="checkbox" name="is_owner" checked> Owner (uncheck for renter)
-                    </label>
+                <div class="field">
+                    <label class="field__label">Member type</label>
+                    <div style="display:flex; gap:var(--sp-4); align-items:center; padding-top:6px;">
+                        <label style="display:flex;align-items:center;gap:var(--sp-1);cursor:pointer;"><input type="radio" name="member_type" value="owner" checked> Owner</label>
+                        <label style="display:flex;align-items:center;gap:var(--sp-1);cursor:pointer;"><input type="radio" name="member_type" value="renter"> Renter</label>
+                        <label style="display:flex;align-items:center;gap:var(--sp-1);cursor:pointer;"><input type="radio" name="member_type" value="staff"> Staff</label>
+                    </div>
                 </div>
             </div>
             <div class="form-row form-row--2">
@@ -990,7 +1005,15 @@ B2,Sam,Garcia,sam@example.com,,,,0</pre>
                 </td>
                 <td><?= e(str_replace('_',' ',$r['role'])) ?></td>
                 <td>
-                    <?= $r['is_owner'] ? '<span class="badge badge--success">Owner</span>' : '<span class="badge">Renter</span>' ?>
+                    <?php
+                        if (in_array($r['role'], ['staff','property_manager'], true)) {
+                            echo '<span class="badge" style="background:#e8eaf0;color:#444;">Staff</span>';
+                        } elseif ($r['is_owner']) {
+                            echo '<span class="badge badge--success">Owner</span>';
+                        } else {
+                            echo '<span class="badge">Renter</span>';
+                        }
+                    ?>
                     <?php if (!empty($r['employee_job_title'])): ?>
                         <span class="badge" style="background: #efe7d1; color: #6b4a06; border: 1px solid #d9c97a; font-size: var(--fs-xs);" title="<?= e((string)$r['employee_job_title']) ?>">💼 <?= e(mb_strimwidth((string)$r['employee_job_title'], 0, 22, '…')) ?></span>
                     <?php endif; ?>
