@@ -1,5 +1,131 @@
 [
     {
+        "id": "cl-20260518-directory-opt-out",
+        "at": "2026-05-18T14:00:00-04:00",
+        "type": "feature",
+        "title": "Residents can opt out of the member directory",
+        "description": "Unit owners and renters can now hide themselves from the resident directory without involving the board. A new 'Directory privacy' checkbox in Settings > Your account lets you opt out with one click. Other residents won't see your name, unit, email, or phone in the directory — but the board and management can always see your information for community management purposes. Board and management roles don't get the toggle since their presence in the directory is part of their community role.",
+        "author": "Reboooot",
+        "link": "/dashboard/settings.php#section-account"
+    },
+    {
+        "id": "cl-20260518-concerns-contact-block",
+        "at": "2026-05-18T13:30:00-04:00",
+        "type": "improvement",
+        "title": "Concerns form now shows how the board will contact you",
+        "description": "When you submit a concern, complaint, or compliment, the form now displays your contact details — name, unit, email, and phone — so you know exactly what the board will use to follow up. If your phone isn't on file, a link takes you straight to profile to add it. The anonymous toggle hides your contact block and shows a clear warning: the board won't be able to follow up or give you updates if they don't know who you are. The member name typeahead also now respects your directory privacy setting — if the board has restricted the full directory, the picker is hidden entirely.",
+        "author": "Reboooot",
+        "link": "/dashboard/concerns.php?action=submit"
+    },
+    {
+        "id": "cl-20260518-dashboard-tile-polish",
+        "at": "2026-05-18T13:00:00-04:00",
+        "type": "improvement",
+        "title": "Dashboard tile polish — members breakdown, rules label, safer contact tiles",
+        "description": "Three small improvements to the dashboard tiles. (1) The Members tile now shows a breakdown under the total count: how many owners, how many renters, and how many team/staff members. (2) The Rules tile label is now 'Rules & bylaws' to more accurately reflect what it links to. (3) The Board & mgmt and Contacts tiles no longer act as links for users who don't have contacts access — previously clicking them would hit a 'you don't have access' wall; now they render as plain non-clickable tiles for those users.",
+        "author": "Reboooot",
+        "link": "/dashboard/"
+    },
+    {
+        "id": "cl-20260518-association-timezone",
+        "at": "2026-05-18T12:00:00-04:00",
+        "type": "improvement",
+        "title": "Events and lobby TV now display in your association's local timezone",
+        "description": "Associations can now set their local timezone in Settings > Association profile. Events are stored in UTC and displayed in the association's local time everywhere — the Events page, the event editor (so 6 PM means 6 PM, not 6 PM UTC), and the Lobby TV. Previously all times were stored and displayed as UTC, so a 6 PM event showed as 2 PM on the TV for Eastern associations. Times entered in the event form are now treated as local time and converted to UTC on save.",
+        "author": "Reboooot",
+        "link": "/dashboard/settings.php"
+    },
+    {
+        "id": "cl-20260518-comms-archive",
+        "at": "2026-05-18T11:30:00-04:00",
+        "type": "improvement",
+        "title": "Archived announcements tab for board admins",
+        "description": "Board admins can now view expired announcements without digging through settings. A new 'Archived' tab on the Announcements page lists everything past its expiry date. Switching back to the live view shows only current announcements as before. Useful for referencing what was communicated in past months or reposting a seasonal reminder.",
+        "author": "Reboooot",
+        "link": "/dashboard/communications.php"
+    },
+    {
+        "id": "cl-20260518-tv-pin-kiosk",
+        "at": "2026-05-18T11:00:00-04:00",
+        "type": "feature",
+        "title": "Lobby TV PIN kiosk login — no more sharing the token URL",
+        "description": "The Lobby TV now has a proper PIN-based login screen at /tv. Enter your community ID (the slug, e.g. 'bellair') and your 4–10 digit PIN, and you get a bookmarkable URL you can load on any TV or kiosk browser. The PIN is managed by the board admin in Settings > Lobby TV — it's randomized on first setup and can be changed any time. The kiosk is rate-limited: 10 wrong PIN attempts from one IP locks out that IP for 15 minutes. Legacy token-based URLs still work if you have one bookmarked. The TV display also gained infinite scroll (content loops seamlessly instead of jumping), a 10-minute page refresh, a high-visibility footer CTA pointing residents to the portal, and copyright.",
+        "author": "Reboooot",
+        "link": "/tv"
+    },
+    {
+        "id": "cl-20260514-events-all-tab",
+        "at": "2026-05-14T18:00:00-04:00",
+        "type": "improvement",
+        "title": "Events: All tab so nothing disappears into the past",
+        "description": "Board admins now see an 'All' tab on the Events page alongside Upcoming and Past. The All tab shows every event regardless of date with full Edit and Delete buttons. This fixes a real problem: if you save an event with the wrong date it would immediately fall off the Upcoming view and show up buried in Past with no obvious way to fix it. Now it's always reachable.",
+        "author": "Reboooot",
+        "link": "/dashboard/events.php"
+    },
+    {
+        "id": "cl-20260514-legal-reference",
+        "at": "2026-05-14T15:00:00-04:00",
+        "type": "feature",
+        "title": "Legal reference — Florida HOA and condo statutes, searchable in-app",
+        "description": "A new Legal page (balance-scale icon in the sidebar, under Resources) gives every signed-in member access to Florida's HOA and condo statutes — chapters 718 (condominiums), 719 (cooperatives), 720 (HOAs), and 553 (building codes). FULLTEXT search across all 232 statutes, plus filters for chapter, what it applies to, and category. For statutes with full text loaded in-app, click Expand to read it right there. For the rest, the Official site button opens the Florida Legislature's page directly. Board admins can import additional states or update the statute list via the admin panel (Admin > Legal import, CSV format).",
+        "author": "Reboooot",
+        "link": "/dashboard/legal.php"
+    },
+    {
+        "id": "cl-20260514-lobby-tv-overhaul",
+        "at": "2026-05-14T12:00:00-04:00",
+        "type": "improvement",
+        "title": "Lobby TV overhaul — 3-column layout, weather, readable from across the room",
+        "description": "The Lobby TV display got a full rework. Three columns — Announcements, Upcoming Events, and Marketplace — each with a colored header, item count, and its own independent scroll that loops when it runs out of content. Text is sized for distance viewing using fluid clamp() values (event dates read as large as 2.6rem). A weather widget centered in the header shows current conditions (WMO emoji + temperature + wind + precipitation) from Open-Meteo (free, no API key), refreshing every 30 minutes. The association's logo is now larger (up to 110px tall). Recurring events are now properly expanded — previously a weekly meeting series only showed one row; now all upcoming occurrences appear. Fixed a bug where trial-status associations were excluded from the TV query.",
+        "author": "Reboooot",
+        "link": "/tv"
+    },
+    {
+        "id": "cl-20260513-marketplace",
+        "at": "2026-05-13T14:00:00-04:00",
+        "type": "feature",
+        "title": "Marketplace — buy, sell, and give away within your community",
+        "description": "Residents can now post items for sale, free giveaways, or wanted ads directly in the community marketplace at /dashboard/marketplace.php. Each listing has a title, category (Furniture, Appliances, Electronics, Clothing, Vehicles, Real estate, Services, Free, and more), price (or 'Free'), description, and an optional photo. Listings default to active and can be marked sold or removed by the poster. Board admins can remove any listing. Active listings appear on the Lobby TV in the third column and are counted on the dashboard home tile. The category set and moderation settings can be extended by the board.",
+        "author": "Reboooot",
+        "link": "/dashboard/marketplace.php"
+    },
+    {
+        "id": "cl-20260513-announcement-images",
+        "at": "2026-05-13T11:00:00-04:00",
+        "type": "improvement",
+        "title": "Announcements can include an image",
+        "description": "Board admins can now attach an optional image to any announcement — a flyer, a photo from last month's social, a map of the work zone, anything. The image appears inline below the announcement body on the dashboard and on the public community landing. Images are served through the same secure file gatekeeper as documents, respecting the announcement's audience setting.",
+        "author": "Reboooot",
+        "link": "/dashboard/communications.php"
+    },
+    {
+        "id": "cl-20260513-life-event-announcements",
+        "at": "2026-05-13T10:00:00-04:00",
+        "type": "feature",
+        "title": "Birth and death notices as announcement types",
+        "description": "Two new announcement types — Birth notice and Death notice — let the board share community life events with residents who want to know. They have their own distinct badge colors and are categorized separately so residents can filter or ignore them. Like all announcements, the audience can be scoped (all residents, owners only, board only).",
+        "author": "Reboooot",
+        "link": "/dashboard/communications.php"
+    },
+    {
+        "id": "cl-20260513-unit-media-gallery",
+        "at": "2026-05-13T09:00:00-04:00",
+        "type": "feature",
+        "title": "Per-unit photo gallery + document archiving",
+        "description": "Each unit now has its own media gallery — floor plan images, interior photos, renovation before/after shots — managed from the unit detail page (/dashboard/unit.php). Images are scoped to the unit, board-only by default, and served through the secure file gatekeeper. Separately, documents can now be archived (soft-deleted) instead of permanently removed. Archived documents stay in the database and can be restored by a board admin, but they don't appear in the regular document listing. Useful for superseded rules, old insurance certificates, or past floor plans you want to keep but not surface.",
+        "author": "Reboooot",
+        "link": "/dashboard/unit.php"
+    },
+    {
+        "id": "cl-20260513-governing-docs-guide",
+        "at": "2026-05-13T08:00:00-04:00",
+        "type": "content",
+        "title": "Governing documents guide for residents",
+        "description": "A new in-app reference page explains Florida HOA and condo governing documents in plain language — what a Declaration of Condominium is, how it differs from the Bylaws and Rules, who can change what and by what vote threshold, and what residents can do if they disagree with a rule. Linked from the Rules & Bylaws page. Scoped to each association's city and type. No legalese.",
+        "author": "Reboooot",
+        "link": "/dashboard/governing-docs.php"
+    },
+    {
         "id": "cl-20260515-ann-tag-colors",
         "at": "2026-05-15T09:00:00-04:00",
         "type": "improvement",
@@ -10,7 +136,7 @@
     },
     {
         "id": "cl-20260512-290000-permissions",
-        "at": "2026-05-12T29:00:00-04:00",
+        "at": "2026-05-12T21:00:00-04:00",
         "type": "feature",
         "title": "Configurable permissions dashboard — board sets who sees what",
         "description": "Board admins can now configure exactly which role is required to access each feature. A new Permissions page (board-admin only) shows a matrix: rows are features, columns are roles. Pick the minimum role for each feature and save. Features you can configure include: viewing meeting minutes, viewing work orders (read-only), viewing violations (read-only), viewing the employee roster, viewing insurance records, the full resident directory, submitting concerns, and submitting ARC requests. Management-write actions (creating work orders, issuing violation notices, editing employees) are always restricted to board/management roles and are not configurable. Changes take effect immediately and are per-association — you're not changing settings for any other community. If you haven't customized a feature, it falls back to a sensible default. Custom overrides are labeled 'custom' in the matrix so you always know what you've changed.",
@@ -19,7 +145,7 @@
     },
     {
         "id": "cl-20260512-285000-owner-rename",
-        "at": "2026-05-12T28:50:00-04:00",
+        "at": "2026-05-12T20:50:00-04:00",
         "type": "improvement",
         "title": "Role renamed: 'Resident' is now 'Owner'",
         "description": "The resident role has been renamed to 'Owner' throughout the app and database. This better reflects what the role actually represents — a unit owner, not just any resident. Existing accounts are migrated automatically; nothing changes for current users except the label. The 'Renter' role remains separate (renters have narrower access than owners — they can't file ARC requests, join committees, or access settings). If you were filtering by 'Resident' anywhere, you'll now see 'Owner' in its place.",
@@ -28,7 +154,7 @@
     },
     {
         "id": "cl-20260512-280000-wo-announcement",
-        "at": "2026-05-12T28:00:00-04:00",
+        "at": "2026-05-12T20:00:00-04:00",
         "type": "feature",
         "title": "Work orders — post a resident announcement when status changes",
         "description": "When a board admin updates a work order status, an optional 'Post an announcement' section now appears in the status form. Tick the checkbox to expand it, pick the audience (All residents, Owners only, Renters only, or Board only), and write the announcement body. The title auto-fills based on the new status — 'Work completed: [title]' when marking done, 'In progress: [title]' when starting work — but you can change it to anything. Handy for closing the loop with residents: when the pool pump is finally fixed or the elevator comes back online, one status change both updates the work order and notifies residents without a second trip to the announcements page.",
@@ -37,7 +163,7 @@
     },
     {
         "id": "cl-20260512-275000-wo-employees",
-        "at": "2026-05-12T27:50:00-04:00",
+        "at": "2026-05-12T19:50:00-04:00",
         "type": "improvement",
         "title": "Work orders — assign to employees, not just board members",
         "description": "The 'Assigned to' dropdown on work orders now includes all active employees (contractors, vendors, maintenance staff) alongside board and management roles. If an employee has a title on file (e.g., 'HVAC Technician', 'Pool Service'), that title shows in the dropdown. This means you no longer need to create a board-role account just to route a work order to your plumber or landscaper.",
@@ -46,7 +172,7 @@
     },
     {
         "id": "cl-20260512-270000-insurance-docs",
-        "at": "2026-05-12T27:00:00-04:00",
+        "at": "2026-05-12T19:00:00-04:00",
         "type": "improvement",
         "title": "Insurance — attach policy documents directly to each record",
         "description": "The insurance record edit view now includes an attached documents section. Board admins can upload PDFs, Word docs, or images (up to 25 MB each) directly from the insurance page and they're stored with the policy record — no more uploading to the documents library and hunting for them later. Attached files are board-only and pull from the same storage quota. You can also delete individual attachments from the same view.",
@@ -55,7 +181,7 @@
     },
     {
         "id": "cl-20260512-265000-employee-docs",
-        "at": "2026-05-12T26:50:00-04:00",
+        "at": "2026-05-12T18:50:00-04:00",
         "type": "improvement",
         "title": "Employees — attach W-9s, contracts, and background checks to employee records",
         "description": "Board admins can now attach documents directly to an employee record — W-9s, signed contracts, background-check reports, certifications, anything relevant to that person. The upload section appears in the employee edit form (board admin only). Attached files are board-only access, stored in the same upload quota, and can be individually deleted from the same view.",
@@ -64,7 +190,7 @@
     },
     {
         "id": "cl-20260512-260000-employee-financials",
-        "at": "2026-05-12T26:00:00-04:00",
+        "at": "2026-05-12T18:00:00-04:00",
         "type": "improvement",
         "title": "Employee financial details gated to board admins only",
         "description": "Pay type, pay rate, and salary information on employee records is now visible and editable only by board admins and super admins. Board members and property managers can still view and update everything else on an employee record (name, title, contact, status, notes) but pay details are hidden. This separates the operational view from the financial one without splitting the page into two separate access tiers.",
@@ -73,7 +199,7 @@
     },
     {
         "id": "cl-20260512-240000-batch",
-        "at": "2026-05-12T24:00:00-04:00",
+        "at": "2026-05-12T17:00:00-04:00",
         "type": "feature",
         "title": "Meeting minutes, maintenance-to-WO, and forgot-password rate limiting",
         "description": "Three things shipped together. (1) Board meeting minutes: a new Minutes page in the dashboard lets the board record official meeting minutes with a rich-text editor (Quill), attendee list, meeting type (Regular / Special / Annual / Executive Session), and date. All members can read; only board admins and property managers can create or edit. (2) Maintenance request → Work Order: when a member files a maintenance request form, board admins now see a 'Convert to Work Order' button on the submission detail that pre-fills the work order title, priority, description, location, and access instructions from the form payload. (3) IP rate limiting on the forgot-password page: the page now caps at 5 reset-link requests per IP address per hour and returns a clear error if exceeded. Previously there was no per-IP cap — an attacker could spam unlimited reset emails from a single connection.",
