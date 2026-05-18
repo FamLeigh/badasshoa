@@ -75,6 +75,7 @@ function active_nav_key(): string
         '/admin/users.php'              => 'users',
         '/admin/activity.php'           => 'activity',
         '/admin/changelog.php'          => 'changelog',
+        '/dashboard/help.php'           => 'help',
     ];
     return $map[$path] ?? '';
 }
@@ -454,6 +455,9 @@ if ($page_layout === 'app' && isset($association) && $association):
             </span>
             <span class="topbar-user__name"><?= e(trim(explode(' ', (string)($_SESSION['name'] ?? ''))[0])) ?: e($userInitial) ?></span>
         </a>
+        <a class="topbar-user__help" href="/dashboard/help.php" title="Help">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </a>
         <a class="topbar-user__signout" href="/logout.php" title="Sign out">
             <?= nav_icon('logout') ?>
             <span class="topbar-user__signout-label">Sign out</span>
@@ -582,6 +586,15 @@ if ($page_layout === 'app' && isset($association) && $association):
             <?= nav_link('/admin/legal.php',           'legal',          'Legal / Laws',   'legal',          $active) ?>
         <?php endif; ?>
         </div>
+
+        <!-- Help link — always visible at the bottom of the nav -->
+        <?php if ($page_layout === 'app'): ?>
+        <a class="side-nav__link side-nav__help-link<?= ($active === 'help') ? ' active' : '' ?>"
+           href="/dashboard/help.php" style="margin-top: auto; border-top: 1px solid var(--color-border); padding-top: var(--sp-3); margin-top: var(--sp-2);">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <span class="side-nav__label">Help</span>
+        </a>
+        <?php endif; ?>
 
         <!-- Scroll-fade hint — fades in when links overflow the sidebar; click scrolls down -->
         <button type="button" class="side-nav__scroll-hint" id="side-nav-scroll-hint" aria-label="Scroll down for more">↓ more</button>

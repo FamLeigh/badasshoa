@@ -794,6 +794,17 @@
 .topbar-user__signout-label { /* hidden on narrow screens */ }
 @media (max-width: 860px) { .topbar-user__signout-label { display: none; } }
 
+.topbar-user__help {
+    display: flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px;
+    color: var(--color-text-soft);
+    border-radius: var(--r-sm);
+    text-decoration: none;
+    transition: background var(--t-fast), color var(--t-fast);
+    flex-shrink: 0;
+}
+.topbar-user__help:hover { background: var(--color-surface); color: var(--color-navy); text-decoration: none; }
+
 /* Alerts bell */
 .topbar-alerts { position: relative; flex: 0 0 auto; }
 .topbar-alerts__btn {
