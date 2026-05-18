@@ -886,12 +886,11 @@ function tick() {
 tick();
 setInterval(tick, 1000);
 
-// ── Infinite auto-scroll — rAF + translate3d (GPU layer stays alive) ─────────
-// CSS animations on Tizen get throttled when translateY pushes the element
-// partially off-screen — browser considers the layer idle and pauses it.
-// rAF keeps the main thread ticking so the layer is never considered idle.
-// translate3d (not translateY) + backfaceVisibility:hidden = GPU-promoted layer.
-var SPEED = 40; // px per second
+// ── Infinite auto-scroll — setInterval + translate3d ─────────────────────────
+// rAF stalls/stops on older Tizen (pre-2019). setInterval at a fixed timestep
+// is more reliable on those browsers. 30fps is smooth at lobby viewing distance.
+var SPEED    = 40; // px per second
+var INTERVAL = 33; // ms per tick (~30 fps)
 
 function setupScroll(vpId, trId, startDelay) {
     var vp = document.getElementById(vpId);
@@ -904,28 +903,24 @@ function setupScroll(vpId, trId, startDelay) {
     // Double the children so the list wraps seamlessly.
     Array.from(tr.children).forEach(function(c) { tr.appendChild(c.cloneNode(true)); });
 
-    // Promote to GPU layer before the first frame.
+    // Promote to GPU layer.
     tr.style.webkitBackfaceVisibility = 'hidden';
     tr.style.backfaceVisibility       = 'hidden';
     tr.style.webkitTransform          = 'translate3d(0,0,0)';
     tr.style.transform                = 'translate3d(0,0,0)';
 
-    var pos  = 0;
-    var prev = null;
+    var pos   = 0;
+    var delta = SPEED * INTERVAL / 1000; // px per tick — fixed, no dt drift
 
-    function frame(ts) {
-        requestAnimationFrame(frame);
-        if (prev === null) { prev = ts; return; } // skip first frame — no dt yet
-        var dt = Math.min(ts - prev, 100);        // cap at 100ms: handles tab/focus gaps
-        prev = ts;
-        pos += SPEED * dt / 1000;
-        if (pos >= origHeight) pos -= origHeight; // seamless wrap
-        var y = -Math.round(pos);
-        tr.style.webkitTransform = 'translate3d(0,' + y + 'px,0)';
-        tr.style.transform       = 'translate3d(0,' + y + 'px,0)';
-    }
-
-    setTimeout(function() { requestAnimationFrame(frame); }, startDelay || 0);
+    setTimeout(function() {
+        setInterval(function() {
+            pos += delta;
+            if (pos >= origHeight) pos -= origHeight;
+            var y = -Math.round(pos);
+            tr.style.webkitTransform = 'translate3d(0,' + y + 'px,0)';
+            tr.style.transform       = 'translate3d(0,' + y + 'px,0)';
+        }, INTERVAL);
+    }, startDelay || 0);
 }
 
 window.addEventListener('load', function() {
