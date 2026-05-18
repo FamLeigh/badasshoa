@@ -1,5 +1,14 @@
 [
     {
+        "id": "cl-20260515-ann-tag-colors",
+        "at": "2026-05-15T09:00:00-04:00",
+        "type": "improvement",
+        "title": "Announcement tag colors — customizable per association",
+        "description": "Announcement type badges are now color-coded by type: Beautification is green, Emergency is red, Event is blue, Maintenance is amber, and General is orange. Board admins can now customize any of these colors in Settings > Announcement tag colors. Pick a color with the color picker, preview the badge live, and save. The chosen color applies on the announcements dashboard, the public community landing page, and the lobby TV. Colors reset to the app defaults at any time via the Reset to defaults button.",
+        "author": "Reboooot",
+        "link": "/dashboard/settings.php#section-ann-colors"
+    },
+    {
         "id": "cl-20260512-290000-permissions",
         "at": "2026-05-12T29:00:00-04:00",
         "type": "feature",

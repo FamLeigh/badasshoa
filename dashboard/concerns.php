@@ -305,12 +305,15 @@ $membersForPicker = [];
 $unitsForPicker   = [];
 $rulesForPicker   = [];
 if ($showSubmit) {
-    $m = db()->prepare("SELECT id, first_name, last_name, unit_number
-                          FROM users
-                         WHERE association_id = ? AND status <> 'inactive'
-                         ORDER BY last_name, first_name");
-    $m->execute([$assocId]);
-    $membersForPicker = $m->fetchAll();
+    // Only expose names when the viewer already has directory access.
+    if (can_do('read_full_directory')) {
+        $m = db()->prepare("SELECT id, first_name, last_name, unit_number
+                              FROM users
+                             WHERE association_id = ? AND status <> 'inactive'
+                             ORDER BY last_name, first_name");
+        $m->execute([$assocId]);
+        $membersForPicker = $m->fetchAll();
+    }
 
     $u = db()->prepare('SELECT id, unit_number FROM units
                          WHERE association_id = ?
@@ -565,6 +568,7 @@ function concern_status_badge(string $s): string {
 
             <div class="form-row form-row--2">
                 <div class="field" style="position: relative;">
+                    <?php if ($membersForPicker): ?>
                     <label class="field__label" for="c-person">About a person</label>
                     <?php
                     $personTypeahead = [];
@@ -580,6 +584,10 @@ function concern_status_badge(string $s): string {
                            aria-autocomplete="list" aria-controls="c-person-results">
                     <input type="hidden" id="c-person" name="target_user_id" value="">
                     <div id="c-person-results" class="typeahead-list" role="listbox" hidden></div>
+                    <?php else: ?>
+                    <label class="field__label">About a person</label>
+                    <p class="muted" style="font-size: var(--fs-sm); margin: 0;">Contact the board directly to name a specific person.</p>
+                    <?php endif; ?>
                 </div>
                 <div class="field">
                     <label class="field__label" for="c-unit">About a unit</label>
@@ -614,10 +622,54 @@ function concern_status_badge(string $s): string {
             </div>
         </fieldset>
 
+        <!-- Contact info block — hidden when anonymous is checked -->
+        <?php
+        $cName  = trim((string)$user['first_name'] . ' ' . (string)$user['last_name']);
+        $cEmail = (string)($user['email'] ?? '');
+        $cPhone = (string)($user['phone'] ?? '');
+        ?>
+        <div id="contact-info-block" style="background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--r-md); padding: var(--sp-3) var(--sp-4); margin-bottom: var(--sp-3);">
+            <div style="font-size: var(--fs-xs); font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--color-text-soft); margin-bottom: var(--sp-2);">How the board will contact you</div>
+            <div style="display: flex; flex-wrap: wrap; gap: var(--sp-3) var(--sp-6); font-size: var(--fs-sm);">
+                <?php if ($cName): ?>
+                <div><span class="muted">Name</span><br><strong><?= e($cName) ?></strong></div>
+                <?php endif; ?>
+                <?php $cUnit = (string)($user['unit_number'] ?? ''); if ($cUnit): ?>
+                <div><span class="muted">Unit</span><br><strong><?= e($cUnit) ?></strong></div>
+                <?php endif; ?>
+                <?php if ($cEmail): ?>
+                <div><span class="muted">Email</span><br><strong><?= e($cEmail) ?></strong></div>
+                <?php endif; ?>
+                <?php if ($cPhone): ?>
+                <div><span class="muted">Phone</span><br><strong><?= e($cPhone) ?></strong></div>
+                <?php else: ?>
+                <div><span class="muted">Phone</span><br><span class="muted" style="font-style:italic;">not on file — <a href="/dashboard/settings.php#account">add it</a></span></div>
+                <?php endif; ?>
+            </div>
+        </div>
+
         <label style="display:flex; align-items:center; gap: var(--sp-2); margin-bottom: var(--sp-2);">
-            <input type="checkbox" name="is_anonymous">
-            <span>Submit anonymously — board won't see your name. (You still get email updates.)</span>
+            <input type="checkbox" name="is_anonymous" id="anon-toggle">
+            <span>Submit anonymously — the board will not know who you are.</span>
         </label>
+        <div id="anon-warning" style="display:none; background: #fff8e1; border: 1px solid #f59e0b; border-radius: var(--r-md); padding: var(--sp-3) var(--sp-4); margin-bottom: var(--sp-3); font-size: var(--fs-sm); color: #92400e;">
+            <strong>Heads up:</strong> Because the board won't know who you are, they have no way to follow up with you and you will not receive any updates on this submission. We encourage you to put your name on it — all concerns are kept confidential within the board.
+        </div>
+        <script>
+        (function () {
+            var cb      = document.getElementById('anon-toggle');
+            var block   = document.getElementById('contact-info-block');
+            var warning = document.getElementById('anon-warning');
+            if (!cb) return;
+            function sync() {
+                var on = cb.checked;
+                if (block)   block.style.display   = on ? 'none' : '';
+                if (warning) warning.style.display  = on ? '' : 'none';
+            }
+            cb.addEventListener('change', sync);
+            sync();
+        })();
+        </script>
         <div class="row" style="justify-content: flex-end;">
             <a class="btn btn--ghost" href="/dashboard/concerns.php">Cancel</a>
             <button class="btn btn--primary" type="submit">Submit</button>

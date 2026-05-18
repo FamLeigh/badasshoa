@@ -17,11 +17,13 @@ $startTs = strtotime((string)$a['published_at']);
 $expTs   = !empty($a['expires_at']) ? strtotime((string)$a['expires_at']) : null;
 
 $typeColor = match ($a['type']) {
-    'emergency'     => '#a8322a',
-    'event'         => '#1f4f9c',
-    'maintenance'   => '#a8782a',
+    'emergency'    => '#a8322a',
+    'event'        => '#1f4f9c',
+    'maintenance'  => '#a8782a',
     'beautification'=> '#2f7a3d',
-    default         => '#c25a1e',
+    'birth_notice' => '#6d28d9',
+    'death_notice' => '#374151',
+    default        => '#c25a1e',
 };
 ?><!doctype html>
 <html lang="en"><head>

@@ -260,57 +260,60 @@ This file (CLAUDE.md) keeps an internal-only summary in the section below for cr
 
 ## Where we left off (resume here next session)
 
-**Last session ended:** 2026-05-12 (session 4) — **UI polish + global search sprint**. No new migrations. All changes are PHP/CSS only. Last commit is session-4 commit (see git log).
+**Last session ended:** 2026-05-14 (session 8) — **Legal reference, Lobby TV overhaul, events All-tab.**
 
 **What got built this session:**
-- **Dashboard tile grid** — 6-across (was 4), tighter padding/icons; breakpoints 4@≤1100px, 3@≤680px, 2@≤420px
-- **Dashboard cleanup** — removed "incl. PM" hint on board tile, "upcoming" hint on events tile; feedback value now shows pending count + inline "/ N total" on same line; removed "Post announcement" and "Upload document" quick-action buttons
-- **Sidebar nav tightened** — link padding reduced to 5px vertical; group-label font bumped to 11px at 45% opacity; group-label top padding removed
-- **Collapse toggle redesign** — floating `position: fixed` circular button (28px, navy border + shadow) pinned at `left: calc(--side-nav-w - 14px)`, outside the sidebar so `overflow: hidden` doesn't clip it; slides with the sidebar via CSS variable; chevron rotates 180° when collapsed
-- **Sign-out button** — added text label "Sign out" next to icon; hidden at ≤860px
-- **Scroll hint** — changed from non-interactive `<div>` to a `<button>`; click scrolls the nav list down 120px smoothly
-- **Weather tile** — second click (when forecast is loaded) opens the NWS forecast page for the association's lat/lon in a new tab
-- **Board member headshots** — 88px centered avatars (photo or navy initial fallback) on directory board-member cards
-- **Directory activity stats** — collapsible `<details>` panel (board_admin/super_admin only) showing count of: members with no real email, members who've never logged in, members active in last 30 days
-- **`can_do()` bug fix** — was reading `$_SESSION['role']` directly; now correctly calls `viewing_role()` so view-as-renter/owner actually hides board-only nav links and pages
-- **Global search expanded** — `dashboard/find.php` now covers: work orders (management), violations (management), meeting minutes (via `can_do()`), members, and FAQs (all roles)
+
+- **Legal Reference** — `dashboard/legal.php` (all logged-in members): FULLTEXT search + browse FL statutes filtered to the association's state. Filters for chapter / applies_to / category. 61 statutes have full text in-app with an expand button; 171 link to the official FL Legislature site. `admin/legal.php` (super admin): CSV import with upsert or full-replace per state. `migrations/058_statutes.sql`: shared statutes table with FULLTEXT index. 232 FL statutes imported from hoa_laws.csv. Balance-scale icon added to sidebar nav (Resources group).
+
+- **Lobby TV (`tv.php`) — full overhaul:**
+  - Fixed trial-status bug (`status = 'active'` → `IN ('active','trial')`).
+  - Three-column layout: Announcements · Upcoming Events · Marketplace. Each column has a colored emoji header, item count, and per-column auto-scroll (55px/sec, staggered 800ms apart, 3s pause at top, 2.5s at bottom).
+  - Text sized for distance viewing: `clamp()` throughout, titles 1.1–1.6rem, event dates 1.7–2.6rem.
+  - Recurring events now expanded in PHP (was doing raw SQL SELECT — only showed one row). Handles daily/weekly/biweekly/monthly.
+  - Weather widget centered in header: Open-Meteo API, WMO emoji + °F temp + condition label, refreshes every 30 min. Falls back gracefully with no lat/lon.
+  - Logo max-height raised from 60px to 110px.
+  - TV URL: `https://badasshoa.com/tv.php?token=affaad783b77ff313ca3ca047c9f8a53ddd285e6c7787ad4`
+
+- **Events — All tab** — board admins now see Upcoming · Past · **All** tabs. All tab shows every event regardless of date with full Edit/Delete buttons. Fixes the "event saved with wrong date disappears into past with no way to retrieve it" class of problem. `expand_events()` in functions.php updated to accept `?bool $past` where `null` = no date filter.
+
+- **Minor:** contacts-print.php redundant "listed" copy fixed.
 
 **Production state in DB:**
-- Migrations through 045 applied to `u535581001_badassHOA` — no new migrations this session
-- 191 users with `role='owner'`; 2 staff; 4 board_member; 1 property_manager; 1 board_admin; 2 super_admin
-- `association_permissions` table exists; no custom overrides (all defaults in effect)
-- Email driver still `log` (paused since 2026-05-10)
+- Migrations through **058** applied to `u535581001_badassHOA`
+- 232 FL statutes in the `statutes` table (chapters 718, 719, 720, 553)
+- 2 events: May Bingo (weekly, all, through May 28) + Memorial Day (May 25, all)
+- Email driver still `log` (paused — flip to `msmtp` in server config.php when Kevin says go)
 
 **Logins:**
 - **Prod** super admin: `me@kevinleigh.com / bhoaK0m3r2.6`
-- Local MAMP DB is behind prod (migrations 014–045). If reviving local dev, run migrations 014 onward in order.
+- Local MAMP DB is well behind prod. If reviving local dev, run migrations 014–058 in order.
 
 **Quick visual check (prod):**
-- Marketing home: https://badasshoa.com/
-- Public landing: https://badasshoa.com/bellair/
 - Dashboard: https://badasshoa.com/dashboard/
-- Global search: https://badasshoa.com/dashboard/find.php?q=pool
-- Permissions: https://badasshoa.com/dashboard/permissions.php
+- Legal: https://badasshoa.com/dashboard/legal.php
+- Lobby TV: https://badasshoa.com/tv.php?token=affaad783b77ff313ca3ca047c9f8a53ddd285e6c7787ad4
+- Admin Legal import: https://badasshoa.com/admin/legal.php
+- Events (All tab): https://badasshoa.com/dashboard/events.php?all=1
 
 **Known gotchas to not regress:**
-- `can_do()` now calls `viewing_role()` — this is intentional and load-bearing for the view-as feature. Do not revert to `$_SESSION['role']`.
-- `can_do()` static cache is per-request (keyed by `$aid`). Two associations in the same PHP process will need a fresh request to clear it.
-- Every write POST handler in work-orders.php and violations.php has an explicit `if (!$canManageWO/Vio) { 403; die }` guard — the individual guards are load-bearing (no top-level `require_management()`).
-- `documents` table has `employee_id` and `insurance_id` nullable FKs (migration 044). Queries that list "all docs for an association" will include employee/insurance docs unless filtered. The file gatekeeper blocks renters via `access_level='board_only'`.
-- The pool FAQ (id 8) still has `[VERIFY]` markers in the answer text — Kevin's rewrite from the paper sign was never finalized.
-- The first Bellair user form (temp parking pass) was never test-filed to validate the flow end-to-end.
+- `can_do()` calls `viewing_role()` — never revert to `$_SESSION['role']`.
+- TV recurring event expansion uses UTC DateTimeImmutable — consistent with the rest of the app (PDO pins connections to UTC).
+- `expand_events(?bool $past)`: null = all, false = upcoming, true = past. The new `?bool` signature is a backwards-compatible change (callers passing `false` still work).
+- Floor plan docs: many DB rows share one physical file. Deleting a floor plan doc from one unit breaks all other units pointing to the same file. Acceptable for now.
+- Pool FAQ (id 8) still has `[VERIFY]` markers in the answer text.
+- First Bellair user form (temp parking pass) never test-filed.
 
 **Candidates for next session** (queued + roughly prioritized):
-1. **Board voting module** — Kevin said "next up voting." Board creates a ballot with options + deadline; members cast one vote; results reveal after deadline. New table `votes` (id, association_id, title, description, options JSON, deadline, status) + `vote_responses` (vote_id, user_id, choice, cast_at) + `/dashboard/voting.php`.
-2. **Lobby-TV digital signage** — rotating-content TV mode, auto-refresh, no-login URL with a time-limited token.
-3. **Maintenance request → Work Order conversion** — form submission lands in the WO queue (same Concern→WO / ARC→WO pattern already in place).
-4. **Turn email back on** — flip prod `config.mail.driver` from `log` to `msmtp` (one line in server config.php whenever Kevin says go).
-5. **Service animal registration form** — queued from a prior session; never shipped.
+1. **Board voting module** — board creates ballot with options + deadline; members cast one vote; results reveal after deadline. Tables: `votes` (id, association_id, title, description, options JSON, deadline, status) + `vote_responses` (vote_id, user_id, choice, cast_at). Page: `/dashboard/voting.php`.
+2. **Turn email back on** — flip prod `config.mail.driver` from `log` to `msmtp` (one-liner on server).
+3. **Per-association logo upload** — use in dashboard nav instead of text name.
+4. **Service animal registration form** — queued from a prior session; never shipped.
+5. **CSV resident import** for directory.
 6. **Newsletter signup** on the public landing.
-7. **Per-user TZ preference** — all server-rendered timestamps are UTC right now; add a TZ field to user settings and wrap display formatters.
-8. **Per-association logo upload** — use it in the dashboard nav instead of the text name.
-9. **Rental agents as contacts** — add `rental_agent` to `association_contacts.kind` ENUM; add `rental_agent_contact_id` FK on `users`; show a "Rental agent" dropdown in the renter add/edit form (directory.php) so renters can be linked to their agent.
-10. **Community marketplace** — members post items for sale/free within the association. New table `marketplace_listings` (id, association_id, seller_user_id, title, description, price_cents NULL=free, condition, status ENUM draft/active/sold/removed, photos, created_at). Members browse, contact seller via internal message or email. Board can remove listings. Scope: residents only (not public). Moderation: listings visible immediately, board can flag/remove.
+7. **Per-user TZ preference** — timestamps all UTC right now; add TZ field to user settings.
+8. **Rental agents as contacts** — `rental_agent` kind in association_contacts, FK on users, dropdown in directory renter form.
+9. **Lobby TV enhancements** — add a fourth panel or ticker for community rules / reminders; per-association configurable refresh interval in settings.
 
 **Big-ticket comms / outreach features (queued — likely a Phase 3 batch):**
 
@@ -372,6 +375,11 @@ All four share a `broadcasts` table (kind / audience / subject / body / schedule
 ---
 
 ## Changelog
+
+- **2026-05-14 (session 8) — Legal reference, Lobby TV overhaul, events All-tab.**
+    - Legal Reference: new `dashboard/legal.php` for all members — FULLTEXT search + browse FL statutes by chapter/applies_to/category. In-app full-text expand for 61 sections; "Official site" button for the rest. `admin/legal.php` CSV import. 232 FL statutes live (ch. 718/719/720/553).
+    - Lobby TV `tv.php`: 3-column layout (Announcements / Events / Marketplace), distance-readable text via `clamp()`, per-column auto-scroll staggered 800ms apart. Recurring events now expanded in PHP so series show all future dates. Weather widget (Open-Meteo) centered in header with emoji, °F, condition. Logo raised to 110px. Fixed trial-status bug.
+    - Events: **All tab** for board admins shows every event regardless of date — fixes the "wrong-date event disappears" problem. `expand_events()` updated with `?bool $past` null-means-all signature.
 
 - **2026-05-12 (session 4) — UI polish + global search sprint.**
     - Dashboard: 6-across tile grid, tighter padding/icons, removed "incl. PM" / "upcoming" hints, feedback shows pending + inline total, removed quick-action buttons at top.

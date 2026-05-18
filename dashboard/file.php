@@ -34,6 +34,20 @@ if ($type === 'document') {
     $relative = $row['file_path'];
     $filename = $row['title'];
     $type_h   = $row['file_type'];
+} elseif ($type === 'unit_media') {
+    $stmt = db()->prepare('SELECT * FROM unit_media WHERE id = ? AND association_id = ?');
+    $stmt->execute([$id, $assocId]);
+    $row = $stmt->fetch();
+    if (!$row) { http_response_code(404); die('Not found'); }
+    // Occupants of the unit and managers can view; everyone else is blocked.
+    if (!role_can_manage(viewing_role())) {
+        $check = db()->prepare('SELECT 1 FROM unit_occupants WHERE unit_id = ? AND user_id = ? LIMIT 1');
+        $check->execute([(int)$row['unit_id'], (int)$_SESSION['user_id']]);
+        if (!$check->fetchColumn()) { http_response_code(403); die('Forbidden'); }
+    }
+    $relative = $row['file_path'];
+    $filename = $row['title'] ?: basename($relative);
+    $type_h   = $row['mime_type'];
 } elseif ($type === 'media') {
     $stmt = db()->prepare('SELECT * FROM media WHERE id = ? AND association_id = ?');
     $stmt->execute([$id, $assocId]);

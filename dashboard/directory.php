@@ -1,6 +1,11 @@
 <?php
 require __DIR__ . '/_bootstrap.php';
 
+if (!can_do('read_full_directory')) {
+    flash('error', 'You don\'t have permission to view the member directory.');
+    redirect('/dashboard/');
+}
+
 $user = current_user();
 $canManage = role_can_manage(viewing_role());
 $flashError = null;
@@ -442,7 +447,8 @@ if ($rentersOnly) {
                      WHERE e.user_id = u.id AND e.association_id = u.association_id AND e.status = 'active'
                      ORDER BY e.id DESC LIMIT 1) AS employee_job_title
               FROM users u
-             WHERE u.association_id = ? AND u.status <> 'inactive'";
+             WHERE u.association_id = ? AND u.status <> 'inactive'"
+             . ($canManage ? '' : ' AND u.hide_from_directory = 0');
     $params = [$assocId];
     if ($qSearch !== '') {
         $sql .= " AND (u.first_name LIKE ? OR u.last_name LIKE ? OR u.email LIKE ? OR u.unit_number LIKE ?)";
@@ -924,89 +930,6 @@ B2,Sam,Garcia,sam@example.com,,,,0</pre>
 
     <?php if (!$editUser && !$showInvite && !$showImport): /* hide the full directory while editing a single member */ ?>
 
-    <?php if ($rentersOnly || ($qSearch === '' && $roleFilter === '' && !$ownersOnly)): ?>
-    <h2 id="board" style="font-size: var(--fs-xl); margin-top: var(--sp-2); scroll-margin-top: 80px;">Board</h2>
-    <?php if (!$board): ?>
-        <p class="muted">No board members on file yet.</p>
-    <?php else: ?>
-    <style>
-        .board-list { display: flex; flex-direction: column; margin-bottom: var(--sp-8); border: 1px solid var(--color-border); border-radius: var(--r-md); overflow: hidden; }
-        .board-list__item { border-bottom: 1px solid var(--color-border); }
-        .board-list__item:last-child { border-bottom: none; }
-        .board-list__item > summary { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); cursor: pointer; list-style: none; background: #fff; }
-        .board-list__item > summary::-webkit-details-marker { display: none; }
-        .board-list__item > summary::marker { display: none; }
-        .board-list__item > summary:hover { background: var(--color-surface-2); }
-        .board-list__item[open] > summary { background: var(--color-surface-2); }
-        .board-list__chevron { margin-left: auto; color: var(--color-text-soft); font-size: var(--fs-xs); transition: transform 200ms ease; display: inline-block; }
-        .board-list__item[open] .board-list__chevron { transform: rotate(180deg); }
-        .board-list__detail { padding: var(--sp-5); background: var(--color-surface); border-top: 1px solid var(--color-border); }
-    </style>
-    <div class="board-list">
-        <?php foreach ($board as $b): $officeLbl = board_office_label((string)($b['board_office'] ?? '')); ?>
-        <details class="board-list__item">
-            <summary>
-                <?php if (!empty($b['avatar_path'])): ?>
-                    <img src="/user-avatar.php?id=<?= (int)$b['id'] ?>" alt=""
-                         style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex: 0 0 40px; border: 2px solid var(--color-border);">
-                <?php else: ?>
-                    <div style="width: 40px; height: 40px; border-radius: 50%; background: var(--color-navy); color: #fff; display: flex; align-items: center; justify-content: center; font-size: var(--fs-md); font-weight: 700; flex: 0 0 40px;">
-                        <?= e(strtoupper(mb_substr((string)($b['first_name'] ?? '?'), 0, 1))) ?>
-                    </div>
-                <?php endif; ?>
-                <div style="flex: 1; min-width: 0;">
-                    <div class="row" style="gap: var(--sp-2); align-items: center; flex-wrap: wrap;">
-                        <strong><?= e(trim($b['first_name'] . ' ' . $b['last_name']) ?: $b['email']) ?></strong>
-                        <?php if ($officeLbl !== ''): ?>
-                            <span class="badge badge--orange"><?= e($officeLbl) ?></span>
-                        <?php endif; ?>
-                        <span class="badge badge--navy"><?= e(str_replace('_',' ',$b['role'])) ?></span>
-                    </div>
-                    <div class="muted" style="font-size: var(--fs-sm); margin-top: 2px;">
-                        <?= is_placeholder_email((string)$b['email']) ? '<em>no email on file</em>' : e((string)$b['email']) ?>
-                        <?php if ($b['phone']): ?> &middot; <?= e($b['phone']) ?><?php endif; ?>
-                    </div>
-                </div>
-                <span class="board-list__chevron">▼</span>
-            </summary>
-            <div class="board-list__detail">
-                <div style="display: flex; gap: var(--sp-5); align-items: flex-start; flex-wrap: wrap;">
-                    <?php if (!empty($b['avatar_path'])): ?>
-                        <img src="/user-avatar.php?id=<?= (int)$b['id'] ?>" alt=""
-                             style="width: 88px; height: 88px; border-radius: 50%; object-fit: cover; flex: 0 0 88px; border: 3px solid var(--color-border);">
-                    <?php else: ?>
-                        <div style="width: 88px; height: 88px; border-radius: 50%; background: var(--color-navy); color: #fff; display: flex; align-items: center; justify-content: center; font-size: var(--fs-2xl); font-weight: 700; flex: 0 0 88px;">
-                            <?= e(strtoupper(mb_substr((string)($b['first_name'] ?? '?'), 0, 1))) ?>
-                        </div>
-                    <?php endif; ?>
-                    <div>
-                        <strong style="font-size: var(--fs-lg);"><?= e(trim($b['first_name'] . ' ' . $b['last_name']) ?: $b['email']) ?></strong>
-                        <div class="row" style="gap: var(--sp-2); margin: var(--sp-2) 0; flex-wrap: wrap;">
-                            <?php if ($officeLbl !== ''): ?>
-                                <span class="badge badge--orange"><?= e($officeLbl) ?></span>
-                            <?php endif; ?>
-                            <span class="badge badge--navy"><?= e(str_replace('_',' ',$b['role'])) ?></span>
-                        </div>
-                        <div class="muted" style="font-size: var(--fs-sm);">
-                            <?= is_placeholder_email((string)$b['email']) ? '<em class="muted">— no email on file —</em>' : e((string)$b['email']) ?>
-                            <?php if ($b['phone']): ?><br><?= e($b['phone']) ?><?php endif; ?>
-                        </div>
-                        <?php if ($b['unit_number']): ?>
-                            <div class="muted" style="font-size: var(--fs-sm); margin-top: var(--sp-1);">Unit <?= e($b['unit_number']) ?></div>
-                        <?php endif; ?>
-                        <?php if ($canManage): ?>
-                            <div style="margin-top: var(--sp-3);">
-                                <a class="btn btn--ghost" style="padding: 0.3rem 0.7rem; font-size: var(--fs-sm);" href="?action=edit&id=<?= (int)$b['id'] ?>">Edit</a>
-                            </div>
-                        <?php endif; ?>
-                    </div>
-                </div>
-            </div>
-        </details>
-        <?php endforeach; ?>
-    </div>
-    <?php endif; ?>
-    <?php endif; /* board section: hide when filter/search active for non-renters */ ?>
 
     <?php if ($rentersOnly): ?>
         <div class="card card--padded muted" style="margin-bottom: var(--sp-4);">

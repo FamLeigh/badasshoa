@@ -840,6 +840,59 @@ function save_attachment(int $assocId, string $subdir, string $field = 'attachme
     ];
 }
 
+// --- announcement types --------------------------------------------------
+// Single source of truth for all valid announcement types, their display
+// labels, emoji, and UI group. Everything that needs a type list uses this.
+function ann_types(): array {
+    return [
+        'general'       => ['label' => 'General',       'emoji' => '📢', 'group' => 'Community'],
+        'emergency'     => ['label' => 'Emergency',     'emoji' => '🚨', 'group' => 'Community'],
+        'beautification'=> ['label' => 'Beautification','emoji' => '🌿', 'group' => 'Community'],
+        'event'         => ['label' => 'Event',         'emoji' => '📅', 'group' => 'Events & Maintenance'],
+        'maintenance'   => ['label' => 'Maintenance',   'emoji' => '🔧', 'group' => 'Events & Maintenance'],
+        'birth_notice'  => ['label' => 'Birth Notice',  'emoji' => '👶', 'group' => 'Life Events'],
+        'death_notice'  => ['label' => 'Death Notice',  'emoji' => '🕊️', 'group' => 'Life Events'],
+    ];
+}
+
+// --- announcement tag colours --------------------------------------------
+function ann_type_defaults(): array {
+    return [
+        'general'       => '#d44617',
+        'emergency'     => '#c0392b',
+        'beautification'=> '#2e7d32',
+        'event'         => '#2660a8',
+        'maintenance'   => '#b6822a',
+        'birth_notice'  => '#7c3aed',
+        'death_notice'  => '#4b5563',
+    ];
+}
+
+function ann_type_colors(int $assocId): array {
+    static $cache = [];
+    if (isset($cache[$assocId])) return $cache[$assocId];
+    $stmt = db()->prepare('SELECT ann_type_colors FROM associations WHERE id = ?');
+    $stmt->execute([$assocId]);
+    $row = $stmt->fetch();
+    $custom = [];
+    if ($row && !empty($row['ann_type_colors'])) {
+        $decoded = json_decode((string)$row['ann_type_colors'], true);
+        if (is_array($decoded)) $custom = $decoded;
+    }
+    $cache[$assocId] = array_merge(ann_type_defaults(), $custom);
+    return $cache[$assocId];
+}
+
+function ann_type_label(string $type): string {
+    return ann_types()[$type]['label'] ?? ucwords(str_replace('_', ' ', $type));
+}
+
+// Returns inline CSS for a .badge element — background is 10% tint, text is the full color.
+function ann_badge_style(string $type, array $colors): string {
+    $hex = $colors[$type] ?? $colors['general'] ?? '#d44617';
+    return "background:{$hex}1a;color:{$hex};border:1px solid {$hex}33;";
+}
+
 // --- pricing calc (single source of truth) ------------------------------
 // 30-day free trial on every paid tier. Two pricing bands (Professional was
 // dropped 2026-05-13 — superfluous):

@@ -33,9 +33,11 @@ $cityLine = trim(
     . ' ' . ($assoc['postal_code'] ?? '')
 );
 
+$landingAnnColors = ann_type_colors((int)$assoc['id']);
+
 // Public announcements (audience='all') for the landing feed
 $annStmt = db()->prepare(
-    "SELECT a.id, a.title, a.body, a.type, a.published_at,
+    "SELECT a.id, a.title, a.body, a.type, a.published_at, a.image_path,
             CONCAT(IFNULL(u.first_name,''), ' ', IFNULL(u.last_name,'')) AS author
      FROM announcements a
      LEFT JOIN users u ON u.id = a.author_id
@@ -542,13 +544,11 @@ $page_layout = 'public_landing'; // Avoids the public marketing nav; landing has
         <p class="muted landing-news__sub">Latest community announcements. Sign in to see board-only updates.</p>
         <div class="stack-lg" style="margin-top: var(--sp-8);">
             <?php foreach ($publicAnnouncements as $a):
-                $typeClass = $a['type'] === 'emergency' ? 'badge--error'
-                           : ($a['type'] === 'event' ? 'badge--info'
-                           : ($a['type'] === 'maintenance' ? 'badge--warning' : 'badge--orange'));
+                $typeBadgeStyle = ann_badge_style((string)$a['type'], $landingAnnColors);
             ?>
             <article class="landing-news__item">
                 <div class="row" style="gap: var(--sp-3); margin-bottom: var(--sp-2); flex-wrap: wrap;">
-                    <span class="badge <?= $typeClass ?>"><?= e((string)$a['type']) ?></span>
+                    <span class="badge" style="<?= $typeBadgeStyle ?>"><?= e(ann_type_label((string)$a['type'])) ?></span>
                     <span class="muted" style="font-size: var(--fs-xs);">
                         <?= e(date('M j, Y', strtotime((string)$a['published_at']))) ?>
                         <?php if (trim((string)$a['author']) !== ''): ?>
@@ -557,6 +557,11 @@ $page_layout = 'public_landing'; // Avoids the public marketing nav; landing has
                     </span>
                 </div>
                 <h3 style="font-size: var(--fs-xl); margin: 0 0 var(--sp-2);"><?= e((string)$a['title']) ?></h3>
+                <?php if (!empty($a['image_path'])): ?>
+                    <img src="/announcement-image.php?id=<?= (int)$a['id'] ?>"
+                         alt=""
+                         style="width: 100%; max-height: 280px; object-fit: cover; border-radius: var(--r-md); margin-bottom: var(--sp-3); display: block;">
+                <?php endif; ?>
                 <p style="margin: 0; white-space: pre-wrap; color: var(--color-text-soft);">
                     <?= e(mb_strimwidth(strip_tags((string)$a['body']), 0, 360, '…')) ?>
                 </p>

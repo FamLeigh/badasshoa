@@ -5,6 +5,34 @@ $user      = current_user();
 $canManage = role_can_manage(viewing_role());
 $flashError = null;
 
+// Association timezone — all event times entered by admins are treated as local
+// and converted to UTC for storage. Display converts back the same way.
+$evTzName = (string)($association['timezone'] ?? 'UTC');
+if (!@timezone_open($evTzName)) $evTzName = 'UTC';
+$evTz  = new DateTimeZone($evTzName);
+$utcTz = new DateTimeZone('UTC');
+
+// Parse a datetime-local string ("2026-05-17T18:00") as $evTz, return UTC timestamp.
+function ev_parse(string $s, DateTimeZone $localTz): int {
+    $dt = DateTimeImmutable::createFromFormat('Y-m-d\TH:i', $s, $localTz)
+       ?: DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $s, $localTz)
+       ?: DateTimeImmutable::createFromFormat('Y-m-d H:i',   $s, $localTz);
+    return $dt ? $dt->getTimestamp() : 0;
+}
+
+// Format a UTC unix timestamp in the association's local timezone.
+function ev_fmt(string $format, int $ts, DateTimeZone $localTz): string {
+    return (new DateTimeImmutable('@' . $ts))->setTimezone($localTz)->format($format);
+}
+
+// Format a UTC DB string for a datetime-local input (local time, no tz suffix).
+function ev_input_val(string $utcStr, DateTimeZone $localTz): string {
+    if ($utcStr === '') return '';
+    $ts = strtotime($utcStr);
+    if (!$ts) return '';
+    return (new DateTimeImmutable('@' . $ts))->setTimezone($localTz)->format('Y-m-d\TH:i');
+}
+
 // --- Add ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'add') {
     csrf_check();
@@ -22,15 +50,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'add') {
     if ($recurUntil !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $recurUntil)) $recurUntil = '';
     $recurUntilSql = ($recurType !== 'none' && $recurUntil !== '') ? $recurUntil : null;
 
-    $startsTs = $starts !== '' ? strtotime($starts) : 0;
-    $endsTs   = $ends   !== '' ? strtotime($ends)   : 0;
+    $startsTs = $starts !== '' ? ev_parse($starts, $evTz) : 0;
+    $endsTs   = $ends   !== '' ? ev_parse($ends,   $evTz) : 0;
 
-    if ($title === '')                           $flashError = 'Title is required.';
-    elseif ($startsTs === 0 || $startsTs === false) $flashError = 'A valid start date/time is required.';
-    elseif ($endsTs && $endsTs < $startsTs)      $flashError = 'End must be after start.';
+    if ($title === '')          $flashError = 'Title is required.';
+    elseif ($startsTs === 0)    $flashError = 'A valid start date/time is required.';
+    elseif ($endsTs && $endsTs < $startsTs) $flashError = 'End must be after start.';
     else {
-        $startsSql = date('Y-m-d H:i:s', $startsTs);
-        $endsSql   = $endsTs ? date('Y-m-d H:i:s', $endsTs) : null;
+        $startsSql = (new DateTimeImmutable('@' . $startsTs))->setTimezone($utcTz)->format('Y-m-d H:i:s');
+        $endsSql   = $endsTs ? (new DateTimeImmutable('@' . $endsTs))->setTimezone($utcTz)->format('Y-m-d H:i:s') : null;
         $stmt = db()->prepare(
             'INSERT INTO events (association_id, title, description, location, starts_at, ends_at, audience, recurrence_type, recurrence_until, created_by)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
@@ -80,11 +108,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit') 
     if (!$curRow) { http_response_code(404); die('Event not found'); }
     $curImagePath = (string)($curRow['image_path'] ?? '');
 
-    $startsTs = $starts !== '' ? strtotime($starts) : 0;
-    $endsTs   = $ends   !== '' ? strtotime($ends)   : 0;
-    if ($title === '')                           $flashError = 'Title is required.';
-    elseif ($startsTs === 0 || $startsTs === false) $flashError = 'A valid start date/time is required.';
-    elseif ($endsTs && $endsTs < $startsTs)      $flashError = 'End must be after start.';
+    $startsTs = $starts !== '' ? ev_parse($starts, $evTz) : 0;
+    $endsTs   = $ends   !== '' ? ev_parse($ends,   $evTz) : 0;
+    if ($title === '')       $flashError = 'Title is required.';
+    elseif ($startsTs === 0) $flashError = 'A valid start date/time is required.';
+    elseif ($endsTs && $endsTs < $startsTs) $flashError = 'End must be after start.';
     else {
         db()->prepare(
             'UPDATE events SET title = ?, description = ?, location = ?, starts_at = ?, ends_at = ?, audience = ?,
@@ -92,14 +120,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit') 
              WHERE id = ? AND association_id = ?'
         )->execute([
             $title, $description ?: null, $location ?: null,
-            date('Y-m-d H:i:s', $startsTs),
-            $endsTs ? date('Y-m-d H:i:s', $endsTs) : null,
+            (new DateTimeImmutable('@' . $startsTs))->setTimezone($utcTz)->format('Y-m-d H:i:s'),
+            $endsTs ? (new DateTimeImmutable('@' . $endsTs))->setTimezone($utcTz)->format('Y-m-d H:i:s') : null,
             $audience, $recurType, $recurUntilSql, $eid, $assocId,
         ]);
-        // Image: remove existing
+        // Image handling
         if (isset($_POST['delete_image']) && $curImagePath !== '') {
-            @unlink(storage_path($curImagePath));
             db()->prepare('UPDATE events SET image_path = NULL WHERE id = ? AND association_id = ?')->execute([$eid, $assocId]);
+            @unlink(storage_path($curImagePath));
         } elseif (!empty($_FILES['image']['name']) && $_FILES['image']['error'] === UPLOAD_ERR_OK && $_FILES['image']['size'] <= 8 * 1024 * 1024) {
             $imgAllowed = ['png','jpg','jpeg','gif','webp'];
             $imgExt = strtolower(pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION));
@@ -108,8 +136,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit') 
                 ensure_dir(storage_path($relDir));
                 $imgFile = uuid_filename($_FILES['image']['name']);
                 if (move_uploaded_file($_FILES['image']['tmp_name'], storage_path("$relDir/$imgFile"))) {
-                    if ($curImagePath !== '') @unlink(storage_path($curImagePath));
+                    // Update DB first so the old path is no longer referenced before we delete the file
                     db()->prepare('UPDATE events SET image_path = ? WHERE id = ? AND association_id = ?')->execute(["$relDir/$imgFile", $eid, $assocId]);
+                    if ($curImagePath !== '') @unlink(storage_path($curImagePath));
+                } else {
+                    flash('warning', 'Event saved but the image could not be uploaded. Try again with a smaller file.');
                 }
             }
         }
@@ -199,7 +230,8 @@ if ($canManage && ($showCreate || $editEvent)) {
 $page_title = 'Events — ' . $association['name'];
 require __DIR__ . '/../includes/header.php';
 
-function event_form_card(?array $editing, string $assocSlug, array $activeLocations = []): void {
+function event_form_card(?array $editing, string $assocSlug, array $activeLocations = [], ?DateTimeZone $localTz = null): void {
+    $localTz ??= new DateTimeZone('UTC');
     $isEdit = $editing !== null;
     $vals   = $editing ?? [
         'title'=>'', 'description'=>'', 'location'=>'', 'image_path'=>'',
@@ -225,11 +257,11 @@ function event_form_card(?array $editing, string $assocSlug, array $activeLocati
             <div class="form-row form-row--2">
                 <div class="field">
                     <label class="field__label" for="ev-s">Starts at</label>
-                    <input class="input" type="datetime-local" id="ev-s" name="starts_at" required value="<?= $vals['starts_at'] ? e(date('Y-m-d\TH:i', strtotime((string)$vals['starts_at']))) : '' ?>">
+                    <input class="input" type="datetime-local" id="ev-s" name="starts_at" required value="<?= e(ev_input_val((string)$vals['starts_at'], $localTz)) ?>">
                 </div>
                 <div class="field">
                     <label class="field__label" for="ev-e">Ends at (optional)</label>
-                    <input class="input" type="datetime-local" id="ev-e" name="ends_at" value="<?= $vals['ends_at'] ? e(date('Y-m-d\TH:i', strtotime((string)$vals['ends_at']))) : '' ?>">
+                    <input class="input" type="datetime-local" id="ev-e" name="ends_at" value="<?= e(ev_input_val((string)$vals['ends_at'], $localTz)) ?>">
                 </div>
             </div>
             <div class="form-row form-row--2">
@@ -341,7 +373,7 @@ function event_form_card(?array $editing, string $assocSlug, array $activeLocati
 
     <?php if ($flashError): ?><div class="flash flash--error"><?= e($flashError) ?></div><?php endif; ?>
 
-    <?php if ($showCreate || $editEvent) event_form_card($editEvent, (string)$association['subdomain'], $activeLocations); ?>
+    <?php if ($showCreate || $editEvent) event_form_card($editEvent, (string)$association['subdomain'], $activeLocations, $evTz); ?>
 
     <div class="row" style="gap: var(--sp-2); margin-bottom: var(--sp-5); flex-wrap: wrap;">
         <?php $aqp = $audienceFilter ? '&audience=' . e($audienceFilter) : ''; ?>
@@ -378,7 +410,7 @@ function event_form_card(?array $editing, string $assocSlug, array $activeLocati
     <?php foreach ($rows as $ev):
         $startTs = strtotime((string)$ev['starts_at']);
         $endTs   = !empty($ev['ends_at']) ? strtotime((string)$ev['ends_at']) : null;
-        $sameDay = $endTs && date('Y-m-d', $startTs) === date('Y-m-d', $endTs);
+        $sameDay = $endTs && ev_fmt('Y-m-d', $startTs, $evTz) === ev_fmt('Y-m-d', $endTs, $evTz);
         $audClass = match ($ev['audience']) {
             'all'     => 'badge--success',
             'board'   => 'badge--navy',
@@ -387,9 +419,9 @@ function event_form_card(?array $editing, string $assocSlug, array $activeLocati
     ?>
     <article class="card card--padded ev-row" style="display:flex; gap: var(--sp-4); align-items: flex-start;">
         <a href="/dashboard/event.php?id=<?= (int)$ev['id'] ?>" class="ev-date" style="flex: 0 0 72px; text-align:center; padding: 6px 10px; border: 2px solid var(--color-navy); border-radius: 8px; background: var(--color-surface); text-decoration: none; color: inherit;">
-            <div style="font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-text-soft); font-weight: 700;"><?= e(udate('M', $startTs)) ?></div>
-            <div style="font-size: 22pt; line-height: 1; font-weight: 800; color: var(--color-navy); margin: 2px 0;"><?= e(udate('j', $startTs)) ?></div>
-            <div style="font-size: var(--fs-xs); color: var(--color-text-soft);"><?= e(udate('D', $startTs)) ?></div>
+            <div style="font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-text-soft); font-weight: 700;"><?= e(ev_fmt('M', $startTs, $evTz)) ?></div>
+            <div style="font-size: 22pt; line-height: 1; font-weight: 800; color: var(--color-navy); margin: 2px 0;"><?= e(ev_fmt('j', $startTs, $evTz)) ?></div>
+            <div style="font-size: var(--fs-xs); color: var(--color-text-soft);"><?= e(ev_fmt('D', $startTs, $evTz)) ?></div>
         </a>
         <div style="flex: 1; min-width: 0;">
             <div class="row" style="gap: var(--sp-2); margin-bottom: var(--sp-2); flex-wrap: wrap;">
@@ -400,9 +432,9 @@ function event_form_card(?array $editing, string $assocSlug, array $activeLocati
                     </span>
                 <?php endif; ?>
                 <span class="muted" style="font-size: var(--fs-sm);">
-                    <?= e(udate('g:i A', $startTs)) ?>
+                    <?= e(ev_fmt('g:i A', $startTs, $evTz)) ?>
                     <?php if ($endTs): ?>
-                        – <?= e(udate($sameDay ? 'g:i A' : 'M j, g:i A', $endTs)) ?>
+                        – <?= e(ev_fmt($sameDay ? 'g:i A' : 'M j, g:i A', $endTs, $evTz)) ?>
                     <?php endif; ?>
                 </span>
                 <?php if (!empty($ev['location'])): ?>

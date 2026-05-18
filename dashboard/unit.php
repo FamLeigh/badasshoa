@@ -165,6 +165,75 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'occupan
     redirect('/dashboard/unit.php?id=' . $unitId);
 }
 
+// --- Unit-doc archive / unarchive ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array(($_POST['form'] ?? ''), ['unit_doc_archive','unit_doc_unarchive'], true)) {
+    csrf_check();
+    $did = (int)($_POST['doc_id'] ?? 0);
+    $row = db()->prepare('SELECT title FROM documents WHERE id = ? AND association_id = ? AND unit_id = ?');
+    $row->execute([$did, $assocId, $unitId]);
+    $drow = $row->fetch();
+    if ($drow) {
+        $isArchive = ($_POST['form'] === 'unit_doc_archive');
+        db()->prepare('UPDATE documents SET archived_at = ? WHERE id = ? AND association_id = ?')
+            ->execute([$isArchive ? date('Y-m-d H:i:s') : null, $did, $assocId]);
+        audit('document.' . ($isArchive ? 'archived' : 'unarchived'), ['title' => $drow['title']], $did, 'document');
+        flash('success', $isArchive ? "Archived \"{$drow['title']}\"." : "Restored \"{$drow['title']}\".");
+    }
+    redirect('/dashboard/unit.php?id=' . $unitId . (($_POST['form'] === 'unit_doc_unarchive') ? '&doc_archived=1' : ''));
+}
+
+// --- Unit media upload ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'unit_media_upload') {
+    csrf_check();
+    $title = trim((string)($_POST['media_title'] ?? ''));
+    if (!isset($_FILES['media_file']) || $_FILES['media_file']['error'] !== UPLOAD_ERR_OK) {
+        $flashError = 'Upload failed — no file received.';
+    } elseif ($_FILES['media_file']['size'] > 10 * 1024 * 1024) {
+        $flashError = 'Max image size is 10 MB.';
+    } elseif (storage_over_quota_by($association, (int)$_FILES['media_file']['size'])) {
+        $flashError = 'Storage quota reached. Delete some files or contact us.';
+    } else {
+        $allowed = ['jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png' => 'image/png', 'webp' => 'image/webp', 'gif' => 'image/gif'];
+        $ext = strtolower(pathinfo((string)$_FILES['media_file']['name'], PATHINFO_EXTENSION));
+        if (!isset($allowed[$ext])) {
+            $flashError = 'Only JPG, PNG, WEBP, and GIF images are allowed.';
+        } else {
+            $newName = uuid_filename((string)$_FILES['media_file']['name']);
+            $relDir  = "uploads/$assocId/unit_media/$unitId";
+            $absDir  = storage_path($relDir);
+            ensure_dir($absDir);
+            if (!move_uploaded_file($_FILES['media_file']['tmp_name'], "$absDir/$newName")) {
+                $flashError = 'Could not save image.';
+            } else {
+                db()->prepare(
+                    'INSERT INTO unit_media (association_id, unit_id, title, file_path, mime_type, uploaded_by)
+                     VALUES (?, ?, ?, ?, ?, ?)'
+                )->execute([$assocId, $unitId, $title ?: $newName, "$relDir/$newName", $allowed[$ext], (int)$user['id']]);
+                audit('unit_media.uploaded', ['unit_id' => $unitId, 'title' => $title], (int)db()->lastInsertId(), 'unit_media');
+                flash('success', 'Image added.');
+                redirect('/dashboard/unit.php?id=' . $unitId . '#unit-media');
+            }
+        }
+    }
+}
+
+// --- Unit media delete ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'unit_media_delete') {
+    csrf_check();
+    $mid = (int)($_POST['media_id'] ?? 0);
+    $mrow = db()->prepare('SELECT file_path FROM unit_media WHERE id = ? AND association_id = ? AND unit_id = ?');
+    $mrow->execute([$mid, $assocId, $unitId]);
+    $mdata = $mrow->fetch();
+    if ($mdata) {
+        $abs = storage_path((string)$mdata['file_path']);
+        if (is_file($abs)) @unlink($abs);
+        db()->prepare('DELETE FROM unit_media WHERE id = ? AND association_id = ?')->execute([$mid, $assocId]);
+        audit('unit_media.deleted', [], $mid, 'unit_media');
+        flash('success', 'Image removed.');
+    }
+    redirect('/dashboard/unit.php?id=' . $unitId . '#unit-media');
+}
+
 // --- Load occupants ---
 $occStmt = db()->prepare(
     'SELECT o.*,
@@ -195,15 +264,35 @@ if (!empty($unit['floor_plan_doc_id'])) {
     $floorPlanDoc = $fpStmt->fetch() ?: null;
 }
 
-// --- Load per-unit documents (manager sees all) ---
+// --- Load per-unit documents (archive toggle) ---
+$showDocArchived = ($_GET['doc_archived'] ?? '') === '1';
 $docStmt = db()->prepare(
     'SELECT d.*, CONCAT(IFNULL(u.first_name,""), " ", IFNULL(u.last_name,"")) AS uploader
        FROM documents d LEFT JOIN users u ON u.id = d.uploaded_by
       WHERE d.association_id = ? AND d.unit_id = ?
+        AND d.archived_at ' . ($showDocArchived ? 'IS NOT NULL' : 'IS NULL') . '
       ORDER BY d.created_at DESC'
 );
 $docStmt->execute([$assocId, $unitId]);
 $unitDocs = $docStmt->fetchAll();
+
+// Archived doc count for the toggle link.
+$archivedDocCount = 0;
+if (!$showDocArchived) {
+    $adcStmt = db()->prepare('SELECT COUNT(*) FROM documents WHERE association_id = ? AND unit_id = ? AND archived_at IS NOT NULL');
+    $adcStmt->execute([$assocId, $unitId]);
+    $archivedDocCount = (int)$adcStmt->fetchColumn();
+}
+
+// --- Load unit media ---
+$mediaStmt = db()->prepare(
+    'SELECT m.*, CONCAT(IFNULL(u.first_name,""), " ", IFNULL(u.last_name,"")) AS uploader
+       FROM unit_media m LEFT JOIN users u ON u.id = m.uploaded_by
+      WHERE m.association_id = ? AND m.unit_id = ?
+      ORDER BY m.created_at DESC'
+);
+$mediaStmt->execute([$assocId, $unitId]);
+$unitMedia = $mediaStmt->fetchAll();
 
 // --- Recent forms filed for this unit ---
 $formStmt = db()->prepare(
@@ -558,13 +647,20 @@ require __DIR__ . '/../includes/header.php';
     <?php endif; ?>
 
     <!-- Per-unit documents -->
-    <h2 style="font-size: var(--fs-xl);">Documents for this unit <span class="muted" style="font-size: var(--fs-sm); font-weight: 400;">— rental agreements, deeds, anything tied to <?= e((string)$unit['unit_number']) ?></span></h2>
-    <p style="margin-bottom: var(--sp-4);">
-        <a class="btn btn--primary" href="/dashboard/documents.php?action=new&unit_id=<?= (int)$unitId ?>">+ Upload to unit <?= e((string)$unit['unit_number']) ?></a>
-    </p>
-
+    <div class="row row--between" style="margin-top: var(--sp-6); margin-bottom: var(--sp-3); align-items: center; flex-wrap: wrap; gap: var(--sp-2);">
+        <h2 style="font-size: var(--fs-xl); margin: 0;">Documents <span class="muted" style="font-size: var(--fs-sm); font-weight: 400;">— rental agreements, deeds, anything specific to unit <?= e((string)$unit['unit_number']) ?></span></h2>
+        <div class="row" style="gap: var(--sp-2);">
+            <?php if ($showDocArchived): ?>
+                <a class="btn btn--ghost" href="/dashboard/unit.php?id=<?= (int)$unitId ?>#unit-docs" style="font-size: var(--fs-sm);">← Active docs</a>
+            <?php elseif ($archivedDocCount > 0): ?>
+                <a class="btn btn--ghost" href="/dashboard/unit.php?id=<?= (int)$unitId ?>&doc_archived=1#unit-docs" style="font-size: var(--fs-sm);">Archived (<?= $archivedDocCount ?>)</a>
+            <?php endif; ?>
+            <a class="btn btn--primary" href="/dashboard/documents.php?action=new&unit_id=<?= (int)$unitId ?>">+ Upload doc</a>
+        </div>
+    </div>
+    <div id="unit-docs">
     <?php if (!$unitDocs): ?>
-        <p class="muted">No unit-scoped documents yet.</p>
+        <p class="muted"><?= $showDocArchived ? 'No archived documents.' : 'No documents uploaded for this unit yet.' ?></p>
     <?php else: ?>
     <div style="overflow-x:auto;">
     <table class="table">
@@ -578,18 +674,36 @@ require __DIR__ . '/../includes/header.php';
                 default         => 'badge--info',
             };
         ?>
-            <tr>
+            <tr<?= !empty($d['archived_at']) ? ' style="opacity:.6;"' : '' ?>>
                 <td><strong><?= e((string)$d['title']) ?></strong>
+                    <?php if (!empty($d['archived_at'])): ?><span class="badge" style="font-size: var(--fs-xs); margin-left: 4px;">archived</span><?php endif; ?>
                     <?php if ($d['description']): ?><div class="muted" style="font-size: var(--fs-xs);"><?= e(mb_strimwidth((string)$d['description'], 0, 80, '…')) ?></div><?php endif; ?>
                 </td>
                 <td><?= e((string)($d['category'] ?? '—')) ?></td>
                 <td><span class="badge <?= $accessClass ?>"><?= e(str_replace('_',' ',(string)$d['access_level'])) ?></span></td>
                 <td>
                     <?= e(udate('M j, Y', strtotime((string)$d['created_at']))) ?>
-                    <div class="muted" style="font-size: var(--fs-xs);">v<?= e((string)$d['version']) ?> · <?= e(trim((string)$d['uploader']) ?: 'unknown') ?></div>
+                    <div class="muted" style="font-size: var(--fs-xs);"><?= e(trim((string)$d['uploader']) ?: 'unknown') ?></div>
                 </td>
                 <td style="text-align:right; white-space: nowrap;">
-                    <a class="btn btn--ghost" href="/dashboard/file.php?type=document&id=<?= (int)$d['id'] ?>" target="_blank" rel="noopener">View</a>
+                    <?php if (empty($d['archived_at']) && !empty($d['file_path'])): ?>
+                        <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="/dashboard/file.php?type=document&id=<?= (int)$d['id'] ?>" target="_blank" rel="noopener">View</a>
+                    <?php endif; ?>
+                    <?php if (empty($d['archived_at'])): ?>
+                        <form method="post" style="display:inline;" onsubmit="return confirm('Archive this document?');">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="form" value="unit_doc_archive">
+                            <input type="hidden" name="doc_id" value="<?= (int)$d['id'] ?>">
+                            <button class="btn btn--ghost" type="submit" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);">Archive</button>
+                        </form>
+                    <?php else: ?>
+                        <form method="post" style="display:inline;">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="form" value="unit_doc_unarchive">
+                            <input type="hidden" name="doc_id" value="<?= (int)$d['id'] ?>">
+                            <button class="btn btn--ghost" type="submit" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);">Restore</button>
+                        </form>
+                    <?php endif; ?>
                 </td>
             </tr>
         <?php endforeach; ?>
@@ -597,6 +711,57 @@ require __DIR__ . '/../includes/header.php';
     </table>
     </div>
     <?php endif; ?>
+    </div>
+
+    <!-- Unit media gallery -->
+    <div class="row row--between" style="margin-top: var(--sp-8); margin-bottom: var(--sp-3); align-items: center;">
+        <h2 id="unit-media" style="font-size: var(--fs-xl); margin: 0;">Photos &amp; Images <span class="muted" style="font-size: var(--fs-sm); font-weight: 400;">— floor plans, interior photos, renovation photos</span></h2>
+    </div>
+
+    <?php if ($unitMedia): ?>
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--sp-3); margin-bottom: var(--sp-6);">
+        <?php foreach ($unitMedia as $m): ?>
+        <div style="position: relative; border-radius: var(--r-lg); overflow: hidden; border: 1px solid var(--color-border); background: var(--color-surface);">
+            <a href="/dashboard/file.php?type=unit_media&id=<?= (int)$m['id'] ?>" target="_blank" rel="noopener">
+                <img src="/dashboard/file.php?type=unit_media&id=<?= (int)$m['id'] ?>"
+                     alt="<?= e((string)$m['title']) ?>"
+                     style="width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block;">
+            </a>
+            <div style="padding: var(--sp-2) var(--sp-2) var(--sp-1);">
+                <div style="font-size: var(--fs-xs); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="<?= e((string)$m['title']) ?>"><?= e((string)$m['title']) ?></div>
+                <div class="muted" style="font-size: var(--fs-xs);"><?= e(udate('M j, Y', strtotime((string)$m['created_at']))) ?></div>
+            </div>
+            <form method="post" style="position: absolute; top: var(--sp-1); right: var(--sp-1);" onsubmit="return confirm('Remove this image?');">
+                <?= csrf_field() ?>
+                <input type="hidden" name="form" value="unit_media_delete">
+                <input type="hidden" name="media_id" value="<?= (int)$m['id'] ?>">
+                <button type="submit" style="background: rgba(0,0,0,.55); border: none; border-radius: 50%; width: 24px; height: 24px; color: #fff; cursor: pointer; font-size: 14px; line-height: 1; display: flex; align-items: center; justify-content: center; padding: 0;" title="Remove">×</button>
+            </form>
+        </div>
+        <?php endforeach; ?>
+    </div>
+    <?php else: ?>
+        <p class="muted" style="margin-bottom: var(--sp-4);">No photos uploaded yet.</p>
+    <?php endif; ?>
+
+    <div class="card card--padded" style="margin-bottom: var(--sp-6); max-width: 480px;">
+        <h3 class="card__title" style="margin-bottom: var(--sp-3);">Add photo or image</h3>
+        <form method="post" enctype="multipart/form-data" class="form" novalidate>
+            <?= csrf_field() ?>
+            <input type="hidden" name="form" value="unit_media_upload">
+            <div class="field">
+                <label class="field__label" for="media_title">Title (optional)</label>
+                <input class="input" id="media_title" name="media_title" maxlength="255" placeholder="Floor plan, Living room, etc.">
+            </div>
+            <div class="field">
+                <label class="field__label" for="media_file">Image (JPG, PNG, WEBP, GIF · max 10 MB)</label>
+                <input class="input" type="file" id="media_file" name="media_file" accept="image/jpeg,image/png,image/webp,image/gif" required>
+            </div>
+            <div class="row" style="justify-content: flex-end;">
+                <button class="btn btn--primary" type="submit">Upload</button>
+            </div>
+        </form>
+    </div>
 
 </div>
 

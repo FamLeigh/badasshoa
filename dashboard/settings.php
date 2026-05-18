@@ -56,6 +56,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'save_ti
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// POST: Directory privacy
+// ──────────────────────────────────────────────────────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'directory_privacy') {
+    csrf_check();
+    $hide = isset($_POST['hide_from_directory']) ? 1 : 0;
+    db()->prepare('UPDATE users SET hide_from_directory = ? WHERE id = ?')
+        ->execute([$hide, (int)$user['id']]);
+    flash('success', $hide ? 'You are now hidden from the resident directory.' : 'You are now visible in the resident directory.');
+    redirect('/dashboard/settings.php#account');
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// POST: Announcement tag colours (board admin only)
+// ──────────────────────────────────────────────────────────────────────────
+if ($canEditPerms && $_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'ann_type_colors') {
+    csrf_check();
+    $types = array_keys(ann_types());
+    $colors = [];
+    foreach ($types as $t) {
+        $val = strtolower(trim((string)($_POST['color_' . $t] ?? '')));
+        if (preg_match('/^#[0-9a-f]{6}$/', $val)) $colors[$t] = $val;
+    }
+    $isReset = isset($_POST['reset_colors']);
+    db()->prepare('UPDATE associations SET ann_type_colors = ? WHERE id = ?')
+        ->execute([$isReset ? null : ($colors ? json_encode($colors) : null), $assocId]);
+    audit('association.ann_colors_updated', $isReset ? ['reset' => true] : $colors);
+    flash('success', $isReset ? 'Tag colors reset to defaults.' : 'Tag colors saved.');
+    redirect('/dashboard/settings.php#section-ann-colors');
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // POST: TV token (board admin only)
 // ──────────────────────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'tv_token' && $canEdit) {
@@ -69,6 +100,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'tv_toke
     } elseif ($action === 'revoke') {
         db()->prepare('UPDATE associations SET tv_token=NULL WHERE id=?')->execute([$assocId]);
         flash('success', 'TV link revoked. The old URL will no longer work.');
+    }
+    redirect('/dashboard/settings.php#tv');
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'tv_pin' && $canEdit) {
+    csrf_check();
+    $newPin = preg_replace('/\D/', '', (string)($_POST['tv_pin'] ?? ''));
+    if (strlen($newPin) < 4 || strlen($newPin) > 10) {
+        flash('error', 'PIN must be 4–10 digits.');
+    } else {
+        db()->prepare('UPDATE associations SET tv_pin=? WHERE id=?')->execute([$newPin, $assocId]);
+        audit('association.tv_pin_changed', []);
+        flash('success', 'TV PIN updated.');
     }
     redirect('/dashboard/settings.php#tv');
 }
@@ -231,9 +275,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'update'
     $country   = strtoupper(trim((string)($_POST['country'] ?? 'US')));
     $units     = (int)($_POST['unit_count'] ?? 0);
     $primary   = trim((string)($_POST['primary_color'] ?? '#0f1f3d'));
+    $assocTzInput = trim((string)($_POST['assoc_timezone'] ?? 'America/New_York'));
     $publicLanding = isset($_POST['public_landing_enabled']) ? 1 : 0;
     if (!preg_match('/^#[0-9a-f]{6}$/i', $primary)) $primary = '#0f1f3d';
     if (!preg_match('/^[A-Z]{2}$/', $country))      $country = 'US';
+    if (!@timezone_open($assocTzInput)) $assocTzInput = 'America/New_York';
 
     $subdomain = preg_replace('/[^a-z0-9-]/', '', strtolower($subdomain));
     $subdomain = trim($subdomain, '-');
@@ -343,10 +389,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'update'
             db()->prepare(
                 "UPDATE associations
                  SET name = ?, subdomain = ?, address = ?, city = ?, state_region = ?, postal_code = ?, country = ?,
-                     unit_count = ?, primary_color = ? $extraSql
+                     timezone = ?, unit_count = ?, primary_color = ? $extraSql
                  WHERE id = ?"
             )->execute(array_merge(
-                [$name, $subdomain, $address ?: null, $city ?: null, $stateReg ?: null, $postal ?: null, $country, $units, $primary],
+                [$name, $subdomain, $address ?: null, $city ?: null, $stateReg ?: null, $postal ?: null, $country, $assocTzInput, $units, $primary],
                 $extraArgs, [$assocId]
             ));
             audit('association.profile_updated', [
@@ -452,20 +498,17 @@ require __DIR__ . '/../includes/header.php';
 
 <div class="container" style="padding: var(--sp-8) var(--sp-6) var(--sp-12); max-width: 980px;">
 
-    <h1 style="font-size: var(--fs-3xl); margin: 0 0 var(--sp-1);">Settings</h1>
-    <p class="muted" style="margin: 0 0 var(--sp-2);">Association configuration, permissions, and account options.</p>
+    <h1 style="font-size: var(--fs-3xl); margin: 0 0 var(--sp-1);"><?= $canEdit ? 'Settings' : 'Your account' ?></h1>
+    <p class="muted" style="margin: 0 0 var(--sp-2);"><?= $canEdit ? 'Association configuration, permissions, and account options.' : 'Password and display preferences.' ?></p>
 
     <?php if ($flashError): ?>
         <div class="flash flash--error" style="margin-top: var(--sp-4);"><?= e($flashError) ?></div>
     <?php endif; ?>
 
-    <?php if (!$canEdit): ?>
-        <div class="flash flash--info" style="margin-top: var(--sp-4);">You can view settings but only board admins can make changes.</div>
-    <?php endif; ?>
-
     <!-- ═══════════════════════════════════════════════════════════════════
          ASSOCIATION PROFILE
     ════════════════════════════════════════════════════════════════════ -->
+    <?php if ($canEdit): ?>
     <details id="section-profile" class="acc-panel" <?= ($openSection === null || $openSection === 'profile') ? 'open' : '' ?>>
         <summary>
             <span class="acc-icon">🏢</span>
@@ -531,6 +574,44 @@ require __DIR__ . '/../includes/header.php';
                     </div>
                     <div class="form-row form-row--2">
                         <div class="field">
+                            <label class="field__label" for="atimezone">Community timezone</label>
+                            <?php
+                            $curTz = (string)($association['timezone'] ?? 'America/New_York');
+                            $tzGroups = [
+                                'US & Canada' => [
+                                    'America/New_York'    => 'Eastern (ET)',
+                                    'America/Chicago'     => 'Central (CT)',
+                                    'America/Denver'      => 'Mountain (MT)',
+                                    'America/Phoenix'     => 'Arizona (no DST)',
+                                    'America/Los_Angeles' => 'Pacific (PT)',
+                                    'America/Anchorage'   => 'Alaska (AKT)',
+                                    'Pacific/Honolulu'    => 'Hawaii (HT)',
+                                    'America/Puerto_Rico' => 'Puerto Rico (AST)',
+                                ],
+                                'Other' => [
+                                    'UTC'                    => 'UTC',
+                                    'Europe/London'          => 'London (GMT/BST)',
+                                    'Europe/Paris'           => 'Central Europe (CET)',
+                                    'Australia/Sydney'       => 'Sydney (AEST)',
+                                    'Pacific/Auckland'       => 'New Zealand (NZST)',
+                                ],
+                            ];
+                            ?>
+                            <select class="select" id="atimezone" name="assoc_timezone">
+                                <?php foreach ($tzGroups as $grpLabel => $tzList): ?>
+                                <optgroup label="<?= e($grpLabel) ?>">
+                                    <?php foreach ($tzList as $tzVal => $tzLabel): ?>
+                                    <option value="<?= e($tzVal) ?>" <?= $curTz === $tzVal ? 'selected' : '' ?>><?= e($tzLabel) ?></option>
+                                    <?php endforeach; ?>
+                                </optgroup>
+                                <?php endforeach; ?>
+                            </select>
+                            <div class="field__hint">Used on the Lobby TV to display event times in local time.</div>
+                        </div>
+                        <div class="field"></div>
+                    </div>
+                    <div class="form-row form-row--2">
+                        <div class="field">
                             <label class="field__label" for="acolor">Primary color</label>
                             <input class="input" type="color" id="acolor" name="primary_color" value="<?= e((string)$association['primary_color']) ?>">
                             <div class="field__hint">Used on the public landing page.</div>
@@ -558,6 +639,7 @@ require __DIR__ . '/../includes/header.php';
             </form>
         </div>
     </details>
+    <?php endif; ?>
 
     <!-- ═══════════════════════════════════════════════════════════════════
          PUBLIC LANDING
@@ -747,6 +829,27 @@ require __DIR__ . '/../includes/header.php';
                 </div>
             </form>
 
+            <?php if (!role_can_manage(viewing_role())): ?>
+            <form method="post" class="form" style="max-width: 480px; margin-bottom: var(--sp-7);">
+                <?= csrf_field() ?>
+                <input type="hidden" name="form" value="directory_privacy">
+                <fieldset style="border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--sp-4) var(--sp-5);">
+                    <legend style="font-weight: 600; font-size: var(--fs-sm); padding: 0 var(--sp-2);">Directory privacy</legend>
+                    <label style="display: flex; align-items: flex-start; gap: var(--sp-3); cursor: pointer;">
+                        <input type="checkbox" name="hide_from_directory" value="1" style="margin-top: 3px; flex-shrink: 0;"
+                            <?= !empty($user['hide_from_directory']) ? 'checked' : '' ?>>
+                        <span>
+                            <strong>Hide me from the resident directory</strong><br>
+                            <span class="muted" style="font-size: var(--fs-sm);">Other residents won't see your name, unit, email, or phone in the directory. The board and management can still see your information.</span>
+                        </span>
+                    </label>
+                </fieldset>
+                <div class="row" style="justify-content: flex-end; margin-top: var(--sp-3);">
+                    <button class="btn btn--secondary" type="submit">Save privacy setting</button>
+                </div>
+            </form>
+            <?php endif; ?>
+
             <form method="post" class="form" style="max-width: 480px;">
                 <?= csrf_field() ?>
                 <input type="hidden" name="form" value="change_password">
@@ -774,8 +877,13 @@ require __DIR__ . '/../includes/header.php';
          LOBBY TV
     ════════════════════════════════════════════════════════════════════ -->
     <?php if ($canEdit):
-        $tvToken = (string)($association['tv_token'] ?? '');
-        $tvUrl   = (strlen($tvToken) > 0) ? 'https://badasshoa.com/tv.php?token=' . rawurlencode($tvToken) : '';
+        $tvToken  = (string)($association['tv_token'] ?? '');
+        $tvPin    = (string)($association['tv_pin']   ?? '');
+        $tvSubdomain = (string)($association['subdomain'] ?? '');
+        $tvUrl    = (strlen($tvToken) > 0) ? 'https://badasshoa.com/tv.php?token=' . rawurlencode($tvToken) : '';
+        $tvPinUrl = ($tvPin !== '' && $tvSubdomain !== '')
+            ? 'https://badasshoa.com/tv?slug=' . rawurlencode($tvSubdomain) . '&pin=' . rawurlencode($tvPin)
+            : '';
     ?>
     <details id="section-tv" class="acc-panel" <?= $openSection === 'tv' ? 'open' : '' ?>>
         <summary>
@@ -788,38 +896,131 @@ require __DIR__ . '/../includes/header.php';
         </summary>
         <div class="acc-body">
             <p class="muted" style="font-size: var(--fs-sm); margin: 0 0 var(--sp-4);">
-                Generate a private URL and open it in any browser on your lobby TV. The display shows active announcements, upcoming events, and a live clock. No login required — the token in the URL is the key. Regenerate or revoke any time.
+                Open the TV display in any browser on your lobby TV. The easiest way is to go to <strong>badasshoa.com/tv</strong>, enter your community ID and PIN, then bookmark the page — the TV just needs to reload that bookmark.
             </p>
-            <?php if ($tvUrl): ?>
-                <div style="background: var(--color-navy-10, #f0f3f8); border-radius: var(--r-md); padding: var(--sp-3) var(--sp-4); font-family: monospace; font-size: var(--fs-sm); word-break: break-all; margin-bottom: var(--sp-4); display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); flex-wrap: wrap;">
-                    <span><?= e($tvUrl) ?></span>
-                    <button type="button" onclick="navigator.clipboard.writeText('<?= e($tvUrl) ?>').then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)})" class="btn btn--sm">Copy</button>
+
+            <?php if ($tvPin !== ''): ?>
+            <div style="background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--r-md); padding: var(--sp-4); margin-bottom: var(--sp-4);">
+                <div style="font-size: var(--fs-xs); font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--color-text-soft); margin-bottom: var(--sp-2);">TV PIN (easy to type on a remote)</div>
+                <div style="display: flex; align-items: center; gap: var(--sp-4); flex-wrap: wrap;">
+                    <span style="font-size: var(--fs-3xl); font-weight: 900; letter-spacing: .15em; font-variant-numeric: tabular-nums; color: var(--color-navy);"><?= e($tvPin) ?></span>
+                    <div style="font-size: var(--fs-sm); color: var(--color-text-soft); line-height: 1.5;">
+                        Community ID: <strong><?= e($tvSubdomain) ?></strong><br>
+                        Go to <strong>badasshoa.com/tv</strong> and enter both to sign in.
+                    </div>
                 </div>
-                <div class="row" style="gap: var(--sp-3); flex-wrap: wrap;">
-                    <a class="btn btn--primary" href="<?= e($tvUrl) ?>" target="_blank" rel="noopener">Open TV display ↗</a>
-                    <form method="post" style="display:inline;">
+                <?php if ($tvPinUrl): ?>
+                <div style="margin-top: var(--sp-3); display: flex; gap: var(--sp-3); align-items: center; flex-wrap: wrap;">
+                    <a class="btn btn--primary btn--sm" href="<?= e($tvPinUrl) ?>" target="_blank" rel="noopener">Open TV display ↗</a>
+                    <button type="button" class="btn btn--sm"
+                        onclick="navigator.clipboard.writeText('<?= e($tvPinUrl) ?>').then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy link',1500)})">Copy link</button>
+                </div>
+                <?php endif; ?>
+                <form method="post" style="margin-top: var(--sp-3); display: flex; gap: var(--sp-2); align-items: flex-end; flex-wrap: wrap;">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="form" value="tv_pin">
+                    <div>
+                        <label style="display:block; font-size: var(--fs-xs); font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--color-text-soft); margin-bottom:4px;">Change PIN</label>
+                        <input type="text" name="tv_pin" inputmode="numeric" pattern="[0-9]{4,10}" maxlength="10"
+                               placeholder="4–10 digits" value="<?= e($tvPin) ?>"
+                               style="width:140px; font-size:var(--fs-lg); font-weight:700; letter-spacing:.1em; text-align:center; font-variant-numeric:tabular-nums;">
+                    </div>
+                    <button class="btn btn--sm" type="submit">Save PIN</button>
+                </form>
+            </div>
+            <?php endif; ?>
+            <details style="margin-top: var(--sp-2);">
+                <summary style="font-size: var(--fs-sm); color: var(--color-text-soft); cursor: pointer;">Legacy token URL</summary>
+                <div style="margin-top: var(--sp-3);">
+                <?php if ($tvUrl): ?>
+                    <div style="background: var(--color-navy-10, #f0f3f8); border-radius: var(--r-md); padding: var(--sp-3) var(--sp-4); font-family: monospace; font-size: var(--fs-sm); word-break: break-all; margin-bottom: var(--sp-4); display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); flex-wrap: wrap;">
+                        <span><?= e($tvUrl) ?></span>
+                        <button type="button" onclick="navigator.clipboard.writeText('<?= e($tvUrl) ?>').then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)})" class="btn btn--sm">Copy</button>
+                    </div>
+                    <div class="row" style="gap: var(--sp-3); flex-wrap: wrap;">
+                        <form method="post" style="display:inline;">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="form" value="tv_token">
+                            <input type="hidden" name="tv_action" value="generate">
+                            <button class="btn btn--sm" type="submit">Regenerate</button>
+                        </form>
+                        <form method="post" style="display:inline;" onsubmit="return confirm('Revoke the TV URL? The display will stop working until you generate a new one.')">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="form" value="tv_token">
+                            <input type="hidden" name="tv_action" value="revoke">
+                            <button class="btn btn--sm btn--error" type="submit">Revoke</button>
+                        </form>
+                    </div>
+                <?php else: ?>
+                    <form method="post">
                         <?= csrf_field() ?>
                         <input type="hidden" name="form" value="tv_token">
                         <input type="hidden" name="tv_action" value="generate">
-                        <button class="btn" type="submit">Regenerate URL</button>
+                        <button class="btn btn--sm" type="submit">Generate legacy URL</button>
                     </form>
-                    <form method="post" style="display:inline;" onsubmit="return confirm('Revoke the TV URL? The display will stop working until you generate a new one.')">
-                        <?= csrf_field() ?>
-                        <input type="hidden" name="form" value="tv_token">
-                        <input type="hidden" name="tv_action" value="revoke">
-                        <button class="btn btn--error" type="submit">Revoke</button>
-                    </form>
+                <?php endif; ?>
                 </div>
-            <?php else: ?>
-                <form method="post">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="form" value="tv_token">
-                    <input type="hidden" name="tv_action" value="generate">
-                    <button class="btn btn--primary" type="submit">Generate TV URL</button>
-                </form>
-            <?php endif; ?>
+            </details>
         </div>
     </details>
+    <?php endif; ?>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         ANNOUNCEMENT TAG COLOURS
+    ════════════════════════════════════════════════════════════════════ -->
+    <?php if ($canEditPerms):
+        $currentAnnColors = ann_type_colors($assocId);
+        $annTypeLabels = array_map(fn($m) => $m['emoji'] . ' ' . $m['label'], ann_types());
+    ?>
+    <details id="section-ann-colors" class="acc-panel" <?= $openSection === 'ann-colors' ? 'open' : '' ?>>
+        <summary>
+            <span class="acc-icon">🏷</span>
+            <div>
+                <span class="acc-title">Announcement tag colors</span>
+                <span class="acc-hint">Customize the color of each announcement type badge</span>
+            </div>
+            <svg class="acc-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <div class="acc-body">
+            <p class="muted" style="font-size: var(--fs-sm); margin: 0 0 var(--sp-5);">
+                Each announcement type gets a color tag on the dashboard, public landing, and lobby TV. Pick any color — the badge auto-generates a matching tint for the background.
+            </p>
+            <form method="post">
+                <?= csrf_field() ?>
+                <input type="hidden" name="form" value="ann_type_colors">
+                <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--sp-4); margin-bottom: var(--sp-5);">
+                    <?php foreach ($annTypeLabels as $typeKey => $typeLabel):
+                        $currentHex = $currentAnnColors[$typeKey] ?? '#888888';
+                        $sampleStyle = "background:{$currentHex}1a;color:{$currentHex};border:1px solid {$currentHex}33;";
+                    ?>
+                    <div>
+                        <label class="field__label" for="color_<?= $typeKey ?>"><?= e($typeLabel) ?></label>
+                        <div style="display:flex; align-items:center; gap: var(--sp-3); margin-top: var(--sp-1);">
+                            <input type="color" id="color_<?= $typeKey ?>" name="color_<?= $typeKey ?>" value="<?= e($currentHex) ?>"
+                                style="width:44px; height:36px; padding:2px; border:1px solid var(--color-border); border-radius: var(--r-sm); cursor:pointer; background:#fff;"
+                                oninput="updatePreview('<?= $typeKey ?>', this.value)">
+                            <span class="badge" id="preview_<?= $typeKey ?>" style="<?= $sampleStyle ?>"><?= e(strtolower($typeLabel)) ?></span>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+                <div class="row" style="gap: var(--sp-3); flex-wrap: wrap; align-items: center;">
+                    <button class="btn btn--primary" type="submit">Save colors</button>
+                    <button class="btn btn--ghost" type="submit" name="reset_colors" value="1"
+                        onclick="return confirm('Reset all tag colors to the app defaults?')">Reset to defaults</button>
+                </div>
+            </form>
+        </div>
+    </details>
+    <script>
+    function updatePreview(type, hex) {
+        var el = document.getElementById('preview_' + type);
+        if (!el || !/^#[0-9a-fA-F]{6}$/.test(hex)) return;
+        el.style.background = hex + '1a';
+        el.style.color = hex;
+        el.style.borderColor = hex + '33';
+    }
+    </script>
     <?php endif; ?>
 
     <!-- ═══════════════════════════════════════════════════════════════════
@@ -1100,6 +1301,7 @@ require __DIR__ . '/../includes/header.php';
     <!-- ═══════════════════════════════════════════════════════════════════
          SUBSCRIPTION
     ════════════════════════════════════════════════════════════════════ -->
+    <?php if ($canEdit): ?>
     <details id="section-subscription" class="acc-panel">
         <summary>
             <span class="acc-icon">💳</span>
@@ -1119,6 +1321,7 @@ require __DIR__ . '/../includes/header.php';
             </p>
         </div>
     </details>
+    <?php endif; ?>
 
     <!-- ═══════════════════════════════════════════════════════════════════
          DANGER ZONE

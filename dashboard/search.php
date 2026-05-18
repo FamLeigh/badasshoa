@@ -219,6 +219,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'suggest
     redirect('/dashboard/search.php?action=suggestions');
 }
 
+// --- Delete a suggestion (hard delete — admins only) ---------------------
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'suggest_delete') {
+    csrf_check();
+    if (!$canManage) { http_response_code(403); die('Forbidden'); }
+    $sid = (int)($_POST['id'] ?? 0);
+    $stmt = db()->prepare('SELECT title FROM rule_suggestions WHERE id = ? AND association_id = ?');
+    $stmt->execute([$sid, $assocId]);
+    $row = $stmt->fetch();
+    if ($row) {
+        db()->prepare('DELETE FROM rule_suggestions WHERE id = ? AND association_id = ?')->execute([$sid, $assocId]);
+        audit('rule_suggestion.deleted', ['title' => $row['title']], $sid, 'rule_suggestion');
+        flash('success', "Suggestion deleted.");
+    }
+    redirect('/dashboard/search.php?action=suggestions');
+}
+
 // --- Reject a suggestion -------------------------------------------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'suggest_reject') {
     csrf_check();
@@ -1097,7 +1113,20 @@ function rule_form_card(?array $editing, array $categories): void {
                                 <input type="hidden" name="decision_note" value="">
                                 <button class="btn btn--ghost" type="submit" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs); color: var(--color-error);">Reject</button>
                             </form>
+                            <form method="post" style="display:inline;" onsubmit="return confirm('Permanently delete this suggestion? This cannot be undone.');">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="form" value="suggest_delete">
+                                <input type="hidden" name="id" value="<?= (int)$sug['id'] ?>">
+                                <button class="btn btn--ghost" type="submit" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs); color: var(--color-error);" title="Delete permanently">🗑 Delete</button>
+                            </form>
                         </div>
+                    <?php else: ?>
+                        <form method="post" style="display:inline;" onsubmit="return confirm('Permanently delete this suggestion?');">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="form" value="suggest_delete">
+                            <input type="hidden" name="id" value="<?= (int)$sug['id'] ?>">
+                            <button class="btn btn--ghost" type="submit" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs); color: var(--color-error);" title="Delete permanently">🗑 Delete</button>
+                        </form>
                     <?php endif; ?>
                 </div>
             </article>
@@ -1261,6 +1290,52 @@ function rule_form_card(?array $editing, array $categories): void {
     <?php endif; ?>
 
     <?php if (!$showCats && !$showImp && !$showSuggest && !$showSuggestQueue && !$approvingSug): /* show search bar + results unless on a sub-view */ ?>
+
+    <div class="card card--padded" style="margin-bottom: var(--sp-6);">
+        <div class="row row--between" style="align-items: baseline; margin-bottom: var(--sp-3);">
+            <h3 class="card__title" style="margin: 0;">Types of Governing Documents &amp; How They're Changed</h3>
+            <a href="/dashboard/governing-docs.php" style="font-size: var(--fs-sm); white-space: nowrap;">Full guide &amp; amendment process →</a>
+        </div>
+        <div style="overflow-x: auto;">
+        <table class="table" style="min-width: 520px; margin: 0;">
+            <thead>
+                <tr>
+                    <th>Document</th>
+                    <th>What It Covers</th>
+                    <th>Approval Required</th>
+                    <th style="white-space: nowrap;">Must Be Recorded?</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Declaration (CC&amp;Rs)</strong></td>
+                    <td class="muted" style="font-size: var(--fs-sm);">Property use restrictions, maintenance obligations, common areas</td>
+                    <td style="font-size: var(--fs-sm);">&#8532; vote of <em>all</em> voting interests</td>
+                    <td style="font-size: var(--fs-sm); color: var(--color-success);">&#10003; Yes</td>
+                </tr>
+                <tr>
+                    <td><strong>Articles of Incorporation</strong></td>
+                    <td class="muted" style="font-size: var(--fs-sm);">Legal structure of the HOA as a corporation</td>
+                    <td style="font-size: var(--fs-sm);">&#8532; vote</td>
+                    <td style="font-size: var(--fs-sm); color: var(--color-success);">&#10003; Yes</td>
+                </tr>
+                <tr>
+                    <td><strong>Bylaws</strong></td>
+                    <td class="muted" style="font-size: var(--fs-sm);">Board elections, meetings, voting procedures</td>
+                    <td style="font-size: var(--fs-sm);">&#8532; vote of voting interests</td>
+                    <td style="font-size: var(--fs-sm); color: var(--color-success);">&#10003; Recommended</td>
+                </tr>
+                <tr>
+                    <td><strong>Rules &amp; Regulations</strong></td>
+                    <td class="muted" style="font-size: var(--fs-sm);">Day-to-day community rules (parking, pool hours, etc.)</td>
+                    <td style="font-size: var(--fs-sm);">Board approval only</td>
+                    <td style="font-size: var(--fs-sm); color: var(--color-error);">&#10007; Not required</td>
+                </tr>
+            </tbody>
+        </table>
+        </div>
+    </div>
+
     <div data-live-search data-endpoint="/dashboard/search.php">
         <form class="search-bar" method="get">
             <span aria-hidden="true">🔎</span>

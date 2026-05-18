@@ -10,7 +10,7 @@ $qPeriod = $_GET['period'] ?? '';
 if (!in_array($qPeriod, ['today','week','month'], true)) $qPeriod = '';
 
 $qType = $_GET['type'] ?? '';
-if (!in_array($qType, ['general','emergency','event','maintenance','beautification'], true)) $qType = '';
+if (!array_key_exists($qType, ann_types())) $qType = '';
 
 $qAud = $_GET['audience'] ?? '';
 if (!in_array($qAud, ['all','owners','renters','board'], true)) $qAud = '';
@@ -55,11 +55,13 @@ $stmt->execute($params);
 $rows = $stmt->fetchAll();
 
 $typeColors = [
-    'emergency'      => '#a8322a',
-    'event'          => '#1f4f9c',
-    'maintenance'    => '#a8782a',
-    'beautification' => '#2f7a3d',
-    'general'        => '#c25a1e',
+    'emergency'     => '#a8322a',
+    'event'         => '#1f4f9c',
+    'maintenance'   => '#a8782a',
+    'beautification'=> '#2f7a3d',
+    'general'       => '#c25a1e',
+    'birth_notice'  => '#6d28d9',
+    'death_notice'  => '#374151',
 ];
 
 $subtitle = '';
@@ -119,7 +121,7 @@ if ($qAud  !== '')  $subtitle .= ' · ' . ucfirst($qAud) . ' only';
         </div>
         <div class="ann-body">
             <div class="ann-meta">
-                <span class="pill" style="background: <?= e($color) ?>;"><?= e((string)$a['type']) ?></span>
+                <span class="pill" style="background: <?= e($color) ?>;"><?= e(ann_types()[(string)$a['type']]['label'] ?? ucfirst((string)$a['type'])) ?></span>
                 <span class="pill-soft"><?= e((string)$a['audience']) ?></span>
                 <?= e(udate('g:i A', $startTs)) ?>
                 · <?= e(trim((string)$a['author']) ?: 'Unknown') ?>

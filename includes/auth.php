@@ -128,7 +128,7 @@ function current_user(): ?array
     static $u = null;
     if ($u !== null) return $u;
     $stmt = db()->prepare(
-        'SELECT id, association_id, first_name, last_name, email, role, status, unit_number, avatar_path, timezone, password_hash
+        'SELECT id, association_id, first_name, last_name, email, phone, role, status, unit_number, avatar_path, timezone, password_hash
          FROM users WHERE id = ?'
     );
     $stmt->execute([$_SESSION['user_id']]);

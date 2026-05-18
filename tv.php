@@ -5,22 +5,171 @@ require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/functions.php';
 require_once __DIR__ . '/includes/auth.php';
 
-$token = trim((string)($_GET['token'] ?? ''));
-if ($token === '') { http_response_code(404); die('Not found.'); }
+// Supports three auth modes:
+//   ?slug=X&pin=Y  — kiosk PIN (bookmarkable, preferred)
+//   ?token=<hex>   — legacy 48-char token (still works)
+//   POST slug+pin  — login form submit → redirect to bookmarkable URL
+//   (no params)    — show PIN entry form
 
-$stmt = db()->prepare('SELECT * FROM associations WHERE tv_token = ? AND status IN ("active","trial") LIMIT 1');
-$stmt->execute([$token]);
-$assoc = $stmt->fetch();
-if (!$assoc) { http_response_code(404); die('Not found.'); }
+$slug      = trim((string)($_GET['slug']  ?? ''));
+$pin       = trim((string)($_GET['pin']   ?? ''));
+$token     = trim((string)($_GET['token'] ?? ''));
+$loginError = null;
+$postSlug  = '';
+
+$clientIp = (string)($_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? '');
+$clientIp = trim(explode(',', $clientIp)[0]); // take first IP if comma-list
+
+// Rate-limit PIN attempts: 10 failures per IP per 15 minutes.
+function tv_pin_is_locked(string $ip): bool {
+    $stmt = db()->prepare(
+        'SELECT COUNT(*) FROM login_attempts
+          WHERE kind = ? AND ip_address = ? AND succeeded = 0
+            AND attempted_at >= NOW() - INTERVAL 15 MINUTE'
+    );
+    $stmt->execute(['tv_pin', $ip]);
+    return (int)$stmt->fetchColumn() >= 10;
+}
+function tv_pin_record(string $ip, bool $ok): void {
+    db()->prepare(
+        'INSERT INTO login_attempts (kind, ip_address, succeeded) VALUES (?, ?, ?)'
+    )->execute(['tv_pin', $ip, $ok ? 1 : 0]);
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $postSlug = trim((string)($_POST['slug'] ?? ''));
+    $postPin  = trim((string)($_POST['pin']  ?? ''));
+    if (tv_pin_is_locked($clientIp)) {
+        $loginError = 'Too many failed attempts. Try again in 15 minutes.';
+    } elseif ($postSlug !== '' && $postPin !== '') {
+        $chk = db()->prepare(
+            'SELECT id FROM associations WHERE subdomain = ? AND tv_pin = ? AND status IN ("active","trial") LIMIT 1'
+        );
+        $chk->execute([$postSlug, $postPin]);
+        if ($chk->fetch()) {
+            tv_pin_record($clientIp, true);
+            header('Location: /tv?slug=' . urlencode($postSlug) . '&pin=' . urlencode($postPin));
+            exit;
+        }
+        tv_pin_record($clientIp, false);
+        $loginError = 'Community not found or PIN incorrect. Check with your board administrator.';
+    } else {
+        $loginError = 'Enter both a community ID and PIN.';
+    }
+}
+
+$assoc = null;
+if ($slug !== '' && $pin !== '') {
+    // Bookmarked URL: also rate-limited so crawlers can't enumerate PINs.
+    if (tv_pin_is_locked($clientIp)) {
+        http_response_code(429);
+        die('Too many failed attempts. Try again in 15 minutes.');
+    }
+    $stmt = db()->prepare(
+        'SELECT * FROM associations WHERE subdomain = ? AND tv_pin = ? AND status IN ("active","trial") LIMIT 1'
+    );
+    $stmt->execute([$slug, $pin]);
+    $assoc = $stmt->fetch() ?: null;
+    if (!$assoc) {
+        tv_pin_record($clientIp, false);
+    }
+} elseif ($token !== '') {
+    $stmt = db()->prepare(
+        'SELECT * FROM associations WHERE tv_token = ? AND status IN ("active","trial") LIMIT 1'
+    );
+    $stmt->execute([$token]);
+    $assoc = $stmt->fetch() ?: null;
+}
+
+if (!$assoc) {
+    ?><!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BadassHOA — Community TV</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+    width: 100%; min-height: 100vh;
+    background: #08111f; color: #fff;
+    font-family: 'Inter', sans-serif;
+    display: flex; align-items: center; justify-content: center;
+}
+.box {
+    width: min(520px, 90vw);
+    background: #111c2e;
+    border: 1px solid rgba(255,255,255,.09);
+    border-radius: 18px;
+    padding: clamp(32px,6vw,60px) clamp(28px,5vw,52px);
+    text-align: center;
+}
+.logo { font-size: clamp(1.2rem,2.5vw,1.6rem); font-weight:900; color:#f05a28; margin-bottom:8px; }
+h1 { font-size: clamp(1.8rem,4.5vw,2.8rem); font-weight:900; margin-bottom:10px; letter-spacing:-.03em; }
+.sub { font-size:clamp(.9rem,1.8vw,1.2rem); color:rgba(255,255,255,.5); margin-bottom:clamp(28px,4vw,44px); line-height:1.55; }
+label { display:block; text-align:left; font-size:clamp(.8rem,1.4vw,.95rem); font-weight:700; color:rgba(255,255,255,.55); letter-spacing:.07em; text-transform:uppercase; margin-bottom:8px; }
+input {
+    display:block; width:100%;
+    background:#182438; border:2px solid rgba(255,255,255,.1); border-radius:10px;
+    color:#fff; font-family:inherit; font-size:clamp(1.4rem,3.5vw,2rem); font-weight:700;
+    padding:16px 20px; margin-bottom:clamp(16px,3vw,26px); outline:none;
+    text-align:center; letter-spacing:.05em; transition:border-color .15s;
+}
+input:focus { border-color:#f05a28; }
+button {
+    width:100%; background:#f05a28; color:#fff; border:none; border-radius:10px;
+    font-family:inherit; font-size:clamp(1.1rem,2.5vw,1.5rem); font-weight:800;
+    padding:18px; cursor:pointer; transition:opacity .15s;
+}
+button:hover { opacity:.88; }
+.error {
+    background:rgba(239,68,68,.18); border:1px solid rgba(239,68,68,.4);
+    color:#fca5a5; border-radius:10px; padding:14px 18px;
+    font-size:clamp(.85rem,1.5vw,1.05rem); font-weight:600; margin-bottom:24px;
+}
+.hint { font-size:clamp(.75rem,1.3vw,.9rem); color:rgba(255,255,255,.3); margin-top:24px; line-height:1.6; }
+</style>
+</head>
+<body>
+<div class="box">
+    <div class="logo">BadassHOA</div>
+    <h1>Community TV</h1>
+    <p class="sub">Enter your community ID and PIN to access the lobby display. Bookmark the page after signing in.</p>
+    <?php if ($loginError): ?>
+        <div class="error"><?= e($loginError) ?></div>
+    <?php endif; ?>
+    <form method="POST" action="/tv" autocomplete="off">
+        <label for="f-slug">Community ID</label>
+        <input id="f-slug" name="slug" type="text" placeholder="bellair"
+               autocomplete="off" autocapitalize="none" spellcheck="false"
+               value="<?= e($postSlug) ?>">
+        <label for="f-pin">PIN</label>
+        <input id="f-pin" name="pin" type="text" inputmode="numeric"
+               placeholder="000000" autocomplete="off" maxlength="8">
+        <button type="submit">Sign in →</button>
+    </form>
+    <p class="hint">Ask your board administrator for the community ID and PIN.</p>
+</div>
+<script>document.getElementById('f-slug').value ? document.getElementById('f-pin').focus() : document.getElementById('f-slug').focus();</script>
+</body>
+</html>
+<?php
+    exit;
+}
+
+// Ensure $token is always set for internal image URLs (even when authed via PIN).
+$token = (string)$assoc['tv_token'];
 
 $assocId = (int)$assoc['id'];
 
 // Active announcements (all-audience, non-expired)
 $anns = db()->prepare(
-    "SELECT title, body, type, published_at FROM announcements
+    "SELECT id, title, body, type, published_at, image_path FROM announcements
       WHERE association_id = ? AND audience = 'all'
         AND published_at <= NOW() AND (expires_at IS NULL OR expires_at > NOW())
-      ORDER BY type = 'emergency' DESC, published_at DESC
+      ORDER BY type = 'emergency' DESC, image_path IS NULL, published_at DESC
       LIMIT 20"
 );
 $anns->execute([$assocId]);
@@ -28,7 +177,7 @@ $announcements = $anns->fetchAll();
 
 // Upcoming events (next 30 days, all-audience) — expand recurrences in PHP.
 $evts = db()->prepare(
-    "SELECT title, starts_at, ends_at, location, recurrence_type, recurrence_until
+    "SELECT id, title, starts_at, ends_at, location, image_path, recurrence_type, recurrence_until
        FROM events
       WHERE association_id = ? AND audience = 'all'
         AND (
@@ -56,8 +205,10 @@ foreach ($rawEvents as $ev) {
     if ($rtype === 'none') {
         if ($start >= $now && $start <= $horizon) {
             $events[] = [
+                'id'        => $ev['id'],
                 'title'     => $ev['title'],
                 'location'  => $ev['location'],
+                'image_path'=> $ev['image_path'],
                 'starts_at' => $start->format('Y-m-d H:i:s'),
                 'ends_at'   => $end ? $end->format('Y-m-d H:i:s') : null,
             ];
@@ -82,8 +233,10 @@ foreach ($rawEvents as $ev) {
         if ($cur >= $now) {
             $duration = $end ? ($end->getTimestamp() - $start->getTimestamp()) : 0;
             $events[] = [
+                'id'        => $ev['id'],
                 'title'     => $ev['title'],
                 'location'  => $ev['location'],
+                'image_path'=> $ev['image_path'],
                 'starts_at' => $cur->format('Y-m-d H:i:s'),
                 'ends_at'   => $duration > 0 ? $cur->modify("+{$duration} seconds")->format('Y-m-d H:i:s') : null,
             ];
@@ -98,23 +251,34 @@ $events = array_slice($events, 0, 20);
 
 // Active marketplace listings
 $mkt = db()->prepare(
-    "SELECT m.title, m.description, m.price_cents, m.category, m.condition_label,
-            u.first_name
+    "SELECT m.id, m.title, m.description, m.price_cents, m.category, m.condition_label,
+            m.photo_path, u.first_name
        FROM marketplace_listings m
        JOIN users u ON u.id = m.seller_user_id
       WHERE m.association_id = ? AND m.status = 'active'
-      ORDER BY m.created_at DESC
+      ORDER BY m.photo_path IS NULL, m.created_at DESC
       LIMIT 20"
 );
 $mkt->execute([$assocId]);
 $listings = $mkt->fetchAll();
 
-$hasLogo  = !empty($assoc['logo_path']);
-$primary  = preg_match('/^#[0-9a-f]{6}$/i', (string)$assoc['primary_color']) ? $assoc['primary_color'] : '#0f1f3d';
+$hasLogo    = !empty($assoc['logo_path']);
+$primary    = preg_match('/^#[0-9a-f]{6}$/i', (string)$assoc['primary_color']) ? $assoc['primary_color'] : '#0f1f3d';
 $hasWeather = !empty($assoc['latitude']) && !empty($assoc['longitude']);
+$tvAnnColors = ann_type_colors($assocId);
 $lat = $hasWeather ? (float)$assoc['latitude'] : null;
 $lon = $hasWeather ? (float)$assoc['longitude'] : null;
-$refreshSec = 60;
+$refreshSec = 600;
+
+// Association local timezone for displaying event times correctly.
+$assocTzName = (string)($assoc['timezone'] ?? 'UTC');
+if (!@timezone_open($assocTzName)) $assocTzName = 'UTC';
+$assocTz = new DateTimeZone($assocTzName);
+
+// Format a UTC unix timestamp in the association's local timezone.
+function tv_time(string $fmt, int $ts, DateTimeZone $tz): string {
+    return (new DateTimeImmutable('@' . $ts))->setTimezone($tz)->format($fmt);
+}
 
 $CONDITION_LABELS = [
     'new' => 'New', 'like_new' => 'Like new', 'good' => 'Good',
@@ -214,6 +378,14 @@ header {
     text-align: center;
     margin-top: 2px;
 }
+.weather-refresh {
+    font-size: clamp(.6rem, .85vw, .75rem);
+    color: rgba(255,255,255,.25);
+    font-weight: 600;
+    letter-spacing: .04em;
+    text-align: center;
+    margin-top: 3px;
+}
 
 .clock-block { text-align: right; }
 .clock {
@@ -221,7 +393,7 @@ header {
     font-weight: 900;
     font-variant-numeric: tabular-nums;
     letter-spacing: -0.04em;
-    color: var(--primary);
+    color: var(--orange);
     line-height: 1;
 }
 .dateline {
@@ -312,6 +484,9 @@ header {
 .ann-badge--info,
 .ann-badge--general     { background: var(--primary); }
 .ann-badge--event       { background: #7c3aed; }
+.ann-badge--beautification { background: #2e7d32; }
+.ann-badge--birth_notice   { background: #7c3aed; }
+.ann-badge--death_notice   { background: #4b5563; }
 
 .ann-title {
     font-size: clamp(1.1rem, 1.8vw, 1.6rem);
@@ -371,8 +546,11 @@ header {
     line-height: 1.4;
 }
 .evt-loc { margin-top: 3px; color: rgba(255,255,255,.35); }
+.ann-thumb { width: 100%; height: clamp(60px, 7vw, 90px); object-fit: cover; border-radius: 6px; margin-bottom: 10px; display: block; }
+.evt-thumb { width: 100%; height: clamp(60px, 7vw, 90px); object-fit: cover; border-radius: 6px; margin-bottom: 10px; display: block; }
 
 /* ── Marketplace card ─────────────────────────────────────── */
+.mkt-thumb { width: 100%; height: clamp(70px, 8vw, 100px); object-fit: cover; border-radius: 6px; margin-bottom: 10px; display: block; }
 .mkt-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
 .mkt-title {
     font-size: clamp(1.05rem, 1.7vw, 1.5rem);
@@ -427,6 +605,7 @@ footer {
     justify-content: space-between;
     border-top: 1px solid var(--border);
     padding-top: 12px;
+    gap: 24px;
 }
 .footer-note {
     font-size: clamp(.6rem, .9vw, .8rem);
@@ -434,7 +613,31 @@ footer {
     font-weight: 600;
     letter-spacing: .04em;
 }
+.footer-cta {
+    font-size: clamp(.85rem, 1.3vw, 1.15rem);
+    font-weight: 800;
+    color: var(--orange);
+    letter-spacing: .02em;
+    text-align: center;
+    flex: 1;
+}
 </style>
+<?php
+$tvStoredCustom = [];
+if (!empty($assoc['ann_type_colors'])) {
+    $decoded = json_decode((string)$assoc['ann_type_colors'], true);
+    if (is_array($decoded)) $tvStoredCustom = $decoded;
+}
+if ($tvStoredCustom):
+?>
+<style>
+<?php foreach ($tvStoredCustom as $type => $hex):
+    if (!preg_match('/^#[0-9a-fA-F]{6}$/', $hex)) continue;
+    $safeType = preg_replace('/[^a-z]/', '', strtolower($type)); ?>
+.ann-badge--<?= $safeType ?> { background: <?= $hex ?>; color: #fff; }
+<?php endforeach; ?>
+</style>
+<?php endif; ?>
 </head>
 <body>
 
@@ -457,6 +660,7 @@ footer {
             <span class="weather-temp" id="w-temp">—°</span>
         </div>
         <div class="weather-cond" id="w-cond"></div>
+        <div class="weather-refresh">Auto-refreshes every 10 minutes</div>
     </div>
     <?php else: ?>
     <div></div>
@@ -485,12 +689,15 @@ footer {
             $isEmergency = $a['type'] === 'emergency';
         ?>
             <div class="card <?= $isEmergency ? 'card--emergency' : '' ?>">
-                <span class="ann-badge ann-badge--<?= e((string)$a['type']) ?>"><?= e((string)$a['type']) ?></span>
+                <?php if (!empty($a['image_path'])): ?>
+                    <img class="ann-thumb" src="/announcement-image.php?id=<?= (int)$a['id'] ?>" alt="" loading="lazy">
+                <?php endif; ?>
+                <span class="ann-badge ann-badge--<?= e((string)$a['type']) ?>"><?= e(ann_type_label((string)$a['type'])) ?></span>
                 <div class="ann-title"><?= e((string)$a['title']) ?></div>
                 <?php $body = trim(strip_tags((string)$a['body'])); if ($body): ?>
                     <div class="ann-body"><?= e($body) ?></div>
                 <?php endif; ?>
-                <div class="ann-date"><?= udate('M j, Y', strtotime((string)$a['published_at'])) ?></div>
+                <div class="ann-date"><?= tv_time('M j, Y', strtotime((string)$a['published_at']), $assocTz) ?></div>
             </div>
         <?php endforeach; endif; ?>
         </div>
@@ -515,16 +722,19 @@ footer {
             $endTs = !empty($ev['ends_at']) ? strtotime((string)$ev['ends_at']) : null;
         ?>
             <div class="card">
+                <?php if (!empty($ev['image_path'])): ?>
+                    <img class="evt-thumb" src="/event-image.php?id=<?= (int)$ev['id'] ?>" alt="" loading="lazy">
+                <?php endif; ?>
                 <div class="evt-item">
                     <div class="evt-cal">
-                        <div class="m"><?= udate('M', $ts) ?></div>
-                        <div class="d"><?= udate('j', $ts) ?></div>
+                        <div class="m"><?= tv_time('M', $ts, $assocTz) ?></div>
+                        <div class="d"><?= tv_time('j', $ts, $assocTz) ?></div>
                     </div>
                     <div class="evt-info">
                         <div class="evt-title"><?= e((string)$ev['title']) ?></div>
                         <div class="evt-meta">
-                            <?= udate('g:i A', $ts) ?>
-                            <?php if ($endTs): ?> – <?= udate($endTs - $ts < 86400 ? 'g:i A' : 'M j, g:i A', $endTs) ?><?php endif; ?>
+                            <?= tv_time('g:i A', $ts, $assocTz) ?>
+                            <?php if ($endTs): ?> – <?= tv_time($endTs - $ts < 86400 ? 'g:i A' : 'M j, g:i A', $endTs, $assocTz) ?><?php endif; ?>
                         </div>
                         <?php if (!empty($ev['location'])): ?>
                             <div class="evt-meta evt-loc"><?= e((string)$ev['location']) ?></div>
@@ -557,6 +767,9 @@ footer {
             $catLbl  = ucfirst((string)$item['category']);
         ?>
             <div class="card">
+                <?php if (!empty($item['photo_path'])): ?>
+                    <img class="mkt-thumb" src="/tv-image.php?token=<?= urlencode($token) ?>&id=<?= (int)$item['id'] ?>" alt="" loading="lazy">
+                <?php endif; ?>
                 <div class="mkt-head">
                     <div class="mkt-title"><?= e((string)$item['title']) ?></div>
                     <div class="mkt-price <?= $isFree ? 'mkt-price--free' : '' ?>"><?= $price ?></div>
@@ -578,8 +791,9 @@ footer {
 </div>
 
 <footer>
-    <div class="footer-note">Powered by BadassHOA</div>
-    <div class="footer-note">Auto-refreshes every <?= $refreshSec ?> seconds</div>
+    <div class="footer-note">&copy; 2026 Savvy Brain LLC and Kevin B. Leigh &middot; Powered by BadassHOA.com &middot; 386-353-4444</div>
+    <div class="footer-cta">Log in for additional details &mdash; badasshoa.com/<?= e((string)$assoc['subdomain']) ?></div>
+    <div class="footer-note">&nbsp;</div>
 </footer>
 
 <script>
@@ -623,15 +837,21 @@ setInterval(tick, 1000);
         95:'Thunderstorm', 96:'Thunderstorm + hail', 99:'Thunderstorm + hail'
     };
     function render(d) {
-        var code = d.current.weather_code;
-        document.getElementById('w-icon').textContent  = WMO_ICON[code]  || '🌡️';
-        document.getElementById('w-temp').textContent  = Math.round(d.current.temperature_2m) + '°F';
-        document.getElementById('w-cond').textContent  = WMO_LABEL[code] || '';
+        var code   = d.current.weather_code;
+        var wind   = Math.round(d.current.wind_speed_10m);
+        var precip = d.hourly ? Math.round(d.hourly.precipitation_probability[new Date().getHours()]) : null;
+        document.getElementById('w-icon').textContent = WMO_ICON[code] || '🌡️';
+        document.getElementById('w-temp').textContent = Math.round(d.current.temperature_2m) + '°F';
+        var cond = WMO_LABEL[code] || '';
+        if (wind)   cond += '  💨 ' + wind + ' mph';
+        if (precip !== null) cond += '  🌧 ' + precip + '%';
+        document.getElementById('w-cond').textContent = cond;
     }
     function fetchWeather() {
         fetch('https://api.open-meteo.com/v1/forecast?latitude=' + LAT
             + '&longitude=' + LON
-            + '&current=temperature_2m,weather_code&temperature_unit=fahrenheit&forecast_days=1')
+            + '&current=temperature_2m,weather_code,wind_speed_10m'
+            + '&hourly=precipitation_probability&temperature_unit=fahrenheit&wind_speed_unit=mph&forecast_days=1')
             .then(function (r) { return r.json(); })
             .then(render)
             .catch(function () {});
@@ -641,75 +861,49 @@ setInterval(tick, 1000);
 })();
 <?php endif; ?>
 
-// ── Auto-scroll each column independently ─────────────────────────────────
-// Speed: pixels per second. Pause (ms) at top and bottom before resuming.
-var SPEED      = 55;   // px/sec — comfortable reading speed
-var PAUSE_TOP  = 3000; // ms to wait at the top before starting
-var PAUSE_BOT  = 2500; // ms to wait at the bottom before resetting
+// ── Infinite auto-scroll — each column loops 1→2→3→…→1 with no jump ───────
+// Clone the track contents so the scroll wraps seamlessly.
+var SPEED         = 40;   // px/sec — comfortable reading speed
+var INITIAL_PAUSE = 3000; // ms to hold at the top before first scroll
 
-function autoScroll(vpId, trId) {
+function autoScroll(vpId, trId, startDelay) {
     var vp = document.getElementById(vpId);
     var tr = document.getElementById(trId);
     if (!vp || !tr) return;
 
-    var pos       = 0;
-    var direction = 1; // 1 = down, -1 = up (we reset, not reverse)
-    var lastTime  = null;
-    var pausing   = true;
-    var pauseEnd  = Date.now() + PAUSE_TOP;
-    var maxScroll = 0;
+    // Measure natural height before cloning.
+    var origHeight = tr.scrollHeight;
+    if (origHeight <= vp.clientHeight + 20) return; // fits on screen, no scroll needed
 
-    function measure() {
-        maxScroll = tr.scrollHeight - vp.clientHeight;
-    }
-    measure();
+    // Duplicate every child so the list wraps seamlessly.
+    Array.from(tr.children).forEach(function (c) { tr.appendChild(c.cloneNode(true)); });
 
-    // No overflow — nothing to do
-    if (maxScroll <= 20) return;
+    var pos      = 0;
+    var lastTime = null;
+    var startAt  = Date.now() + (startDelay || 0) + INITIAL_PAUSE;
 
     function frame(ts) {
         if (lastTime === null) lastTime = ts;
         var dt = ts - lastTime;
         lastTime = ts;
 
-        if (pausing) {
-            if (Date.now() >= pauseEnd) {
-                pausing = false;
-            }
-        } else {
+        if (Date.now() >= startAt) {
             pos += (SPEED * dt) / 1000;
-            measure();
-            if (pos >= maxScroll) {
-                pos = maxScroll;
-                tr.style.transform = 'translateY(-' + pos + 'px)';
-                pausing  = true;
-                pauseEnd = Date.now() + PAUSE_BOT;
-                // after bottom pause, reset to top
-                setTimeout(function () {
-                    pos = 0;
-                    tr.style.transform = 'translateY(0)';
-                    tr.style.transition = 'none';
-                    pausing  = true;
-                    pauseEnd = Date.now() + PAUSE_TOP;
-                    lastTime = null;
-                }, PAUSE_BOT);
-                requestAnimationFrame(frame);
-                return;
-            }
+            // When we reach the end of the original content, silently reset —
+            // the cloned copy is identical so the viewer sees no jump.
+            if (pos >= origHeight) pos -= origHeight;
+            tr.style.transform = 'translateY(-' + Math.round(pos) + 'px)';
         }
-
-        tr.style.transition = 'none';
-        tr.style.transform  = 'translateY(-' + Math.round(pos) + 'px)';
         requestAnimationFrame(frame);
     }
 
     requestAnimationFrame(frame);
 }
 
-// Stagger start times so all three columns don't scroll in lockstep
-setTimeout(function () { autoScroll('vp-ann', 'tr-ann'); }, 0);
-setTimeout(function () { autoScroll('vp-evt', 'tr-evt'); }, 800);
-setTimeout(function () { autoScroll('vp-mkt', 'tr-mkt'); }, 1600);
+// Stagger start times so columns don't move in perfect lockstep.
+autoScroll('vp-ann', 'tr-ann', 0);
+autoScroll('vp-evt', 'tr-evt', 800);
+autoScroll('vp-mkt', 'tr-mkt', 1600);
 </script>
 </body>
 </html>

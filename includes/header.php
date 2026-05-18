@@ -514,16 +514,18 @@ if ($page_layout === 'app' && isset($association) && $association):
             <?php ob_start(); ?>
                 <?= nav_link('/dashboard/documents.php', 'documents', 'Documents', 'documents', $active) ?>
                 <?= nav_link('/dashboard/forms.php',     'documents', 'Forms',     'forms',     $active) ?>
-                <?= nav_link('/dashboard/search.php',    'rules',     'Rules',     'rules',     $active) ?>
+                <?= nav_link('/dashboard/search.php',    'rules',     'Rules & Bylaws', 'rules',     $active) ?>
+                <?= nav_link('/dashboard/legal.php',     'legal',     'Legal',     'legal',     $active) ?>
                 <?php if (can_do('read_minutes')): ?>
                     <?= nav_link('/dashboard/minutes.php', 'minutes', 'Minutes', 'minutes', $active) ?>
                 <?php endif; ?>
                 <?= nav_link('/dashboard/media.php',     'media',     'Media',     'media',     $active) ?>
-                <?= nav_link('/dashboard/directory.php', 'directory', 'Directory', 'directory', $active) ?>
+                <?php if (can_do('read_full_directory')): ?>
+                    <?= nav_link('/dashboard/directory.php', 'directory', 'Directory', 'directory', $active) ?>
+                <?php endif; ?>
                 <?php if (can_do('read_contacts')): ?>
                     <?= nav_link('/dashboard/contacts.php', 'contacts', 'Contacts', 'contacts', $active) ?>
                 <?php endif; ?>
-                <?= nav_link('/dashboard/legal.php', 'legal', 'Legal', 'legal', $active) ?>
             <?php $navGroup('resources', 'Resources', ob_get_clean()); ?>
 
             <?php ob_start(); ?>

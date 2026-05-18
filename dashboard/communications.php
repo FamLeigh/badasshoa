@@ -12,7 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'post') 
     $body  = trim((string)($_POST['body'] ?? ''));
     $type  = $_POST['type'] ?? 'general';
     $aud   = $_POST['audience'] ?? 'all';
-    if (!in_array($type, ['general','emergency','event','maintenance','beautification'], true)) $type = 'general';
+    if (!array_key_exists($type, ann_types())) $type = 'general';
     if (!in_array($aud,  ['all','owners','renters','board'], true))           $aud = 'all';
 
     // Scheduling: start date defaults to now (post immediately). Duration is
@@ -41,14 +41,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'post') 
             break;
     }
 
+    $imgPath = null;
+    if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
+        $allowedImg = ['jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png' => 'image/png', 'webp' => 'image/webp', 'gif' => 'image/gif'];
+        $imgExt = strtolower(pathinfo((string)$_FILES['image']['name'], PATHINFO_EXTENSION));
+        if (!isset($allowedImg[$imgExt])) {
+            $flashError = 'Image must be JPG, PNG, WEBP, or GIF.';
+        } elseif ($_FILES['image']['size'] > 8 * 1024 * 1024) {
+            $flashError = 'Image must be under 8 MB.';
+        } else {
+            $relDir = "uploads/$assocId/announcements";
+            ensure_dir(storage_path($relDir));
+            $fname = uuid_filename((string)$_FILES['image']['name']);
+            if (move_uploaded_file($_FILES['image']['tmp_name'], storage_path("$relDir/$fname"))) {
+                $imgPath = "$relDir/$fname";
+            } else {
+                $flashError = 'Could not save image.';
+            }
+        }
+    }
+
     if ($title === '' || $body === '') {
-        $flashError = 'Title and body are required.';
-    } else {
+        $flashError = $flashError ?? 'Title and body are required.';
+    }
+    if (!$flashError) {
         $stmt = db()->prepare(
-            'INSERT INTO announcements (association_id, author_id, title, body, type, audience, send_email, published_at, expires_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            'INSERT INTO announcements (association_id, author_id, title, body, type, audience, send_email, published_at, expires_at, image_path)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
-        $stmt->execute([$assocId, (int)$user['id'], $title, $body, $type, $aud, isset($_POST['send_email']) ? 1 : 0, $startsSql, $expiresSql]);
+        $stmt->execute([$assocId, (int)$user['id'], $title, $body, $type, $aud, isset($_POST['send_email']) ? 1 : 0, $startsSql, $expiresSql, $imgPath]);
         $newId = (int)db()->lastInsertId();
         audit('announcement.posted', ['title' => $title, 'type' => $type, 'audience' => $aud, 'starts_at' => $startsSql, 'expires_at' => $expiresSql], $newId, 'announcement');
         flash('success', "Posted &ldquo;$title&rdquo;.");
@@ -60,6 +81,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'delete'
     csrf_check();
     if (!$canPost) { http_response_code(403); die('Forbidden'); }
     $id = (int)($_POST['id'] ?? 0);
+    $delRow = db()->prepare('SELECT image_path FROM announcements WHERE id = ? AND association_id = ?');
+    $delRow->execute([$id, $assocId]);
+    $delData = $delRow->fetch();
+    if ($delData && !empty($delData['image_path'])) {
+        $abs = storage_path((string)$delData['image_path']);
+        if (is_file($abs)) @unlink($abs);
+    }
     db()->prepare('DELETE FROM announcements WHERE id = ? AND association_id = ?')->execute([$id, $assocId]);
     audit('announcement.deleted', [], $id, 'announcement');
     flash('success', 'Announcement deleted.');
@@ -74,7 +102,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit') 
     $body  = trim((string)($_POST['body'] ?? ''));
     $type  = $_POST['type'] ?? 'general';
     $aud   = $_POST['audience'] ?? 'all';
-    if (!in_array($type, ['general','emergency','event','maintenance','beautification'], true)) $type = 'general';
+    if (!array_key_exists($type, ann_types())) $type = 'general';
     if (!in_array($aud,  ['all','owners','renters','board'], true)) $aud = 'all';
 
     $neverExpires = isset($_POST['never_expires']);
@@ -90,12 +118,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit') 
     } elseif ($body === '') {
         $flashError = 'Body is required.';
     } else {
-        $chk = db()->prepare('SELECT 1 FROM announcements WHERE id = ? AND association_id = ?');
+        $chk = db()->prepare('SELECT image_path, published_at FROM announcements WHERE id = ? AND association_id = ?');
         $chk->execute([$id, $assocId]);
-        if (!$chk->fetchColumn()) { http_response_code(404); die('Not found'); }
+        $existing = $chk->fetch();
+        if (!$existing) { http_response_code(404); die('Not found'); }
+        $currentImg = $existing['image_path'] ?? null;
+        $newImg = $currentImg;
+
+        if (isset($_POST['remove_image']) && $currentImg) {
+            $abs = storage_path((string)$currentImg);
+            if (is_file($abs)) @unlink($abs);
+            $newImg = null;
+        }
+        if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
+            $allowedImg = ['jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png' => 'image/png', 'webp' => 'image/webp', 'gif' => 'image/gif'];
+            $imgExt = strtolower(pathinfo((string)$_FILES['image']['name'], PATHINFO_EXTENSION));
+            if (isset($allowedImg[$imgExt]) && $_FILES['image']['size'] <= 8 * 1024 * 1024) {
+                $relDir = "uploads/$assocId/announcements";
+                ensure_dir(storage_path($relDir));
+                $fname = uuid_filename((string)$_FILES['image']['name']);
+                if (move_uploaded_file($_FILES['image']['tmp_name'], storage_path("$relDir/$fname"))) {
+                    if ($newImg) { $abs = storage_path((string)$newImg); if (is_file($abs)) @unlink($abs); }
+                    $newImg = "$relDir/$fname";
+                }
+            }
+        }
+
+        $pubRaw = trim((string)($_POST['published_at'] ?? ''));
+        $pubSql = null;
+        if ($pubRaw !== '') {
+            $pubTs = strtotime($pubRaw);
+            if ($pubTs && $pubTs > 0) $pubSql = date('Y-m-d H:i:s', $pubTs);
+        }
+        if (!$pubSql) $pubSql = (string)$existing['published_at'] ?? date('Y-m-d H:i:s');
+
         db()->prepare(
-            'UPDATE announcements SET title = ?, body = ?, type = ?, audience = ?, expires_at = ? WHERE id = ? AND association_id = ?'
-        )->execute([$title, $body, $type, $aud, $expiresSql, $id, $assocId]);
+            'UPDATE announcements SET title = ?, body = ?, type = ?, audience = ?, published_at = ?, expires_at = ?, image_path = ? WHERE id = ? AND association_id = ?'
+        )->execute([$title, $body, $type, $aud, $pubSql, $expiresSql, $newImg, $id, $assocId]);
         audit('announcement.edited', ['title' => $title], $id, 'announcement');
         flash('success', 'Announcement updated.');
         redirect('/dashboard/communications.php?id=' . $id);
@@ -121,7 +180,8 @@ if (!in_array($qPeriod, ['today','week','month'], true)) $qPeriod = '';
 
 // Managers can flip a "Show expired / scheduled" toggle; members never see
 // either (expired = past expires_at, scheduled = future published_at).
-$showAll = $canPost && isset($_GET['show_all']);
+$showAll      = $canPost && isset($_GET['show_all']);
+$showArchived = $canPost && isset($_GET['archived']);
 
 // Compute period window (UTC — all DB timestamps are UTC, CLAUDE.md).
 $periodLabel = '';
@@ -148,20 +208,24 @@ $sql = 'SELECT a.*, CONCAT(IFNULL(u.first_name,""), " ", IFNULL(u.last_name,""))
         FROM announcements a LEFT JOIN users u ON u.id = a.author_id
         WHERE a.association_id = ?';
 $params = [$assocId];
-if (in_array($qType, ['general','emergency','event','maintenance','beautification'], true)) { $sql .= ' AND a.type = ?'; $params[] = $qType; }
+if (array_key_exists($qType, ann_types())) { $sql .= ' AND a.type = ?'; $params[] = $qType; }
 if (in_array($qAud,  ['all','owners','renters','board'], true))           { $sql .= ' AND a.audience = ?'; $params[] = $qAud; }
 if ($periodStart !== null) {
     $sql .= ' AND a.published_at >= ? AND a.published_at <= ?';
     $params[] = date('Y-m-d H:i:s', $periodStart);
     $params[] = date('Y-m-d H:i:s', $periodEnd);
 }
-if (!$showAll) {
+if ($showArchived) {
+    $sql .= ' AND a.expires_at IS NOT NULL AND a.expires_at < NOW()';
+} elseif (!$showAll) {
     $sql .= ' AND a.published_at <= NOW() AND (a.expires_at IS NULL OR a.expires_at >= NOW())';
 }
 $sql .= ' ORDER BY a.published_at DESC LIMIT 200';
 $stmt = db()->prepare($sql);
 $stmt->execute($params);
 $rows = $stmt->fetchAll();
+
+$annColors = ann_type_colors($assocId);
 
 // Detail mode: ?id=N renders a single announcement with full body + print link.
 $detailId = (int)($_GET['id'] ?? 0);
@@ -186,9 +250,7 @@ require __DIR__ . '/../includes/header.php';
     <?php if ($detail): /* ---------- DETAIL VIEW ---------- */
         $startTs = strtotime((string)$detail['published_at']);
         $expTs   = !empty($detail['expires_at']) ? strtotime((string)$detail['expires_at']) : null;
-        $typeClass = $detail['type'] === 'emergency' ? 'badge--error'
-                   : ($detail['type'] === 'event' ? 'badge--info'
-                   : ($detail['type'] === 'maintenance' ? 'badge--warning' : 'badge--orange'));
+        $typeBadgeStyle = ann_badge_style((string)$detail['type'], $annColors);
     ?>
         <div class="row row--between" style="margin-bottom: var(--sp-4); flex-wrap: wrap; gap: var(--sp-3);">
             <a class="muted" style="font-size: var(--fs-sm);" href="/dashboard/communications.php">← Back to announcements</a>
@@ -226,7 +288,7 @@ require __DIR__ . '/../includes/header.php';
                 </div>
                 <div style="flex: 1; min-width: 0;">
                     <div class="row" style="gap: var(--sp-2); margin-bottom: var(--sp-1); flex-wrap: wrap;">
-                        <span class="badge <?= $typeClass ?>"><?= e($detail['type']) ?></span>
+                        <span class="badge" style="<?= $typeBadgeStyle ?>"><?= e(ann_type_label((string)$detail['type'])) ?></span>
                         <span class="badge"><?= e($detail['audience']) ?></span>
                         <?php if ($expTs && $expTs < time()): ?>
                             <span class="badge" style="background:#e8e8e8; color:#666;">⌛ expired</span>
@@ -243,6 +305,11 @@ require __DIR__ . '/../includes/header.php';
                 </div>
             </div>
 
+            <?php if (!empty($detail['image_path'])): ?>
+                <img src="/announcement-image.php?id=<?= (int)$detail['id'] ?>"
+                     alt=""
+                     style="width: 100%; max-height: 360px; object-fit: cover; border-radius: var(--r-md); margin-bottom: var(--sp-4); display: block;">
+            <?php endif; ?>
             <div style="white-space: pre-wrap; line-height: 1.55; font-size: var(--fs-md);"><?= e((string)$detail['body']) ?></div>
         </article>
 
@@ -250,7 +317,7 @@ require __DIR__ . '/../includes/header.php';
     <?php if ($flashError): ?><div class="flash flash--error"><?= e($flashError) ?></div><?php endif; ?>
     <div class="card card--padded" style="margin-bottom: var(--sp-6);">
         <h3 class="card__title">Edit announcement</h3>
-        <form method="post" class="form">
+        <form method="post" enctype="multipart/form-data" class="form">
             <?= csrf_field() ?>
             <input type="hidden" name="form" value="edit">
             <input type="hidden" name="id" value="<?= (int)$detail['id'] ?>">
@@ -266,9 +333,17 @@ require __DIR__ . '/../includes/header.php';
                 <div class="field">
                     <label class="field__label" for="etype">Type</label>
                     <select class="select" id="etype" name="type">
-                        <?php foreach (['general'=>'General','event'=>'Event','maintenance'=>'Maintenance','beautification'=>'Beautification','emergency'=>'Emergency'] as $v=>$l): ?>
-                            <option value="<?= e($v) ?>" <?= $detail['type']===$v?'selected':'' ?>><?= e($l) ?></option>
-                        <?php endforeach; ?>
+                        <?php
+                        $curGroup = '';
+                        foreach (ann_types() as $v => $meta):
+                            if ($meta['group'] !== $curGroup) {
+                                if ($curGroup !== '') echo '</optgroup>';
+                                echo '<optgroup label="' . e($meta['group']) . '">';
+                                $curGroup = $meta['group'];
+                            }
+                        ?>
+                            <option value="<?= e($v) ?>" <?= $detail['type']===$v?'selected':'' ?>><?= e($meta['emoji'] . ' ' . $meta['label']) ?></option>
+                        <?php endforeach; if ($curGroup !== '') echo '</optgroup>'; ?>
                     </select>
                 </div>
                 <div class="field">
@@ -280,15 +355,35 @@ require __DIR__ . '/../includes/header.php';
                     </select>
                 </div>
             </div>
+            <div class="form-row form-row--2">
+                <div class="field">
+                    <label class="field__label" for="epub">Post date</label>
+                    <input class="input" type="datetime-local" id="epub" name="published_at"
+                           value="<?= e(date('Y-m-d\TH:i', strtotime((string)$detail['published_at']))) ?>">
+                    <div class="field__hint">Changes when the announcement appears in the feed and on cards.</div>
+                </div>
+                <div class="field">
+                    <label class="field__label" for="eexpires">Expires at</label>
+                    <input class="input" type="datetime-local" id="eexpires" name="expires_at"
+                           value="<?= !empty($detail['expires_at']) ? e(date('Y-m-d\TH:i', strtotime((string)$detail['expires_at']))) : '' ?>">
+                    <label style="display:flex; align-items:center; gap: var(--sp-2); margin-top: var(--sp-2); font-size: var(--fs-sm);">
+                        <input type="checkbox" name="never_expires" id="enever" <?= empty($detail['expires_at']) ? 'checked' : '' ?>>
+                        Never expires
+                    </label>
+                </div>
+            </div>
             <div class="field">
-                <label class="field__label" for="eexpires">Expires at</label>
-                <input class="input" type="datetime-local" id="eexpires" name="expires_at"
-                       value="<?= !empty($detail['expires_at']) ? e(date('Y-m-d\TH:i', strtotime((string)$detail['expires_at']))) : '' ?>"
-                       id="eexpires-input">
-                <label style="display:flex; align-items:center; gap: var(--sp-2); margin-top: var(--sp-2); font-size: var(--fs-sm);">
-                    <input type="checkbox" name="never_expires" id="enever" <?= empty($detail['expires_at']) ? 'checked' : '' ?>>
-                    Never expires (clears the date above)
-                </label>
+                <label class="field__label">Image (optional)</label>
+                <?php if (!empty($detail['image_path'])): ?>
+                    <div style="margin-bottom: var(--sp-2);">
+                        <img src="/announcement-image.php?id=<?= (int)$detail['id'] ?>" alt="" style="max-height: 120px; border-radius: var(--r-md); display: block;">
+                    </div>
+                    <label style="display:flex; align-items:center; gap: var(--sp-2); font-size: var(--fs-sm); margin-bottom: var(--sp-2);">
+                        <input type="checkbox" name="remove_image"> Remove current image
+                    </label>
+                <?php endif; ?>
+                <input class="input" type="file" name="image" accept="image/jpeg,image/png,image/webp,image/gif">
+                <div class="field__hint">JPG, PNG, WEBP, GIF · max 8 MB. <?= !empty($detail['image_path']) ? 'Upload a new file to replace the current one.' : '' ?></div>
             </div>
             <div class="row" style="justify-content: flex-end; gap: var(--sp-2);">
                 <a class="btn btn--ghost" href="?id=<?= (int)$detail['id'] ?>">Cancel</a>
@@ -321,8 +416,9 @@ require __DIR__ . '/../includes/header.php';
         </div>
         <?php if ($canPost): ?>
             <div class="row" style="gap: var(--sp-2);">
-                <a class="btn btn--ghost" href="?<?= $showAll ? '' : 'show_all=1' ?><?= $qType !== '' ? '&type='.urlencode($qType) : '' ?><?= $qAud !== '' ? '&audience='.urlencode($qAud) : '' ?>" title="<?= $showAll ? 'Hide expired & scheduled' : 'Show expired & scheduled' ?>"><?= $showAll ? '👁 Live only' : '👁 Show all' ?></a>
-                <a class="btn btn--primary" href="?action=new">+ Post</a>
+                <?php if (!$showArchived): ?>
+                    <a class="btn btn--primary" href="?action=new">+ Post</a>
+                <?php endif; ?>
             </div>
         <?php endif; ?>
     </div>
@@ -334,15 +430,26 @@ require __DIR__ . '/../includes/header.php';
         $q = array_filter(array_merge($filterBase, ['period' => $p]), fn($v) => $v !== '');
         return '/dashboard/communications.php' . ($q ? '?' . http_build_query($q) : '');
     };
+    $archiveLink = '/dashboard/communications.php?archived=1'
+        . ($qType  !== '' ? '&type='     . urlencode($qType)  : '')
+        . ($qAud   !== '' ? '&audience=' . urlencode($qAud)   : '');
     $printParams = array_filter(['period' => $qPeriod, 'type' => $qType, 'audience' => $qAud], fn($v) => $v !== '');
     $printUrl = '/dashboard/announcements-print.php' . ($printParams ? '?' . http_build_query($printParams) : '');
     $activeStyle = 'background: var(--color-navy); color: #fff; border-color: var(--color-navy);';
     ?>
     <div class="row" style="margin-bottom: var(--sp-4); gap: var(--sp-2); flex-wrap: wrap; align-items: center;">
+        <?php if (!$showArchived): ?>
         <a class="btn btn--ghost" href="<?= e($periodLink('')) ?>" style="<?= $qPeriod === '' ? $activeStyle : '' ?>">All</a>
         <a class="btn btn--ghost" href="<?= e($periodLink('today')) ?>" style="<?= $qPeriod === 'today' ? $activeStyle : '' ?>">Today</a>
         <a class="btn btn--ghost" href="<?= e($periodLink('week')) ?>"  style="<?= $qPeriod === 'week'  ? $activeStyle : '' ?>">This week</a>
         <a class="btn btn--ghost" href="<?= e($periodLink('month')) ?>" style="<?= $qPeriod === 'month' ? $activeStyle : '' ?>">This month</a>
+        <?php if ($canPost): ?>
+        <a class="btn btn--ghost" href="<?= e($archiveLink) ?>">📦 Archived</a>
+        <?php endif; ?>
+        <?php else: ?>
+        <a class="btn btn--ghost" href="/dashboard/communications.php<?= ($qType !== '' || $qAud !== '') ? '?'.http_build_query(array_filter(['type'=>$qType,'audience'=>$qAud])) : '' ?>">← Live</a>
+        <span style="font-weight: 700; color: var(--color-navy);">Archived announcements</span>
+        <?php endif; ?>
         <div style="flex: 1;"></div>
         <a class="btn btn--ghost" href="<?= e($printUrl) ?>" target="_blank" rel="noopener" title="Print current view">🖨 Print</a>
     </div>
@@ -352,20 +459,31 @@ require __DIR__ . '/../includes/header.php';
     <?php if ($showNew): ?>
     <div class="card card--padded" style="margin-bottom: var(--sp-6);">
         <h3 class="card__title">New announcement</h3>
-        <form method="post" class="form">
+        <form method="post" enctype="multipart/form-data" class="form">
             <?= csrf_field() ?>
             <input type="hidden" name="form" value="post">
             <div class="field"><label class="field__label" for="atitle">Title</label><input class="input" id="atitle" name="title" required></div>
             <div class="field"><label class="field__label" for="abody">Body</label><textarea class="textarea" id="abody" name="body" rows="6" required></textarea></div>
+            <div class="field">
+                <label class="field__label">Image (optional)</label>
+                <input class="input" type="file" name="image" accept="image/jpeg,image/png,image/webp,image/gif">
+                <div class="field__hint">JPG, PNG, WEBP, GIF · max 8 MB. Displayed on the TV board and announcement detail page.</div>
+            </div>
             <div class="form-row form-row--2">
                 <div class="field">
                     <label class="field__label" for="atype">Type</label>
                     <select class="select" id="atype" name="type">
-                        <option value="general">General</option>
-                        <option value="event">Event</option>
-                        <option value="maintenance">Maintenance</option>
-                        <option value="beautification">Beautification</option>
-                        <option value="emergency">Emergency</option>
+                        <?php
+                        $curGroup = '';
+                        foreach (ann_types() as $v => $meta):
+                            if ($meta['group'] !== $curGroup) {
+                                if ($curGroup !== '') echo '</optgroup>';
+                                echo '<optgroup label="' . e($meta['group']) . '">';
+                                $curGroup = $meta['group'];
+                            }
+                        ?>
+                            <option value="<?= e($v) ?>"><?= e($meta['emoji'] . ' ' . $meta['label']) ?></option>
+                        <?php endforeach; if ($curGroup !== '') echo '</optgroup>'; ?>
                     </select>
                 </div>
                 <div class="field">
@@ -431,8 +549,8 @@ require __DIR__ . '/../includes/header.php';
         <?php endif; ?>
         <select class="select" name="type" style="max-width: 200px;">
             <option value="">All types</option>
-            <?php foreach (['general','event','maintenance','beautification','emergency'] as $t): ?>
-                <option value="<?= e($t) ?>" <?= $qType===$t?'selected':'' ?>><?= e(ucfirst($t)) ?></option>
+            <?php foreach (ann_types() as $v => $meta): ?>
+                <option value="<?= e($v) ?>" <?= $qType===$v?'selected':'' ?>><?= e($meta['emoji'] . ' ' . $meta['label']) ?></option>
             <?php endforeach; ?>
         </select>
         <select class="select" name="audience" style="max-width: 200px;">
@@ -458,13 +576,12 @@ require __DIR__ . '/../includes/header.php';
             .ann-date .d { font-size: 22pt; line-height: 1; font-weight: 800; color: var(--color-navy); margin: 2px 0; }
             .ann-date .y { font-size: 8pt; color: var(--color-text-soft); }
             .ann-body { flex: 1 1 auto; min-width: 0; }
+            .ann-thumb { flex: 0 0 72px; width: 72px; height: 72px; border-radius: var(--r-md); object-fit: cover; display: block; }
         </style>
         <?php
         $nowTs = time();
         foreach ($rows as $a):
-            $typeClass = $a['type'] === 'emergency' ? 'badge--error'
-                       : ($a['type'] === 'event' ? 'badge--info'
-                       : ($a['type'] === 'maintenance' ? 'badge--warning' : 'badge--orange'));
+            $typeBadgeStyle = ann_badge_style((string)$a['type'], $annColors);
             $startTs = strtotime((string)$a['published_at']);
             $expTs   = !empty($a['expires_at']) ? strtotime((string)$a['expires_at']) : null;
             $isScheduled = $startTs > $nowTs;
@@ -478,7 +595,7 @@ require __DIR__ . '/../includes/header.php';
             </div>
             <div class="ann-body">
                 <div class="row" style="gap: var(--sp-2); margin-bottom: var(--sp-1); flex-wrap: wrap;">
-                    <span class="badge <?= $typeClass ?>"><?= e($a['type']) ?></span>
+                    <span class="badge" style="<?= $typeBadgeStyle ?>"><?= e(ann_type_label((string)$a['type'])) ?></span>
                     <span class="badge"><?= e($a['audience']) ?></span>
                     <?php if ($isScheduled): ?>
                         <span class="badge badge--info" title="Scheduled — not yet visible to members">⏳ scheduled</span>
@@ -492,6 +609,9 @@ require __DIR__ . '/../includes/header.php';
                 <h2 style="font-size: var(--fs-lg); margin: 0 0 var(--sp-1);"><?= e($a['title']) ?></h2>
                 <p class="muted" style="margin: 0; font-size: var(--fs-sm);"><?= e(mb_strimwidth(strip_tags($a['body']), 0, 200, '…')) ?></p>
             </div>
+            <?php if (!empty($a['image_path'])): ?>
+                <img class="ann-thumb" src="/announcement-image.php?id=<?= (int)$a['id'] ?>" alt="" loading="lazy">
+            <?php endif; ?>
         </a>
         <?php endforeach; ?>
     <?php endif; ?>

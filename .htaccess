@@ -13,6 +13,8 @@ ErrorDocument 404 /404.php
 # keep working). Only single-segment lowercase slugs hit the rewrite.
 <IfModule mod_rewrite.c>
     RewriteEngine On
+    # /tv and /tv/ → tv.php (must come before the slug catch-all)
+    RewriteRule ^tv/?$ /tv.php [QSA,L]
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_URI}      !^/(landing|branding|public-media|public-document|contact|user-avatar|newsletter-signup|newsletter-unsubscribe|tv)\.php

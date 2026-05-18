@@ -13,6 +13,18 @@ $memberCount = db()->prepare("SELECT COUNT(*) FROM users WHERE association_id = 
 $memberCount->execute([$assocId]);
 $stats['members'] = (int)$memberCount->fetchColumn();
 
+$ownerCount = db()->prepare("SELECT COUNT(*) FROM users WHERE association_id = ? AND status <> 'inactive' AND role IN ('owner','board_member','board_admin')");
+$ownerCount->execute([$assocId]);
+$stats['members_owners'] = (int)$ownerCount->fetchColumn();
+
+$renterCount = db()->prepare("SELECT COUNT(*) FROM users WHERE association_id = ? AND status <> 'inactive' AND role = 'renter'");
+$renterCount->execute([$assocId]);
+$stats['members_renters'] = (int)$renterCount->fetchColumn();
+
+$staffCount = db()->prepare("SELECT COUNT(*) FROM users WHERE association_id = ? AND status <> 'inactive' AND role IN ('staff','property_manager')");
+$staffCount->execute([$assocId]);
+$stats['members_staff'] = (int)$staffCount->fetchColumn();
+
 // Rules / bylaws / policies (all sources)
 $ruleCount = db()->prepare('SELECT COUNT(*) FROM rules WHERE association_id = ?');
 $ruleCount->execute([$assocId]);
@@ -85,7 +97,7 @@ $mkCountStmt->execute([$assocId]);
 $stats['marketplace'] = (int)$mkCountStmt->fetchColumn();
 
 $mkRecentStmt = db()->prepare(
-    "SELECT ml.id, ml.title, ml.price_cents, ml.category, ml.created_at,
+    "SELECT ml.id, ml.title, ml.price_cents, ml.category, ml.created_at, ml.photo_path,
             CONCAT(IFNULL(u.first_name,''), ' ', IFNULL(u.last_name,'')) AS seller
        FROM marketplace_listings ml
        JOIN users u ON u.id = ml.seller_user_id
@@ -293,6 +305,7 @@ require __DIR__ . '/../includes/header.php';
             <div class="stat__body">
                 <div class="stat__label">Members</div>
                 <div class="stat__value"><?= (int)$stats['members'] ?></div>
+                <div class="stat__hint"><?= (int)$stats['members_owners'] ?> owners &middot; <?= (int)$stats['members_renters'] ?> renters &middot; <?= (int)$stats['members_staff'] ?> team</div>
             </div>
         </a>
         <?php if ($canManage): ?>
@@ -304,17 +317,21 @@ require __DIR__ . '/../includes/header.php';
             </div>
         </a>
         <?php endif; ?>
-        <a class="stat" href="/dashboard/directory.php#board">
+        <?php if (can_do('read_contacts')): ?>
+        <a class="stat" href="/dashboard/contacts.php">
+        <?php else: ?>
+        <div class="stat">
+        <?php endif; ?>
             <div class="stat__icon">🎩</div>
             <div class="stat__body">
                 <div class="stat__label">Board &amp; mgmt</div>
                 <div class="stat__value"><?= (int)$stats['board'] ?></div>
             </div>
-        </a>
+        <?php echo can_do('read_contacts') ? '</a>' : '</div>'; ?>
         <a class="stat<?= ($canManage && $stats['rule_changes_pending'] > 0) ? ' stat--alert' : '' ?>" href="/dashboard/search.php">
             <div class="stat__icon">📜</div>
             <div class="stat__body">
-                <div class="stat__label">Rules <?php if ($canManage && $stats['rule_changes_pending'] > 0): ?><span class="badge badge--warning" style="font-size: 10px; vertical-align: middle; margin-left: 4px;"><?= (int)$stats['rule_changes_pending'] ?> pending</span><?php endif; ?></div>
+                <div class="stat__label">Rules &amp; bylaws <?php if ($canManage && $stats['rule_changes_pending'] > 0): ?><span class="badge badge--warning" style="font-size: 10px; vertical-align: middle; margin-left: 4px;"><?= (int)$stats['rule_changes_pending'] ?> pending</span><?php endif; ?></div>
                 <div class="stat__value"><?= (int)$stats['rules'] ?></div>
             </div>
         </a>
@@ -358,6 +375,14 @@ require __DIR__ . '/../includes/header.php';
                 <div class="stat__value"><?= (int)$stats['contacts'] ?></div>
             </div>
         </a>
+        <?php else: ?>
+        <div class="stat">
+            <div class="stat__icon">📞</div>
+            <div class="stat__body">
+                <div class="stat__label">Contacts</div>
+                <div class="stat__value"><?= (int)$stats['contacts'] ?></div>
+            </div>
+        </div>
         <?php endif; ?>
         <a class="stat" href="/dashboard/events.php">
             <div class="stat__icon">📅</div>
@@ -398,9 +423,11 @@ require __DIR__ . '/../includes/header.php';
                 <p class="muted">No announcements yet. <a href="/dashboard/communications.php?action=new">Post the first one</a>.</p>
             <?php else: ?>
                 <div class="dash-list">
-                <?php foreach ($announcements as $a):
+                <?php
+                $dashAnnColors = ann_type_colors($assocId);
+                foreach ($announcements as $a):
                     $aTs = strtotime((string)$a['published_at']);
-                    $typeBadge = $a['type'] === 'emergency' ? 'badge--error' : ($a['type'] === 'event' ? 'badge--info' : 'badge--orange');
+                    $typeBadgeStyle = ann_badge_style((string)$a['type'], $dashAnnColors);
                 ?>
                     <a class="dash-row" href="/dashboard/communications.php?id=<?= (int)$a['id'] ?>">
                         <div class="dash-date">
@@ -409,7 +436,7 @@ require __DIR__ . '/../includes/header.php';
                         </div>
                         <div class="dash-body">
                             <div class="row" style="gap: var(--sp-2); margin-bottom: 2px; flex-wrap: wrap;">
-                                <span class="badge <?= $typeBadge ?>" style="font-size: var(--fs-xs);"><?= e($a['type']) ?></span>
+                                <span class="badge" style="font-size: var(--fs-xs); <?= $typeBadgeStyle ?>"><?= e(ann_type_label((string)$a['type'])) ?></span>
                                 <span class="muted" style="font-size: var(--fs-xs);"><?= e(udate('g:i A', $aTs)) ?> · <?= e(trim($a['author']) ?: 'Unknown') ?></span>
                             </div>
                             <strong><?= e($a['title']) ?></strong>
@@ -435,10 +462,16 @@ require __DIR__ . '/../includes/header.php';
                     $price = $mk['price_cents'] === null ? 'Free' : '$' . number_format($mk['price_cents'] / 100, 0);
                 ?>
                     <a class="dash-row" href="/dashboard/marketplace.php?id=<?= (int)$mk['id'] ?>">
+                        <?php if (!empty($mk['photo_path'])): ?>
+                        <div class="dash-thumb">
+                            <img src="/marketplace-image.php?id=<?= (int)$mk['id'] ?>" alt="" loading="lazy">
+                        </div>
+                        <?php else: ?>
                         <div class="dash-date">
                             <div class="m"><?= e(udate('M', $mkTs)) ?></div>
                             <div class="d"><?= e(udate('j', $mkTs)) ?></div>
                         </div>
+                        <?php endif; ?>
                         <div class="dash-body">
                             <div class="row" style="gap: var(--sp-2); margin-bottom: 2px; flex-wrap: wrap;">
                                 <span class="badge badge--success" style="font-size: var(--fs-xs);"><?= e($price) ?></span>
@@ -476,11 +509,17 @@ require __DIR__ . '/../includes/header.php';
                     };
                 ?>
                     <a class="dash-row" href="/dashboard/event.php?id=<?= (int)$ev['id'] ?>">
+                        <?php if (!empty($ev['image_path'])): ?>
+                        <div class="dash-thumb">
+                            <img src="/event-image.php?id=<?= (int)$ev['id'] ?>" alt="" loading="lazy">
+                        </div>
+                        <?php else: ?>
                         <div class="dash-date">
                             <div class="m"><?= e(udate('M', $startTs)) ?></div>
                             <div class="d"><?= e(udate('j', $startTs)) ?></div>
                             <div class="dow"><?= e(udate('D', $startTs)) ?></div>
                         </div>
+                        <?php endif; ?>
                         <div class="dash-body">
                             <div class="row" style="gap: var(--sp-2); margin-bottom: 2px; flex-wrap: wrap;">
                                 <span class="badge <?= $audClass ?>" style="font-size: var(--fs-xs);"><?= e((string)$ev['audience']) ?></span>
@@ -560,6 +599,11 @@ require __DIR__ . '/../includes/header.php';
     .dash-date .d  { font-size: 20pt; line-height: 1; font-weight: 800; color: var(--color-navy); margin: 1px 0; }
     .dash-date .dow{ font-size: 8pt; color: var(--color-text-soft); }
     .dash-body { flex: 1 1 auto; min-width: 0; }
+    .dash-thumb {
+        flex: 0 0 56px; width: 56px; height: 56px; border-radius: 6px;
+        overflow: hidden; background: var(--color-border);
+    }
+    .dash-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 </style>
 
 <?php require __DIR__ . '/../includes/footer.php'; ?>

@@ -277,6 +277,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'upload'
     }
 }
 
+// --- Archive / unarchive ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array(($_POST['form'] ?? ''), ['archive','unarchive'], true)) {
+    csrf_check();
+    if (!$canManage) { http_response_code(403); die('Forbidden'); }
+    $did = (int)($_POST['id'] ?? 0);
+    $check = db()->prepare('SELECT title, unit_id FROM documents WHERE id = ? AND association_id = ?');
+    $check->execute([$did, $assocId]);
+    $row = $check->fetch();
+    if ($row) {
+        $isArchive = ($_POST['form'] === 'archive');
+        db()->prepare('UPDATE documents SET archived_at = ? WHERE id = ? AND association_id = ?')
+            ->execute([$isArchive ? date('Y-m-d H:i:s') : null, $did, $assocId]);
+        audit('document.' . ($_POST['form'] === 'archive' ? 'archived' : 'unarchived'), ['title' => $row['title']], $did, 'document');
+        flash('success', $isArchive ? "Archived \"{$row['title']}\"." : "Restored \"{$row['title']}\".");
+        $backUnit = (int)($row['unit_id'] ?? 0);
+        redirect($backUnit ? '/dashboard/unit.php?id=' . $backUnit : '/dashboard/documents.php');
+    }
+    redirect('/dashboard/documents.php');
+}
+
 // --- Delete handler (board only) ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'delete') {
     csrf_check();
@@ -296,36 +316,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'delete'
 }
 
 // --- Listing query (filters) ---
-$qCategory = trim((string)($_GET['category'] ?? ''));
-$qSearch   = trim((string)($_GET['q'] ?? ''));
-$qUnitId   = (int)($_GET['filter_unit_id'] ?? 0);
-$qUserId   = (int)($_GET['filter_user_id'] ?? 0);
+$qCategory    = trim((string)($_GET['category'] ?? ''));
+$qSearch      = trim((string)($_GET['q'] ?? ''));
+$qUserId      = (int)($_GET['filter_user_id'] ?? 0);
+$showArchived = ($_GET['archived'] ?? '') === '1' && $canManage;
 
 $sql = 'SELECT d.*, CONCAT(IFNULL(u.first_name,""), " ", IFNULL(u.last_name,"")) AS uploader,
-               un.unit_number AS unit_label,
                TRIM(CONCAT(IFNULL(mu.first_name,""), " ", IFNULL(mu.last_name,""))) AS member_label
         FROM documents d
         LEFT JOIN users u  ON u.id  = d.uploaded_by
-        LEFT JOIN units un ON un.id = d.unit_id
         LEFT JOIN users mu ON mu.id = d.user_id
-        WHERE d.association_id = ?';
+        WHERE d.association_id = ?
+          AND d.unit_id IS NULL';
 $params = [$assocId];
+$sql .= $showArchived ? ' AND d.archived_at IS NOT NULL' : ' AND d.archived_at IS NULL';
 if ($qCategory !== '') { $sql .= ' AND d.category = ?'; $params[] = $qCategory; }
 if ($qSearch !== '')   { $sql .= ' AND (d.title LIKE ? OR d.description LIKE ?)'; $params[] = "%$qSearch%"; $params[] = "%$qSearch%"; }
-if ($qUnitId)          { $sql .= ' AND d.unit_id = ?'; $params[] = $qUnitId; }
 if ($qUserId)          { $sql .= ' AND d.user_id = ?'; $params[] = $qUserId; }
 
 // Visibility (uses viewing_role for view-as fidelity):
 //   - Managers see everything.
-//   - Non-managers: board_only docs are hidden; unit_only docs are visible
-//     only to occupants of that unit.
+//   - Non-managers: board_only docs are hidden.
 if (!role_can_manage(viewing_role())) {
-    $sql .= " AND d.access_level <> 'board_only'
-              AND (d.access_level <> 'unit_only'
-                   OR d.unit_id IN (SELECT unit_id FROM unit_occupants WHERE user_id = ?))";
-    $params[] = (int)$user['id'];
+    $sql .= " AND d.access_level <> 'board_only'";
 }
 $sql .= ' ORDER BY d.created_at DESC LIMIT 200';
+
+// Archived doc count for the toggle link (managers only, active view).
+$archivedCount = 0;
+if ($canManage && !$showArchived) {
+    $acStmt = db()->prepare('SELECT COUNT(*) FROM documents WHERE association_id = ? AND unit_id IS NULL AND archived_at IS NOT NULL');
+    $acStmt->execute([$assocId]);
+    $archivedCount = (int)$acStmt->fetchColumn();
+}
 $stmt = db()->prepare($sql);
 $stmt->execute($params);
 $rows = $stmt->fetchAll();
@@ -808,30 +831,34 @@ require __DIR__ . '/../includes/header.php';
     </div>
     <?php endif; ?>
 
-    <form method="get" class="row" style="margin-bottom: var(--sp-4); gap: var(--sp-3); flex-wrap: wrap;">
-        <input class="input" type="search" name="q" placeholder="Search title or description" value="<?= e($qSearch) ?>" style="max-width: 280px;">
-        <select class="select" name="category" style="max-width: 200px;">
-            <option value="">All categories</option>
-            <?php foreach ($filterCategories as $c): ?>
-                <option value="<?= e($c) ?>" <?= $c === $qCategory ? 'selected' : '' ?>><?= e($c) ?></option>
-            <?php endforeach; ?>
-        </select>
-        <?php if ($canManage && $unitsList): ?>
-            <select class="select js-searchable-select" name="filter_unit_id" style="max-width: 200px;">
-                <option value="0">All units</option>
-                <?php foreach ($unitsList as $u_): ?>
-                    <option value="<?= (int)$u_['id'] ?>" <?= $qUnitId === (int)$u_['id'] ? 'selected' : '' ?>>Unit <?= e((string)$u_['unit_number']) ?></option>
+    <div class="row" style="margin-bottom: var(--sp-4); gap: var(--sp-3); flex-wrap: wrap; align-items: center;">
+        <form method="get" class="row" style="gap: var(--sp-3); flex-wrap: wrap; margin: 0;">
+            <?php if ($showArchived): ?><input type="hidden" name="archived" value="1"><?php endif; ?>
+            <input class="input" type="search" name="q" placeholder="Search title or description" value="<?= e($qSearch) ?>" style="max-width: 280px;">
+            <select class="select" name="category" style="max-width: 200px;">
+                <option value="">All categories</option>
+                <?php foreach ($filterCategories as $c): ?>
+                    <option value="<?= e($c) ?>" <?= $c === $qCategory ? 'selected' : '' ?>><?= e($c) ?></option>
                 <?php endforeach; ?>
             </select>
+            <button class="btn btn--ghost" type="submit">Filter</button>
+            <?php if ($qSearch !== '' || $qCategory !== ''): ?>
+                <a class="btn btn--ghost" href="/dashboard/documents.php<?= $showArchived ? '?archived=1' : '' ?>">Clear</a>
+            <?php endif; ?>
+        </form>
+        <?php if ($canManage): ?>
+            <?php if ($showArchived): ?>
+                <a class="btn btn--ghost" href="/dashboard/documents.php" style="font-size: var(--fs-sm);">← Active documents</a>
+            <?php elseif ($archivedCount > 0): ?>
+                <a class="btn btn--ghost" href="/dashboard/documents.php?archived=1" style="font-size: var(--fs-sm);">Show archived (<?= $archivedCount ?>)</a>
+            <?php endif; ?>
         <?php endif; ?>
-        <button class="btn btn--ghost" type="submit">Filter</button>
-        <?php if ($qSearch !== '' || $qCategory !== '' || $qUnitId): ?>
-            <a class="btn btn--ghost" href="/dashboard/documents.php">Clear</a>
-        <?php endif; ?>
-    </form>
+    </div>
 
     <?php if (!$rows): ?>
-        <div class="card card--padded center"><p class="muted">No documents yet.</p></div>
+        <div class="card card--padded center">
+            <p class="muted"><?= $showArchived ? 'No archived documents.' : 'No documents yet.' ?></p>
+        </div>
     <?php else: ?>
     <div style="overflow-x:auto;">
     <table class="table">
@@ -839,7 +866,6 @@ require __DIR__ . '/../includes/header.php';
             <tr>
                 <th>Title</th>
                 <th>Category</th>
-                <th>Unit</th>
                 <th>Access</th>
                 <th>Uploaded</th>
                 <th style="text-align:right;">Actions</th>
@@ -854,21 +880,17 @@ require __DIR__ . '/../includes/header.php';
                 default      => 'badge--info',
             };
         ?>
-            <tr>
+            <tr<?= !empty($r['archived_at']) ? ' style="opacity:.6;"' : '' ?>>
                 <td>
                     <strong><?= e($r['title']) ?></strong>
+                    <?php if (!empty($r['archived_at'])): ?>
+                        <span class="badge" style="font-size: var(--fs-xs); margin-left: 4px;">archived</span>
+                    <?php endif; ?>
                     <?php if ($r['description']): ?>
                         <div class="muted rule-body-clamp" style="font-size: var(--fs-xs); white-space: pre-wrap; -webkit-line-clamp: 2;"><?= e((string)$r['description']) ?></div>
                     <?php endif; ?>
                 </td>
                 <td><?= e($r['category'] ?: '—') ?></td>
-                <td>
-                    <?php if (!empty($r['unit_label'])): ?>
-                        <a href="/dashboard/unit.php?id=<?= (int)$r['unit_id'] ?>"><?= e((string)$r['unit_label']) ?></a>
-                    <?php else: ?>
-                        <span class="muted">—</span>
-                    <?php endif; ?>
-                </td>
                 <td><span class="badge <?= $accessClass ?>"><?= e(str_replace('_',' ',$r['access_level'])) ?></span></td>
                 <td>
                     <?php if (!empty($r['effective_date'])): ?>
@@ -883,9 +905,32 @@ require __DIR__ . '/../includes/header.php';
                 </td>
                 <td style="text-align:right; white-space: nowrap;">
                     <?php $viewUrl = !empty($r['file_path']) ? '/dashboard/file.php?type=document&id=' . (int)$r['id'] : '/dashboard/document.php?id=' . (int)$r['id']; ?>
-                    <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="<?= e($viewUrl) ?>" <?= !empty($r['file_path']) ? 'target="_blank" rel="noopener"' : '' ?>>View</a>
+                    <?php if (empty($r['archived_at'])): ?>
+                        <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="<?= e($viewUrl) ?>" <?= !empty($r['file_path']) ? 'target="_blank" rel="noopener"' : '' ?>>View</a>
+                    <?php endif; ?>
                     <?php if ($canManage): ?>
-                        <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="?action=edit&id=<?= (int)$r['id'] ?>">Edit</a>
+                        <?php if (empty($r['archived_at'])): ?>
+                            <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="?action=edit&id=<?= (int)$r['id'] ?>">Edit</a>
+                            <form method="post" style="display:inline;" onsubmit="return confirm('Archive &quot;<?= e(addslashes($r['title'])) ?>&quot;? It will be hidden from the listing but not deleted.');">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="form" value="archive">
+                                <input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
+                                <button class="btn btn--ghost" type="submit" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);">Archive</button>
+                            </form>
+                        <?php else: ?>
+                            <form method="post" style="display:inline;">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="form" value="unarchive">
+                                <input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
+                                <button class="btn btn--ghost" type="submit" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);">Restore</button>
+                            </form>
+                            <form method="post" style="display:inline;" onsubmit="return confirm('Permanently delete &quot;<?= e(addslashes($r['title'])) ?>&quot;?');">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="form" value="delete">
+                                <input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
+                                <button class="btn btn--ghost" type="submit" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs); color: var(--color-error);">Delete</button>
+                            </form>
+                        <?php endif; ?>
                     <?php endif; ?>
                 </td>
             </tr>

@@ -1,7 +1,6 @@
 <?php
-// Public endpoint that serves an event image from /storage/.
-// No auth required — same pattern as user-avatar.php. URLs are unguessable
-// (UUID-based filenames), and event images are non-sensitive.
+// Public endpoint for announcement images — no auth required.
+// URLs are unguessable (UUID-based filenames). Same pattern as event-image.php.
 declare(strict_types=1);
 require __DIR__ . '/includes/db.php';
 require __DIR__ . '/includes/functions.php';
@@ -9,7 +8,7 @@ require __DIR__ . '/includes/functions.php';
 $id = (int)($_GET['id'] ?? 0);
 if ($id <= 0) { http_response_code(404); die('Not found'); }
 
-$stmt = db()->prepare('SELECT image_path FROM events WHERE id = ?');
+$stmt = db()->prepare('SELECT image_path FROM announcements WHERE id = ?');
 $stmt->execute([$id]);
 $row = $stmt->fetch();
 if (!$row || empty($row['image_path'])) { http_response_code(404); die('No image'); }

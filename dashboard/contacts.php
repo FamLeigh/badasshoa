@@ -128,6 +128,19 @@ $rows = db()->prepare($sql);
 $rows->execute($params);
 $all = $rows->fetchAll();
 
+// Board members shown at the top of the contacts page.
+$boardStmt = db()->prepare(
+    "SELECT id, first_name, last_name, email, phone, role, board_office, avatar_path
+       FROM users
+      WHERE association_id = ? AND role IN ('board_admin','board_member','property_manager') AND status = 'active'
+      ORDER BY FIELD(board_office,'president','vice_president','secretary','treasurer','secretary_treasurer','director') = 0,
+               FIELD(board_office,'president','vice_president','secretary','treasurer','secretary_treasurer','director'),
+               FIELD(role,'board_admin','board_member','property_manager'),
+               last_name, first_name"
+);
+$boardStmt->execute([$assocId]);
+$boardMembers = $boardStmt->fetchAll();
+
 $showAdd = $canManageContacts && ($_GET['action'] ?? '') === 'new';
 $editContact = null;
 if ($canManageContacts && ($_GET['action'] ?? '') === 'edit') {
@@ -149,14 +162,8 @@ require __DIR__ . '/../includes/header.php';
             <h1 style="font-size: var(--fs-3xl); margin: 0;">Contacts</h1>
             <p class="muted">Emergency &amp; non-emergency phone numbers, recommended contractors, utility providers — anything the board points residents to.</p>
         </div>
-        <?php if (!$showAdd && !$editContact): ?>
-            <div class="row" style="gap: var(--sp-2); flex-wrap: wrap;">
-                <a class="btn btn--ghost" href="/dashboard/contacts-print.php" target="_blank" rel="noopener" title="Printable list of contacts">🖨 Print contacts</a>
-                <?php if ($canManageContacts): ?>
-                    <a class="btn btn--ghost" href="/dashboard/contacts-print.php?include_board=1" target="_blank" rel="noopener" title="Printable list — contacts plus board members & property managers">🖨 Print + board</a>
-                    <a class="btn btn--primary" href="?action=new">+ New contact</a>
-                <?php endif; ?>
-            </div>
+        <?php if ($canManageContacts && !$showAdd && !$editContact): ?>
+            <a class="btn btn--primary" href="?action=new">+ New contact</a>
         <?php endif; ?>
     </div>
 
@@ -174,6 +181,11 @@ require __DIR__ . '/../includes/header.php';
         <button class="btn btn--ghost" type="submit">Search</button>
         <?php if ($qSearch !== '' || $kindFilter !== ''): ?>
             <a class="btn btn--ghost" href="/dashboard/contacts.php">Clear</a>
+        <?php endif; ?>
+        <div style="flex:1;"></div>
+        <a class="btn btn--ghost" href="/dashboard/contacts-print.php" target="_blank" rel="noopener">🖨 Print</a>
+        <?php if ($canManageContacts): ?>
+            <a class="btn btn--ghost" href="/dashboard/contacts-print.php?include_board=1" target="_blank" rel="noopener">🖨 + board</a>
         <?php endif; ?>
     </form>
     <?php endif; ?>
@@ -256,6 +268,41 @@ require __DIR__ . '/../includes/header.php';
                 <button class="btn btn--primary" type="submit"><?= $isEdit ? 'Save' : 'Add contact' ?></button>
             </div>
         </form>
+    </div>
+    <?php endif; ?>
+
+    <?php if ($boardMembers && $qSearch === '' && $kindFilter === ''): ?>
+    <h2 style="font-size: var(--fs-lg); margin: 0 0 var(--sp-3);">Board &amp; Management</h2>
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--sp-3); margin-bottom: var(--sp-6);">
+        <?php foreach ($boardMembers as $b):
+            $officeLbl = board_office_label((string)($b['board_office'] ?? ''));
+            $name = trim($b['first_name'] . ' ' . $b['last_name']);
+        ?>
+        <div style="display:flex; gap: var(--sp-3); align-items:center; padding: var(--sp-3); border: 1px solid var(--color-border); border-radius: var(--r-md); background: var(--color-surface-2);">
+            <?php if (!empty($b['avatar_path'])): ?>
+                <img src="/user-avatar.php?id=<?= (int)$b['id'] ?>" alt=""
+                     style="width:44px; height:44px; border-radius:50%; object-fit:cover; flex:0 0 44px; border:2px solid var(--color-border);">
+            <?php else: ?>
+                <div style="width:44px; height:44px; border-radius:50%; background:var(--color-navy); color:#fff; display:flex; align-items:center; justify-content:center; font-size:var(--fs-lg); font-weight:700; flex:0 0 44px;">
+                    <?= e(strtoupper(mb_substr($name ?: '?', 0, 1))) ?>
+                </div>
+            <?php endif; ?>
+            <div style="min-width:0;">
+                <div style="font-weight:600; font-size:var(--fs-sm);"><?= e($name) ?></div>
+                <?php if ($officeLbl !== ''): ?>
+                    <div style="font-size:var(--fs-xs); color:var(--color-orange);"><?= e($officeLbl) ?></div>
+                <?php else: ?>
+                    <div style="font-size:var(--fs-xs); color:var(--color-text-soft);"><?= e(str_replace('_',' ',$b['role'])) ?></div>
+                <?php endif; ?>
+                <?php if (!empty($b['phone'])): ?>
+                    <a href="tel:<?= e((string)$b['phone']) ?>" style="font-size:var(--fs-xs); display:block; margin-top:2px;"><?= e((string)$b['phone']) ?></a>
+                <?php endif; ?>
+                <?php if (!empty($b['email']) && !is_placeholder_email((string)$b['email'])): ?>
+                    <a href="mailto:<?= e((string)$b['email']) ?>" style="font-size:var(--fs-xs); display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><?= e((string)$b['email']) ?></a>
+                <?php endif; ?>
+            </div>
+        </div>
+        <?php endforeach; ?>
     </div>
     <?php endif; ?>
 
