@@ -260,9 +260,27 @@ This file (CLAUDE.md) keeps an internal-only summary in the section below for cr
 
 ## Where we left off (resume here next session)
 
-**Last session ended:** 2026-05-14 (session 8) — **Legal reference, Lobby TV overhaul, events All-tab.**
+**Last session ended:** 2026-05-18 (session 9) — **Admin sign-out fix, Samsung TV scroll memory, Bellair contact import.**
 
 **What got built this session:**
+
+- **Admin sign-out** — Admin sidebar (`/admin/` layout) had no logout button because the topbar is only rendered for the dashboard layout. Added a Sign out link at the bottom of the admin sidebar (`includes/header.php`).
+
+- **Bellair contact import** — `migrations/067_bellair_contact_update.sql` applied to prod. Updated 29 email addresses (placeholder → real), corrected 2 misassigned emails (Wayne Proie unit 311, Kathleen Hamilton unit 407), corrected 2 phone numbers (Garvin digits, Miller area code), added 3 phone/phone2 for units that were NULL.
+
+  **8 exceptions — kept original DB data, flagged for later review:**
+  1. Unit 105 Yueh Chen (id=9): DB `e_g_marshall@yahoo.com` / CSV `8693Chen@gmail.com`
+  2. Unit 114 Gordon Benson (id=22): DB `gbenson15@cfl.rr.com` / CSV `alkov80@gmail.com` (looks like Ilkov data-entry error)
+  3. Unit 204 Edward Sheckler (id=35): CSV shows "Edward Henry" / `khpbiz@yahoo.com` — possible ownership change
+  4. Unit 209 Eric Edelman (id=43): DB `ericedelman@gmail.com` / CSV `Joaneherrold@gmail.com` — CSV email doesn't match owner name
+  5. Unit 221 Ray Baxter (id=62): CSV shows "Ray & Debbie Ray/St. John" / `TDBaxteremail@gmail.com` — name mismatch vs DB
+  6. Unit 317 Henry Cory (id=87): DB `Henrydcory@gmail.com` / CSV `ashkcory@Yahoo.com`
+  7. Unit 409 VanEssendelft (id=106): CSV shows "Alexis Myles Bron Inc VMU REO" — possible corporate ownership change
+  8. Unit 506 Clint Davis (id=135): DB `Pncdavis@comcast.net` / CSV `dcrservices@aol.com`
+
+  Also: Henry Orszulak appears in units 419 (id=120) and 621 (id=186) — UNIQUE email constraint means only id=186 got `h.orszulak@comcast.net`; id=120 left as placeholder.
+
+- **Previous session (2026-05-14) — Legal reference, Lobby TV overhaul, events All-tab.**
 
 - **Legal Reference** — `dashboard/legal.php` (all logged-in members): FULLTEXT search + browse FL statutes filtered to the association's state. Filters for chapter / applies_to / category. 61 statutes have full text in-app with an expand button; 171 link to the official FL Legislature site. `admin/legal.php` (super admin): CSV import with upsert or full-replace per state. `migrations/058_statutes.sql`: shared statutes table with FULLTEXT index. 232 FL statutes imported from hoa_laws.csv. Balance-scale icon added to sidebar nav (Resources group).
 
@@ -280,7 +298,7 @@ This file (CLAUDE.md) keeps an internal-only summary in the section below for cr
 - **Minor:** contacts-print.php redundant "listed" copy fixed.
 
 **Production state in DB:**
-- Migrations through **058** applied to `u535581001_badassHOA`
+- Migrations through **067** applied to `u535581001_badassHOA`
 - 232 FL statutes in the `statutes` table (chapters 718, 719, 720, 553)
 - 2 events: May Bingo (weekly, all, through May 28) + Memorial Day (May 25, all)
 - Email driver still `log` (paused — flip to `msmtp` in server config.php when Kevin says go)
