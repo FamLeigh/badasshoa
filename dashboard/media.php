@@ -52,6 +52,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'upload'
                 ]);
                 $newId = (int)db()->lastInsertId();
                 audit('media.uploaded', ['caption' => $caption, 'visibility' => $visibility], $newId, 'media');
+                // Thumbnail: stored at uploads/{id}/media/thumbs/{basename}.jpg
+                $thumbName = pathinfo($newName, PATHINFO_FILENAME) . '.jpg';
+                make_thumbnail($absPath, storage_path("$relDir/thumbs/$thumbName"));
                 flash('success', 'Image uploaded.');
                 redirect('/dashboard/media.php?tab=' . $visibility);
             }
@@ -240,7 +243,7 @@ require __DIR__ . '/../includes/header.php';
         <?php foreach ($items as $m): ?>
             <div class="gallery__item">
                 <a href="/dashboard/file.php?type=media&id=<?= (int)$m['id'] ?>" target="_blank" rel="noopener">
-                    <img src="/dashboard/file.php?type=media&id=<?= (int)$m['id'] ?>" alt="<?= e((string)$m['caption']) ?>" loading="lazy">
+                    <img src="/dashboard/file.php?type=media&id=<?= (int)$m['id'] ?>&thumb=1" alt="<?= e((string)$m['caption']) ?>" loading="lazy">
                 </a>
                 <?php if ($m['caption']): ?>
                     <div class="gallery__caption"><?= e($m['caption']) ?></div>

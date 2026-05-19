@@ -59,6 +59,18 @@ if ($type === 'document') {
     $relative = $row['file_path'];
     $filename = $row['file_name'] ?: basename($relative);
     $type_h   = $row['file_type'];
+    // Serve thumbnail when requested — fall back to original if not generated yet
+    if (!empty($_GET['thumb'])) {
+        $thumbName = pathinfo(basename($relative), PATHINFO_FILENAME) . '.jpg';
+        $thumbRel  = dirname($relative) . '/thumbs/' . $thumbName;
+        $thumbAbs  = storage_path($thumbRel);
+        if (is_file($thumbAbs)) {
+            $relative = $thumbRel;
+            $type_h   = 'image/jpeg';
+            $filename = $thumbName;
+        }
+        // If thumb doesn't exist yet, falls through and serves the original
+    }
 } else {
     http_response_code(400); die('Bad request');
 }

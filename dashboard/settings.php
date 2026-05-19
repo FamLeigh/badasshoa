@@ -452,6 +452,23 @@ if ($canEdit) {
     }
 }
 
+// Audit log (board_admin + super_admin only)
+$auditRows = [];
+if ($canEditPerms) {
+    $aStmt = db()->prepare(
+        'SELECT al.id, al.action, al.target_type, al.target_id,
+                al.ip_address, al.metadata, al.created_at,
+                u.first_name, u.last_name
+           FROM audit_log al
+      LEFT JOIN users u ON u.id = al.actor_user_id
+          WHERE al.association_id = ?
+          ORDER BY al.created_at DESC
+          LIMIT 200'
+    );
+    $aStmt->execute([$assocId]);
+    $auditRows = $aStmt->fetchAll();
+}
+
 // Permissions
 $overrides    = [];
 $permDefaults = permission_defaults();
@@ -1296,6 +1313,88 @@ require __DIR__ . '/../includes/header.php';
             <?php endif; ?>
         </div>
     </details>
+    <?php endif; ?>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         AUDIT LOG
+    ════════════════════════════════════════════════════════════════════ -->
+    <?php if ($canEditPerms && $auditRows): ?>
+    <details id="section-audit" class="acc-panel" <?= $openSection === 'audit' ? 'open' : '' ?>>
+        <summary>
+            <span class="acc-icon">🔍</span>
+            <div>
+                <span class="acc-title">Activity log</span>
+                <span class="acc-hint">Last 200 actions in this community</span>
+            </div>
+            <svg class="acc-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <div class="acc-body">
+            <div style="display:flex; gap:var(--sp-2); align-items:center; margin-bottom:var(--sp-3); flex-wrap:wrap;">
+                <input class="input" type="search" id="audit-filter" placeholder="Filter by action, name, or IP…" style="max-width:320px;">
+                <span class="muted" style="font-size:var(--fs-xs);" id="audit-count"><?= count($auditRows) ?> entries shown</span>
+            </div>
+            <div style="overflow-x:auto;">
+            <table class="table" id="audit-table">
+                <thead>
+                    <tr>
+                        <th style="white-space:nowrap;">When</th>
+                        <th>Who</th>
+                        <th>Action</th>
+                        <th>Target</th>
+                        <th>IP</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <?php foreach ($auditRows as $a):
+                    $actor = trim(($a['first_name'] ?? '') . ' ' . ($a['last_name'] ?? ''));
+                    $meta  = $a['metadata'] ? @json_decode((string)$a['metadata'], true) : [];
+                    $targetStr = '';
+                    if ($a['target_type'] && $a['target_id']) {
+                        $targetStr = $a['target_type'] . ' #' . $a['target_id'];
+                    }
+                ?>
+                <tr>
+                    <td style="white-space:nowrap; font-size:var(--fs-xs); color:var(--color-text-soft);"><?= e(udate('M j, Y g:i A', strtotime((string)$a['created_at']))) ?></td>
+                    <td style="font-size:var(--fs-sm);"><?= e($actor ?: '(system)') ?></td>
+                    <td style="font-size:var(--fs-sm);">
+                        <code style="font-size:11px; background:var(--color-surface-2); padding:1px 5px; border-radius:3px;"><?= e($a['action']) ?></code>
+                        <?php if ($meta): ?>
+                            <span class="muted" style="font-size:var(--fs-xs); display:block; margin-top:2px;">
+                                <?= e(implode(' · ', array_map(
+                                    fn($k,$v) => $k . ': ' . (is_array($v) ? json_encode($v) : mb_strimwidth((string)$v, 0, 60, '…')),
+                                    array_keys($meta), $meta
+                                ))) ?>
+                            </span>
+                        <?php endif; ?>
+                    </td>
+                    <td style="font-size:var(--fs-xs); color:var(--color-text-soft);"><?= e($targetStr) ?></td>
+                    <td style="font-size:var(--fs-xs); color:var(--color-text-soft);"><?= e((string)($a['ip_address'] ?? '')) ?></td>
+                </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+            </div>
+        </div>
+    </details>
+    <script>
+    (function(){
+        var inp  = document.getElementById('audit-filter');
+        var tbl  = document.getElementById('audit-table');
+        var cnt  = document.getElementById('audit-count');
+        if (!inp || !tbl) return;
+        inp.addEventListener('input', function(){
+            var q = this.value.toLowerCase();
+            var rows = tbl.querySelectorAll('tbody tr');
+            var visible = 0;
+            rows.forEach(function(r){
+                var show = !q || r.textContent.toLowerCase().includes(q);
+                r.style.display = show ? '' : 'none';
+                if (show) visible++;
+            });
+            cnt.textContent = visible + ' entr' + (visible === 1 ? 'y' : 'ies') + ' shown';
+        });
+    })();
+    </script>
     <?php endif; ?>
 
     <!-- ═══════════════════════════════════════════════════════════════════

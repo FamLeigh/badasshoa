@@ -906,3 +906,37 @@ function calc_monthly_price(int $units): array
     if ($u <= 20) return ['tier' => 'starter', 'price' => 20.0, 'cta' => 'Start 30-day free trial'];
     return                ['tier' => 'growth',  'price' => 20.0 + 0.50 * ($u - 20), 'cta' => 'Start 30-day free trial'];
 }
+
+// --- thumbnail generator ------------------------------------------------
+// Resizes an image to fit within $maxDim×$maxDim, saves as JPEG to $dstPath.
+// Returns true on success. Silently returns false if GD is unavailable or
+// the source can't be decoded (animated GIFs, corrupted files, etc.).
+function make_thumbnail(string $srcPath, string $dstPath, int $maxDim = 400): bool
+{
+    if (!function_exists('imagecreatetruecolor')) return false;
+    $mime = (string)@mime_content_type($srcPath);
+    $src  = match ($mime) {
+        'image/jpeg' => @imagecreatefromjpeg($srcPath),
+        'image/png'  => @imagecreatefrompng($srcPath),
+        'image/gif'  => @imagecreatefromgif($srcPath),
+        'image/webp' => function_exists('imagecreatefromwebp') ? @imagecreatefromwebp($srcPath) : false,
+        default      => false,
+    };
+    if (!$src) return false;
+    $sw = imagesx($src);
+    $sh = imagesy($src);
+    if ($sw <= 0 || $sh <= 0) { imagedestroy($src); return false; }
+    $scale = min($maxDim / $sw, $maxDim / $sh, 1.0);
+    $dw = max(1, (int)round($sw * $scale));
+    $dh = max(1, (int)round($sh * $scale));
+    $dst = imagecreatetruecolor($dw, $dh);
+    $white = imagecolorallocate($dst, 255, 255, 255);
+    imagefill($dst, 0, 0, $white);
+    imagecopyresampled($dst, $src, 0, 0, 0, 0, $dw, $dh, $sw, $sh);
+    imagedestroy($src);
+    $dir = dirname($dstPath);
+    if (!is_dir($dir)) @mkdir($dir, 0755, true);
+    $ok = imagejpeg($dst, $dstPath, 82);
+    imagedestroy($dst);
+    return $ok;
+}
