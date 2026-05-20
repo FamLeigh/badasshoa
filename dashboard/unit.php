@@ -356,6 +356,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'save_ag
     redirect('/dashboard/unit.php?id=' . $unitId);
 }
 
+// --- Add board note ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'add_board_note') {
+    csrf_check();
+    $noteText  = trim((string)($_POST['note_text'] ?? ''));
+    $subjectId = (int)($_POST['subject_user_id'] ?? 0);
+    if ($noteText === '') {
+        flash('error', 'Note text is required.');
+    } else {
+        // Validate subject belongs to this association if provided
+        if ($subjectId) {
+            $sc = db()->prepare('SELECT 1 FROM users WHERE id = ? AND association_id = ?');
+            $sc->execute([$subjectId, $assocId]);
+            if (!$sc->fetchColumn()) $subjectId = 0;
+        }
+        db()->prepare(
+            'INSERT INTO board_notes (association_id, author_user_id, unit_id, subject_user_id, note_text)
+             VALUES (?, ?, ?, ?, ?)'
+        )->execute([$assocId, (int)$user['id'], $unitId, $subjectId ?: null, $noteText]);
+        audit('board_note.added', ['unit_id' => $unitId, 'subject_user_id' => $subjectId ?: null], (int)db()->lastInsertId(), 'board_note');
+        flash('success', 'Note saved.');
+    }
+    $anchor = $subjectId ? '#notes-user-' . $subjectId : '#notes-unit';
+    redirect('/dashboard/unit.php?id=' . $unitId . $anchor);
+}
+
+// --- Delete board note ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'delete_board_note') {
+    csrf_check();
+    $nid = (int)($_POST['note_id'] ?? 0);
+    $row = db()->prepare('SELECT * FROM board_notes WHERE id = ? AND association_id = ?');
+    $row->execute([$nid, $assocId]);
+    $note = $row->fetch();
+    if ($note) {
+        db()->prepare('DELETE FROM board_notes WHERE id = ?')->execute([$nid]);
+        audit('board_note.deleted', ['unit_id' => $unitId], $nid, 'board_note');
+        flash('success', 'Note deleted.');
+        $anchor = $note['subject_user_id'] ? '#notes-user-' . $note['subject_user_id'] : '#notes-unit';
+        redirect('/dashboard/unit.php?id=' . $unitId . $anchor);
+    }
+    redirect('/dashboard/unit.php?id=' . $unitId . '#board-notes');
+}
+
 // --- Candidates for "Add occupant" dropdown: active members not already linked ---
 $candStmt = db()->prepare(
     "SELECT id, first_name, last_name, email
@@ -395,6 +437,27 @@ if (!empty($unit['rental_agent_contact_id'])) {
     $s->execute([(int)$unit['rental_agent_contact_id'], $assocId]);
     $currentRentalAgent = $s->fetch() ?: null;
 }
+
+// --- Load board notes for this unit ---
+$notesStmt = db()->prepare(
+    'SELECT n.*, u.first_name AS author_first, u.last_name AS author_last
+       FROM board_notes n
+       JOIN users u ON u.id = n.author_user_id
+      WHERE n.association_id = ? AND n.unit_id = ?
+      ORDER BY n.created_at DESC'
+);
+$notesStmt->execute([$assocId, $unitId]);
+$allBoardNotes = $notesStmt->fetchAll();
+// Split into unit-level and per-member buckets
+$unitNotes   = array_filter($allBoardNotes, fn($n) => $n['subject_user_id'] === null);
+$memberNotes = []; // keyed by subject_user_id
+foreach ($allBoardNotes as $n) {
+    if ($n['subject_user_id'] !== null) {
+        $memberNotes[(int)$n['subject_user_id']][] = $n;
+    }
+}
+// Note counts per occupant user_id
+$noteCountMap = array_map('count', $memberNotes);
 
 $showEditUnit     = ($_GET['action'] ?? '') === 'edit_unit';
 $showAddOccupant  = ($_GET['action'] ?? '') === 'add_occupant';
@@ -587,7 +650,7 @@ require __DIR__ . '/../includes/header.php';
     <?php else: ?>
     <div style="overflow-x:auto; margin-bottom: var(--sp-4);">
     <table class="table">
-        <thead><tr><th>Name</th><th>Role</th><th>Primary</th><th>Since</th><th>Email</th><th>Phone</th><th></th></tr></thead>
+        <thead><tr><th>Name</th><th>Role</th><th>Primary</th><th>Since</th><th>Email</th><th>Phone</th><th>Notes</th><th></th></tr></thead>
         <tbody>
         <?php foreach ($occupants as $o):
             $roleClass = match ($o['role']) {
@@ -604,6 +667,14 @@ require __DIR__ . '/../includes/header.php';
                 <td><?= $o['since'] ? e(udate('M j, Y', strtotime((string)$o['since']))) : '<span class="muted">—</span>' ?></td>
                 <td><?= e((string)$o['email']) ?></td>
                 <td><?= $o['phone'] ? e((string)$o['phone']) : '<span class="muted">—</span>' ?></td>
+                <td>
+                    <?php $nc = $noteCountMap[(int)$o['user_id']] ?? 0; ?>
+                    <?php if ($nc > 0): ?>
+                        <a href="#notes-user-<?= (int)$o['user_id'] ?>" class="badge badge--warning" style="text-decoration:none;"><?= $nc ?></a>
+                    <?php else: ?>
+                        <a href="#notes-user-<?= (int)$o['user_id'] ?>" class="muted" style="font-size:var(--fs-xs); text-decoration:none;">+ add</a>
+                    <?php endif; ?>
+                </td>
                 <td style="text-align:right; white-space: nowrap;">
                     <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="?id=<?= (int)$unitId ?>&action=edit_occupant&oid=<?= (int)$o['id'] ?>">Edit</a>
                     <form method="post" style="display:inline;" onsubmit="return confirm('Remove this person from the unit?');">
@@ -724,6 +795,57 @@ require __DIR__ . '/../includes/header.php';
         <?php endif; ?>
     </div>
     <?php endif; ?>
+
+    <!-- ═══════════════════════════════ BOARD NOTES ═══════════════════ -->
+    <h2 id="board-notes" style="font-size: var(--fs-xl); margin-top: var(--sp-8);">Board Notes <span class="muted" style="font-size: var(--fs-sm); font-weight: 400;">— internal only, not visible to members</span></h2>
+
+    <?php
+    // Helper: render a notes list + add form for a given subject (null=unit-level)
+    function render_notes_section(array $notes, ?int $subjectUserId, int $unitId, string $heading, string $anchorId): void {
+        $authorName = fn($n) => trim((string)$n['author_first'] . ' ' . (string)$n['author_last']) ?: 'Staff';
+    ?>
+    <div class="card card--padded" id="<?= e($anchorId) ?>" style="margin-bottom: var(--sp-4);">
+        <div class="card__head">
+            <h3 class="card__title" style="font-size: var(--fs-base);"><?= e($heading) ?></h3>
+            <?php if ($notes): ?><span class="badge"><?= count($notes) ?></span><?php endif; ?>
+        </div>
+        <?php if ($notes): ?>
+        <div style="display:flex; flex-direction:column; gap: var(--sp-3); margin-bottom: var(--sp-4);">
+            <?php foreach ($notes as $n): ?>
+            <div style="background: var(--color-surface-2); border-radius: var(--r-md); padding: var(--sp-3) var(--sp-4); position:relative;">
+                <div style="font-size: var(--fs-xs); color: var(--color-text-soft); margin-bottom: var(--sp-1);">
+                    <?= e($authorName($n)) ?> &middot; <?= e(udate('M j, Y g:i A', strtotime((string)$n['created_at']))) ?>
+                </div>
+                <div style="white-space: pre-wrap; font-size: var(--fs-sm); line-height: 1.55;"><?= e((string)$n['note_text']) ?></div>
+                <form method="post" style="position:absolute; top: var(--sp-2); right: var(--sp-2);" onsubmit="return confirm('Delete this note?');">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="form" value="delete_board_note">
+                    <input type="hidden" name="note_id" value="<?= (int)$n['id'] ?>">
+                    <button type="submit" style="background:none; border:none; cursor:pointer; color: var(--color-text-soft); font-size: var(--fs-xs); padding: 2px 6px;" title="Delete note">✕</button>
+                </form>
+            </div>
+            <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
+        <form method="post" class="form" style="display:flex; gap: var(--sp-2); align-items: flex-end;">
+            <?= csrf_field() ?>
+            <input type="hidden" name="form" value="add_board_note">
+            <input type="hidden" name="subject_user_id" value="<?= $subjectUserId ?? 0 ?>">
+            <div class="field" style="flex:1; margin:0;">
+                <textarea class="textarea" name="note_text" rows="2" placeholder="Add a note…" style="resize:vertical;"></textarea>
+            </div>
+            <button class="btn btn--primary" type="submit" style="white-space:nowrap;">Save note</button>
+        </form>
+    </div>
+    <?php } ?>
+
+    <?php render_notes_section(array_values($unitNotes), null, $unitId, 'Unit notes', 'notes-unit'); ?>
+
+    <?php foreach ($occupants as $o):
+        $uid  = (int)$o['user_id'];
+        $name = trim((string)$o['first_name'] . ' ' . (string)$o['last_name']) ?: (string)$o['email'];
+        render_notes_section($memberNotes[$uid] ?? [], $uid, $unitId, $name, 'notes-user-' . $uid);
+    endforeach; ?>
 
     <!-- Parking spots assigned to this unit -->
     <h2 style="font-size: var(--fs-xl); margin-top: var(--sp-6);">Parking <span class="muted" style="font-size: var(--fs-sm); font-weight: 400;">— garages and parking spots assigned to this unit</span></h2>
