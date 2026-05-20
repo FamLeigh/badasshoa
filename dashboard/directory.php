@@ -443,7 +443,9 @@ if ($rentersOnly) {
     $sql = "SELECT u.*,
                    (SELECT job_title FROM employees e
                      WHERE e.user_id = u.id AND e.association_id = u.association_id AND e.status = 'active'
-                     ORDER BY e.id DESC LIMIT 1) AS employee_job_title
+                     ORDER BY e.id DESC LIMIT 1) AS employee_job_title,
+                   (SELECT COUNT(*) FROM board_notes bn
+                     WHERE bn.subject_user_id = u.id AND bn.association_id = u.association_id) AS note_count
               FROM users u
              WHERE u.association_id = ? AND u.status <> 'inactive'"
              . ($canManage ? '' : ' AND u.hide_from_directory = 0');
@@ -970,7 +972,7 @@ B2,Sam,Garcia,sam@example.com,,,,0</pre>
         <thead>
             <tr>
                 <th>Name</th><th>Unit</th><th>Role</th><th>Owner / Renter</th><th>Email</th><th>Phone</th>
-                <?php if ($canManage): ?><th></th><?php endif; ?>
+                <?php if ($canManage): ?><th></th><th></th><?php endif; ?>
             </tr>
         </thead>
         <tbody>
@@ -1021,6 +1023,14 @@ B2,Sam,Garcia,sam@example.com,,,,0</pre>
                 <td><?= is_placeholder_email((string)$r['email']) ? '<em class="muted">—</em>' : e((string)$r['email']) ?></td>
                 <td><?= e($r['phone'] ?: '—') ?></td>
                 <?php if ($canManage): ?>
+                <td style="text-align:center;">
+                    <?php $dnc = (int)($r['note_count'] ?? 0); ?>
+                    <a href="/dashboard/board-note.php?user_id=<?= (int)$r['id'] ?>"
+                       title="<?= $dnc ?> note<?= $dnc !== 1 ? 's' : '' ?>"
+                       style="display:inline-flex; align-items:center; gap:3px; text-decoration:none; color:<?= $dnc ? 'var(--color-warning, #b45309)' : 'var(--color-text-soft)' ?>; font-size:var(--fs-xs);">
+                        📋<?php if ($dnc): ?><span class="badge badge--warning" style="font-size:10px; padding:1px 5px; min-width:16px; margin-left:2px;"><?= $dnc ?></span><?php endif; ?>
+                    </a>
+                </td>
                 <td style="text-align:right; white-space: nowrap;">
                     <a class="btn btn--ghost" href="?action=edit&id=<?= (int)$r['id'] ?>">Edit</a>
                 </td>

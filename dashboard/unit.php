@@ -509,7 +509,16 @@ require __DIR__ . '/../includes/header.php';
                 <p class="muted" style="font-size: var(--fs-sm); margin-top: var(--sp-1);"><?= e((string)$unit['notes']) ?></p>
             <?php endif; ?>
         </div>
-        <a class="btn btn--ghost" href="?id=<?= (int)$unitId ?>&action=edit_unit">Edit unit</a>
+        <div class="row" style="gap: var(--sp-2); align-items:center; flex-wrap:wrap;">
+            <?php $unitNoteCount = count($unitNotes); ?>
+            <a href="/dashboard/board-note.php?unit_id=<?= $unitId ?>"
+               class="btn btn--ghost"
+               title="Unit notes<?= $unitNoteCount ? ' (' . $unitNoteCount . ')' : '' ?>"
+               style="display:inline-flex; align-items:center; gap:5px;">
+                📋 Notes<?php if ($unitNoteCount): ?><span class="badge badge--warning" style="font-size:10px; padding:1px 6px;"><?= $unitNoteCount ?></span><?php endif; ?>
+            </a>
+            <a class="btn btn--ghost" href="?id=<?= (int)$unitId ?>&action=edit_unit">Edit unit</a>
+        </div>
     </div>
 
     <?php if ($flashError): ?><div class="flash flash--error"><?= e($flashError) ?></div><?php endif; ?>
@@ -669,11 +678,11 @@ require __DIR__ . '/../includes/header.php';
                 <td><?= $o['phone'] ? e((string)$o['phone']) : '<span class="muted">—</span>' ?></td>
                 <td>
                     <?php $nc = $noteCountMap[(int)$o['user_id']] ?? 0; ?>
-                    <?php if ($nc > 0): ?>
-                        <a href="#notes-user-<?= (int)$o['user_id'] ?>" class="badge badge--warning" style="text-decoration:none;"><?= $nc ?></a>
-                    <?php else: ?>
-                        <a href="#notes-user-<?= (int)$o['user_id'] ?>" class="muted" style="font-size:var(--fs-xs); text-decoration:none;">+ add</a>
-                    <?php endif; ?>
+                    <a href="/dashboard/board-note.php?unit_id=<?= $unitId ?>&user_id=<?= (int)$o['user_id'] ?>"
+                       title="<?= $nc ?> note<?= $nc !== 1 ? 's' : '' ?>"
+                       style="display:inline-flex; align-items:center; gap:3px; text-decoration:none; color:<?= $nc ? 'var(--color-warning, #b45309)' : 'var(--color-text-soft)' ?>; font-size:var(--fs-xs);">
+                        📋<?php if ($nc): ?><span class="badge badge--warning" style="font-size:10px; padding:1px 5px; min-width:16px; margin-left:2px;"><?= $nc ?></span><?php endif; ?>
+                    </a>
                 </td>
                 <td style="text-align:right; white-space: nowrap;">
                     <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="?id=<?= (int)$unitId ?>&action=edit_occupant&oid=<?= (int)$o['id'] ?>">Edit</a>
@@ -795,57 +804,6 @@ require __DIR__ . '/../includes/header.php';
         <?php endif; ?>
     </div>
     <?php endif; ?>
-
-    <!-- ═══════════════════════════════ BOARD NOTES ═══════════════════ -->
-    <h2 id="board-notes" style="font-size: var(--fs-xl); margin-top: var(--sp-8);">Board Notes <span class="muted" style="font-size: var(--fs-sm); font-weight: 400;">— internal only, not visible to members</span></h2>
-
-    <?php
-    // Helper: render a notes list + add form for a given subject (null=unit-level)
-    function render_notes_section(array $notes, ?int $subjectUserId, int $unitId, string $heading, string $anchorId): void {
-        $authorName = fn($n) => trim((string)$n['author_first'] . ' ' . (string)$n['author_last']) ?: 'Staff';
-    ?>
-    <div class="card card--padded" id="<?= e($anchorId) ?>" style="margin-bottom: var(--sp-4);">
-        <div class="card__head">
-            <h3 class="card__title" style="font-size: var(--fs-base);"><?= e($heading) ?></h3>
-            <?php if ($notes): ?><span class="badge"><?= count($notes) ?></span><?php endif; ?>
-        </div>
-        <?php if ($notes): ?>
-        <div style="display:flex; flex-direction:column; gap: var(--sp-3); margin-bottom: var(--sp-4);">
-            <?php foreach ($notes as $n): ?>
-            <div style="background: var(--color-surface-2); border-radius: var(--r-md); padding: var(--sp-3) var(--sp-4); position:relative;">
-                <div style="font-size: var(--fs-xs); color: var(--color-text-soft); margin-bottom: var(--sp-1);">
-                    <?= e($authorName($n)) ?> &middot; <?= e(udate('M j, Y g:i A', strtotime((string)$n['created_at']))) ?>
-                </div>
-                <div style="white-space: pre-wrap; font-size: var(--fs-sm); line-height: 1.55;"><?= e((string)$n['note_text']) ?></div>
-                <form method="post" style="position:absolute; top: var(--sp-2); right: var(--sp-2);" onsubmit="return confirm('Delete this note?');">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="form" value="delete_board_note">
-                    <input type="hidden" name="note_id" value="<?= (int)$n['id'] ?>">
-                    <button type="submit" style="background:none; border:none; cursor:pointer; color: var(--color-text-soft); font-size: var(--fs-xs); padding: 2px 6px;" title="Delete note">✕</button>
-                </form>
-            </div>
-            <?php endforeach; ?>
-        </div>
-        <?php endif; ?>
-        <form method="post" class="form" style="display:flex; gap: var(--sp-2); align-items: flex-end;">
-            <?= csrf_field() ?>
-            <input type="hidden" name="form" value="add_board_note">
-            <input type="hidden" name="subject_user_id" value="<?= $subjectUserId ?? 0 ?>">
-            <div class="field" style="flex:1; margin:0;">
-                <textarea class="textarea" name="note_text" rows="2" placeholder="Add a note…" style="resize:vertical;"></textarea>
-            </div>
-            <button class="btn btn--primary" type="submit" style="white-space:nowrap;">Save note</button>
-        </form>
-    </div>
-    <?php } ?>
-
-    <?php render_notes_section(array_values($unitNotes), null, $unitId, 'Unit notes', 'notes-unit'); ?>
-
-    <?php foreach ($occupants as $o):
-        $uid  = (int)$o['user_id'];
-        $name = trim((string)$o['first_name'] . ' ' . (string)$o['last_name']) ?: (string)$o['email'];
-        render_notes_section($memberNotes[$uid] ?? [], $uid, $unitId, $name, 'notes-user-' . $uid);
-    endforeach; ?>
 
     <!-- Parking spots assigned to this unit -->
     <h2 style="font-size: var(--fs-xl); margin-top: var(--sp-6);">Parking <span class="muted" style="font-size: var(--fs-sm); font-weight: 400;">— garages and parking spots assigned to this unit</span></h2>

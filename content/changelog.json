@@ -1,5 +1,23 @@
 [
     {
+        "id": "cl-20260518-bellair-tenants",
+        "at": "2026-05-18T23:00:00-04:00",
+        "type": "improvement",
+        "title": "Bellair tenant directory imported",
+        "description": "37 renters across 29 units imported from the Bellair tenant list. All accounts are active in the directory with phone numbers on file. Tenants without an email address on record have placeholder emails and can set their own via the password-reset flow when they're ready to log in.",
+        "author": "Reboooot",
+        "link": "/dashboard/directory.php"
+    },
+    {
+        "id": "cl-20260518-unit-agents",
+        "at": "2026-05-18T22:00:00-04:00",
+        "type": "feature",
+        "title": "Assign rental and real estate agents to units",
+        "description": "Board admins can now link a rental/property management agent or real estate agent to any unit. Agent contacts are stored association-wide so the same agent can be linked to multiple units without re-entering their info. The unit detail page shows a new Agents card with dropdowns for each agent type, and an inline form lets you add a brand-new agent on the spot without leaving the page.",
+        "author": "Reboooot",
+        "link": "/dashboard/"
+    },
+    {
         "id": "cl-20260518-tv-samsung-scroll",
         "at": "2026-05-18T17:00:00-04:00",
         "type": "improvement",
