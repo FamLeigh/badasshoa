@@ -126,12 +126,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'import'
                 ]);
                 $newId = (int)db()->lastInsertId();
 
-                // Only send the welcome email when we have a real address.
-                if ($hasRealEmail) {
-                    send_mail($finalEmail, "You've been invited to {$association['name']}",
-                        "Hi $first,\n\nYou've been added to {$association['name']} on BadassHOA.\n\nSign in: " .
-                        (config()['app']['base_url'] ?? '') . "/login.php\nEmail: $finalEmail\nTemporary password: $tempPass\n(Change it on first sign-in.)\n");
-                }
                 audit('user.imported', ['email' => $hasRealEmail ? $finalEmail : '(no email)', 'unit' => $unit], $newId, 'user');
                 $added++;
             }

@@ -250,7 +250,7 @@ $events = array_slice($events, 0, 20);
 // Active marketplace listings
 $mkt = db()->prepare(
     "SELECT m.id, m.title, m.description, m.price_cents, m.category, m.condition_label,
-            m.photo_path, u.first_name
+            m.photo_path, u.first_name, u.unit_number, u.phone
        FROM marketplace_listings m
        JOIN users u ON u.id = m.seller_user_id
       WHERE m.association_id = ? AND m.status = 'active'
@@ -853,7 +853,10 @@ if ($tvStoredCustom):
                     <span class="mkt-tag"><?= e($catLbl) ?></span>
                     <span class="mkt-tag"><?= e($condLbl) ?></span>
                     <?php if (!empty($item['first_name'])): ?>
-                        <span class="mkt-tag">From <?= e((string)$item['first_name']) ?></span>
+                        <span class="mkt-tag">From <?= e((string)$item['first_name']) ?><?= !empty($item['unit_number']) ? ' · Unit ' . e((string)$item['unit_number']) : '' ?></span>
+                    <?php endif; ?>
+                    <?php if (!empty($item['phone'])): ?>
+                        <span class="mkt-tag">📞 <?= e((string)$item['phone']) ?></span>
                     <?php endif; ?>
                 </div>
             </div>
