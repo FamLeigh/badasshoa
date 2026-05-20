@@ -196,7 +196,7 @@ $showMine   = isset($_GET['mine']);
 $showSold   = isset($_GET['sold']);
 if ($catFilter !== '' && !array_key_exists($catFilter, $CATEGORIES)) $catFilter = '';
 
-$sql    = 'SELECT l.*, u.first_name, u.last_name, u.email FROM marketplace_listings l
+$sql    = 'SELECT l.*, u.first_name, u.last_name, u.email, u.phone, u.unit_number FROM marketplace_listings l
            JOIN users u ON u.id = l.seller_user_id
            WHERE l.association_id = ?';
 $params = [$assocId];
@@ -221,7 +221,7 @@ $listings = $stmt->fetchAll();
 // ── edit preload ───────────────────────────────────────────────────────────
 $editRow = null;
 if (isset($_GET['edit'])) {
-    $er = db()->prepare('SELECT l.*, u.first_name, u.last_name, u.email FROM marketplace_listings l JOIN users u ON u.id=l.seller_user_id WHERE l.id=? AND l.association_id=?');
+    $er = db()->prepare('SELECT l.*, u.first_name, u.last_name, u.email, u.phone, u.unit_number FROM marketplace_listings l JOIN users u ON u.id=l.seller_user_id WHERE l.id=? AND l.association_id=?');
     $er->execute([(int)$_GET['edit'], $assocId]);
     $row = $er->fetch();
     if ($row && ((int)$row['seller_user_id'] === $myUserId || $canBoard)) {
@@ -232,7 +232,7 @@ if (isset($_GET['edit'])) {
 // ── view preload ───────────────────────────────────────────────────────────
 $viewListing = null;
 if (isset($_GET['view'])) {
-    $vr = db()->prepare('SELECT l.*, u.first_name, u.last_name, u.email FROM marketplace_listings l JOIN users u ON u.id=l.seller_user_id WHERE l.id=? AND l.association_id=?');
+    $vr = db()->prepare('SELECT l.*, u.first_name, u.last_name, u.email, u.phone, u.unit_number FROM marketplace_listings l JOIN users u ON u.id=l.seller_user_id WHERE l.id=? AND l.association_id=?');
     $vr->execute([(int)$_GET['view'], $assocId]);
     $viewListing = $vr->fetch() ?: null;
 }
@@ -382,8 +382,13 @@ require __DIR__ . '/../includes/header.php';
         </div>
         <div style="font-size: var(--fs-sm); line-height: 1.6; white-space: pre-wrap;"><?= e((string)$vl['description']) ?></div>
         <div class="muted" style="font-size: var(--fs-sm);">
-            Posted by <?= e($vSeller) ?> &middot; <?= udate('M j, Y', strtotime((string)$vl['created_at'])) ?>
+            Posted by <?= e($vSeller) ?>
+            <?php if (!empty($vl['unit_number'])): ?>&middot; Unit <?= e($vl['unit_number']) ?><?php endif; ?>
+            &middot; <?= udate('M j, Y', strtotime((string)$vl['created_at'])) ?>
         </div>
+        <?php if (!empty($vl['phone'])): ?>
+        <div style="font-size: var(--fs-sm);">📞 <?= e($vl['phone']) ?></div>
+        <?php endif; ?>
 
         <!-- Disclaimer -->
         <div style="background: #fefce8; border: 1px solid #fde68a; border-radius: var(--r-md); padding: var(--sp-3) var(--sp-4); font-size: var(--fs-xs); line-height: 1.6; color: #78350f;">
@@ -528,8 +533,13 @@ require __DIR__ . '/../includes/header.php';
                     <?= price_display($l['price_cents']) ?>
                 </div>
                 <div class="muted" style="font-size: var(--fs-xs);">
-                    <?= e($sellerName) ?> &middot; <?= udate('M j', strtotime((string)$l['created_at'])) ?>
+                    <?= e($sellerName) ?>
+                    <?php if (!empty($l['unit_number'])): ?> &middot; Unit <?= e($l['unit_number']) ?><?php endif; ?>
+                    &middot; <?= udate('M j', strtotime((string)$l['created_at'])) ?>
                 </div>
+                <?php if (!empty($l['phone'])): ?>
+                <div class="muted" style="font-size: var(--fs-xs);"><?= e($l['phone']) ?></div>
+                <?php endif; ?>
             </div>
         </a>
         <!-- Owner quick actions (no delete — that lives in the detail view) -->
