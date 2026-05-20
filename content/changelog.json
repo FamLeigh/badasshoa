@@ -1,5 +1,23 @@
 [
     {
+        "id": "cl-20260520-board-notes",
+        "at": "2026-05-20T20:00:00-04:00",
+        "type": "feature",
+        "title": "Board notes — log calls, emails, and conversations per member or unit",
+        "description": "Board admins and managers can now log private notes on any unit or member. Notes are tagged by type (📞 Call, 📧 Email, 💬 Text, 🤝 In person, 📋 General), include a backdatable date field, and support full edit and delete. A 📋 icon with note count appears on each occupant row in the unit detail page and on every member row in the directory — click to open the notes log. Notes are never visible to residents.",
+        "author": "Reboooot",
+        "link": "/dashboard/directory.php"
+    },
+    {
+        "id": "cl-20260520-directory-polish",
+        "at": "2026-05-20T18:00:00-04:00",
+        "type": "improvement",
+        "title": "Directory: Owners / Renters split, 3-way member type, media thumbnails",
+        "description": "The directory nav label is now 'Owners / Renters' and the dashboard tile shows owner and renter counts as two separate numbers. The add/edit member form now has a 3-way Owner / Renter / Staff radio group instead of a checkbox. Media uploads now generate thumbnails (400×400 max) for faster grid loading. The audit log is now visible to board admins on the Settings page.",
+        "author": "Reboooot",
+        "link": "/dashboard/directory.php"
+    },
+    {
         "id": "cl-20260518-bellair-tenants",
         "at": "2026-05-18T23:00:00-04:00",
         "type": "improvement",

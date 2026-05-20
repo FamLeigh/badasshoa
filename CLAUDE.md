@@ -260,78 +260,72 @@ This file (CLAUDE.md) keeps an internal-only summary in the section below for cr
 
 ## Where we left off (resume here next session)
 
-**Last session ended:** 2026-05-18 (session 9) — **Admin sign-out fix, Samsung TV scroll memory, Bellair contact import.**
+**Last session ended:** 2026-05-20 (session 10) — **Board notes overhaul, media thumbnails, audit log viewer, tenant import, directory polish.**
 
 **What got built this session:**
 
-- **Admin sign-out** — Admin sidebar (`/admin/` layout) had no logout button because the topbar is only rendered for the dashboard layout. Added a Sign out link at the bottom of the admin sidebar (`includes/header.php`).
+- **Migration 069 (Bellair agent import)** — applied to prod. 8 rental agent contacts inserted, 14 units linked.
 
-- **Bellair contact import** — `migrations/067_bellair_contact_update.sql` applied to prod. Updated 29 email addresses (placeholder → real), corrected 2 misassigned emails (Wayne Proie unit 311, Kathleen Hamilton unit 407), corrected 2 phone numbers (Garvin digits, Miller area code), added 3 phone/phone2 for units that were NULL.
+- **Migration 070 (Bellair tenant import)** — 37 renters imported. Placeholder email format `r{unit}x{n}@noemail.bellair.com`. Email conflicts resolved: kallyp61 → unit 119 owner keeps it, unit 119 tenant gets placeholder; Kevmcamp42 → unit 704 (current resident) gets real email; Kortbanks → Kori Banks unit 521 keeps it, unit 214 gets placeholder.
 
-  **8 exceptions — kept original DB data, flagged for later review:**
-  1. Unit 105 Yueh Chen (id=9): DB `e_g_marshall@yahoo.com` / CSV `8693Chen@gmail.com`
-  2. Unit 114 Gordon Benson (id=22): DB `gbenson15@cfl.rr.com` / CSV `alkov80@gmail.com` (looks like Ilkov data-entry error)
-  3. Unit 204 Edward Sheckler (id=35): CSV shows "Edward Henry" / `khpbiz@yahoo.com` — possible ownership change
-  4. Unit 209 Eric Edelman (id=43): DB `ericedelman@gmail.com` / CSV `Joaneherrold@gmail.com` — CSV email doesn't match owner name
-  5. Unit 221 Ray Baxter (id=62): CSV shows "Ray & Debbie Ray/St. John" / `TDBaxteremail@gmail.com` — name mismatch vs DB
-  6. Unit 317 Henry Cory (id=87): DB `Henrydcory@gmail.com` / CSV `ashkcory@Yahoo.com`
-  7. Unit 409 VanEssendelft (id=106): CSV shows "Alexis Myles Bron Inc VMU REO" — possible corporate ownership change
-  8. Unit 506 Clint Davis (id=135): DB `Pncdavis@comcast.net` / CSV `dcrservices@aol.com`
+- **Directory nav rename** — "Directory" → "Owners / Renters" in sidebar.
 
-  Also: Henry Orszulak appears in units 419 (id=120) and 621 (id=186) — UNIQUE email constraint means only id=186 got `h.orszulak@comcast.net`; id=120 left as placeholder.
+- **Dashboard tile** — Members tile replaced with two-large-number Owners / Renters layout.
 
-- **Previous session (2026-05-14) — Legal reference, Lobby TV overhaul, events All-tab.**
+- **3-way member type radio** — replaced Owner/Renter checkbox with Owner / Renter / Staff radio group on add and edit forms.
 
-- **Legal Reference** — `dashboard/legal.php` (all logged-in members): FULLTEXT search + browse FL statutes filtered to the association's state. Filters for chapter / applies_to / category. 61 statutes have full text in-app with an expand button; 171 link to the official FL Legislature site. `admin/legal.php` (super admin): CSV import with upsert or full-replace per state. `migrations/058_statutes.sql`: shared statutes table with FULLTEXT index. 232 FL statutes imported from hoa_laws.csv. Balance-scale icon added to sidebar nav (Resources group).
+- **CSV import email suppression** — welcome email suppressed on CSV import (manual add only).
 
-- **Lobby TV (`tv.php`) — full overhaul:**
-  - Fixed trial-status bug (`status = 'active'` → `IN ('active','trial')`).
-  - Three-column layout: Announcements · Upcoming Events · Marketplace. Each column has a colored emoji header, item count, and per-column auto-scroll (55px/sec, staggered 800ms apart, 3s pause at top, 2.5s at bottom).
-  - Text sized for distance viewing: `clamp()` throughout, titles 1.1–1.6rem, event dates 1.7–2.6rem.
-  - Recurring events now expanded in PHP (was doing raw SQL SELECT — only showed one row). Handles daily/weekly/biweekly/monthly.
-  - Weather widget centered in header: Open-Meteo API, WMO emoji + °F temp + condition label, refreshes every 30 min. Falls back gracefully with no lat/lon.
-  - Logo max-height raised from 60px to 110px.
-  - TV URL: `https://badasshoa.com/tv.php?token=affaad783b77ff313ca3ca047c9f8a53ddd285e6c7787ad4`
+- **Media thumbnails** — `make_thumbnail()` in functions.php generates 400×400 max JPEG at 82q into `uploads/{aid}/media/thumbs/`. `file.php?type=media&thumb=1` serves thumb with original fallback. Grid uses thumbs.
 
-- **Events — All tab** — board admins now see Upcoming · Past · **All** tabs. All tab shows every event regardless of date with full Edit/Delete buttons. Fixes the "event saved with wrong date disappears into past with no way to retrieve it" class of problem. `expand_events()` in functions.php updated to accept `?bool $past` where `null` = no date filter.
+- **Audit log viewer** — Activity log accordion on `/dashboard/settings.php` (board_admin+), last 200 entries, client-side keyword filter.
 
-- **Minor:** contacts-print.php redundant "listed" copy fixed.
+- **Marketplace seller info** — unit number and phone shown on listing cards, detail view, and Lobby TV marketplace pills.
+
+- **Landing page** — amenities 3 columns, FAQs 2 columns.
+
+- **Board notes** — full feature:
+  - Migration 071: `board_notes` table (association_id, author_user_id, unit_id nullable, subject_user_id nullable, note_text, created_at).
+  - Migration 072: added `note_type` VARCHAR(20) default 'general' and `note_date` DATE nullable.
+  - Types: 📋 General, 📞 Call, 📧 Email, 💬 Text, 🤝 In person.
+  - Unit page: 📋 Notes button in unit header (with count badge); per-occupant 📋 icon+count in occupants table. Big inline Board Notes section removed.
+  - Directory: 📋 icon+count on every member row (board-visible only).
+  - `dashboard/board-note.php`: works with `?unit_id=X`, `?user_id=Y`, or both. Add / edit (inline) / delete on one page. Date field for backdating. Notes sorted by interaction date DESC.
 
 **Production state in DB:**
-- Migrations through **067** applied to `u535581001_badassHOA`
+- Migrations through **072** applied to `u535581001_badassHOA`
 - 232 FL statutes in the `statutes` table (chapters 718, 719, 720, 553)
-- 2 events: May Bingo (weekly, all, through May 28) + Memorial Day (May 25, all)
-- Email driver still `log` (paused — flip to `msmtp` in server config.php when Kevin says go)
+- 37 Bellair tenants imported (migration 070)
+- 8 rental agents + 14 unit links (migration 069)
+- Email driver: `msmtp` (live — flip back to `log` in server config.php if needed)
 
 **Logins:**
 - **Prod** super admin: `me@kevinleigh.com / bhoaK0m3r2.6`
-- Local MAMP DB is well behind prod. If reviving local dev, run migrations 014–058 in order.
+- Local MAMP DB is well behind prod. If reviving local dev, run migrations 014–072 in order.
 
 **Quick visual check (prod):**
 - Dashboard: https://badasshoa.com/dashboard/
-- Legal: https://badasshoa.com/dashboard/legal.php
+- Directory: https://badasshoa.com/dashboard/directory.php
+- Unit detail: https://badasshoa.com/dashboard/unit.php?id=1
+- Board notes: https://badasshoa.com/dashboard/board-note.php?unit_id=1
 - Lobby TV: https://badasshoa.com/tv.php?token=affaad783b77ff313ca3ca047c9f8a53ddd285e6c7787ad4
-- Admin Legal import: https://badasshoa.com/admin/legal.php
-- Events (All tab): https://badasshoa.com/dashboard/events.php?all=1
 
 **Known gotchas to not regress:**
 - `can_do()` calls `viewing_role()` — never revert to `$_SESSION['role']`.
-- TV recurring event expansion uses UTC DateTimeImmutable — consistent with the rest of the app (PDO pins connections to UTC).
-- `expand_events(?bool $past)`: null = all, false = upcoming, true = past. The new `?bool` signature is a backwards-compatible change (callers passing `false` still work).
-- Floor plan docs: many DB rows share one physical file. Deleting a floor plan doc from one unit breaks all other units pointing to the same file. Acceptable for now.
+- TV recurring event expansion uses UTC DateTimeImmutable — consistent with the rest of the app.
+- `expand_events(?bool $past)`: null = all, false = upcoming, true = past.
+- Floor plan docs: many DB rows share one physical file. Deleting from one unit breaks others. Acceptable for now.
 - Pool FAQ (id 8) still has `[VERIFY]` markers in the answer text.
 - First Bellair user form (temp parking pass) never test-filed.
+- Bellair contact exceptions (8 email mismatches flagged in session 9) still unresolved — kept original DB data pending Kevin's review.
 
 **Candidates for next session** (queued + roughly prioritized):
 1. **Board voting module** — board creates ballot with options + deadline; members cast one vote; results reveal after deadline. Tables: `votes` (id, association_id, title, description, options JSON, deadline, status) + `vote_responses` (vote_id, user_id, choice, cast_at). Page: `/dashboard/voting.php`.
-2. **Turn email back on** — flip prod `config.mail.driver` from `log` to `msmtp` (one-liner on server).
-3. **Per-association logo upload** — use in dashboard nav instead of text name.
-4. **Service animal registration form** — queued from a prior session; never shipped.
-5. **CSV resident import** for directory.
-6. **Newsletter signup** on the public landing.
-7. **Per-user TZ preference** — timestamps all UTC right now; add TZ field to user settings.
-8. **Rental agents as contacts** — `rental_agent` kind in association_contacts, FK on users, dropdown in directory renter form.
-9. **Lobby TV enhancements** — add a fourth panel or ticker for community rules / reminders; per-association configurable refresh interval in settings.
+2. **Per-association logo upload** — use in dashboard nav instead of text name.
+3. **CSV resident import** for directory.
+4. **Newsletter signup** on the public landing.
+5. **Per-user TZ preference** — timestamps all UTC right now; add TZ field to user settings.
+6. **Lobby TV enhancements** — fourth panel or ticker for community rules; per-association configurable refresh interval.
 
 **Big-ticket comms / outreach features (queued — likely a Phase 3 batch):**
 
