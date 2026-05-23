@@ -907,6 +907,9 @@ require __DIR__ . '/../includes/header.php';
                     <?php $viewUrl = !empty($r['file_path']) ? '/dashboard/file.php?type=document&id=' . (int)$r['id'] : '/dashboard/document.php?id=' . (int)$r['id']; ?>
                     <?php if (empty($r['archived_at'])): ?>
                         <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="<?= e($viewUrl) ?>" <?= !empty($r['file_path']) ? 'target="_blank" rel="noopener"' : '' ?>>View</a>
+                        <?php if (!empty($r['file_path']) && ($r['file_type'] ?? '') === 'application/pdf'): ?>
+                            <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="/dashboard/sign-pdf.php?doc_id=<?= (int)$r['id'] ?>">Sign</a>
+                        <?php endif; ?>
                     <?php endif; ?>
                     <?php if ($canManage): ?>
                         <?php if (empty($r['archived_at'])): ?>

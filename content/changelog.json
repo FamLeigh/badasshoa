@@ -1,5 +1,14 @@
 [
     {
+        "id": "cl-20260523-pdf-sign",
+        "at": "2026-05-23T22:00:00-04:00",
+        "type": "feature",
+        "title": "PDF signing — place your saved signature on any uploaded PDF",
+        "description": "Any member can now sign uploaded PDF documents directly in the portal. Click Sign on a PDF row to open the signing page: the full document renders via PDF.js, you pick a saved signature (or draw a new one), click to place it on any page, and the document is baked client-side by pdf-lib before being saved as a signed copy. Signed copies are stored separately so the original is never modified.",
+        "author": "Reboooot",
+        "link": "/dashboard/documents.php"
+    },
+    {
         "id": "cl-20260523-platform-messages",
         "at": "2026-05-23T20:00:00-04:00",
         "type": "feature",
