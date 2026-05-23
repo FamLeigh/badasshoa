@@ -123,8 +123,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'sign_pd
 
     if ($sigId) touch_user_signature((int)$user['id'], $sigId);
 
-    flash('success', '"' . e((string)$doc['title']) . '" signed and saved.');
-    redirect('/dashboard/documents.php');
+    flash('success', '"' . e((string)$doc['title']) . '" signed and saved. Your signature is on page ' . ($pageNum + 1) . '.');
+    redirect('/dashboard/document-audit.php?doc_id=' . $docId);
 }
 
 // Load user's saved signatures.

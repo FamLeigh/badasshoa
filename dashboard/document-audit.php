@@ -190,8 +190,8 @@ require __DIR__ . '/../includes/header.php';
 
                 <dt class="muted">Signed file</dt>
                 <dd style="margin:0;">
-                    <a href="/dashboard/signed-doc.php?id=<?= (int)$ev['id'] ?>"
-                       target="_blank" rel="noopener" style="font-size:var(--fs-xs);">Download signed copy</a>
+                    <a href="/dashboard/signed-doc.php?id=<?= (int)$ev['id'] ?>#page=<?= (int)$ev['page_num'] + 1 ?>"
+                       target="_blank" rel="noopener" style="font-size:var(--fs-xs);">View signed copy (page <?= (int)$ev['page_num'] + 1 ?>)</a>
                 </dd>
             </dl>
         </div>

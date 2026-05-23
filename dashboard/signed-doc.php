@@ -41,9 +41,11 @@ $abs = storage_path((string)$row['signed_file_path']);
 if (!is_file($abs)) { http_response_code(404); die('File missing'); }
 
 $safeName = preg_replace('/[^A-Za-z0-9._-]/', '_', (string)$row['title']) . '_signed.pdf';
+$pageNum  = (int)($row['page_num'] ?? 0);   // 0-indexed; pass as PDF fragment so browser opens to that page
 
 header('Content-Type: application/pdf');
-header('Content-Disposition: attachment; filename="' . $safeName . '"');
+// inline so the browser PDF viewer opens directly; user can also save from there
+header('Content-Disposition: inline; filename="' . $safeName . '"');
 header('Content-Length: ' . filesize($abs));
 header('X-Content-Type-Options: nosniff');
 header('Cache-Control: private, no-store');
