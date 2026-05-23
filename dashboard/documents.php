@@ -270,11 +270,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'upload'
                 ]);
                 $newId = (int)db()->lastInsertId();
                 audit('document.uploaded', ['title' => $title, 'access' => $access, 'unit_id' => $unitId, 'user_id' => $memberId], $newId, 'document');
+
+                // Insert required signers if specified.
+                $reqSigners = array_filter(array_map('intval', (array)($_POST['required_signers'] ?? [])));
+                if ($reqSigners) {
+                    $rsStmt = db()->prepare(
+                        'INSERT IGNORE INTO document_signature_requests (association_id, document_id, user_id) VALUES (?,?,?)'
+                    );
+                    foreach ($reqSigners as $rsUid) {
+                        $vc = db()->prepare('SELECT 1 FROM users WHERE id = ? AND association_id = ?');
+                        $vc->execute([$rsUid, $assocId]);
+                        if ($vc->fetchColumn()) $rsStmt->execute([$assocId, $newId, $rsUid]);
+                    }
+                }
+
                 flash('success', "Uploaded \"$title\".");
                 redirect($unitId ? '/dashboard/unit.php?id=' . $unitId : '/dashboard/documents.php');
             }
         }
     }
+}
+
+// --- Required signer: add ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'signer_add') {
+    csrf_check();
+    if (!$canManage) { http_response_code(403); die('Forbidden'); }
+    $did = (int)($_POST['doc_id'] ?? 0);
+    $uid = (int)($_POST['user_id'] ?? 0);
+    if ($did && $uid) {
+        $cv = db()->prepare('SELECT 1 FROM documents WHERE id = ? AND association_id = ?');
+        $cv->execute([$did, $assocId]);
+        $uv = db()->prepare('SELECT 1 FROM users WHERE id = ? AND association_id = ?');
+        $uv->execute([$uid, $assocId]);
+        if ($cv->fetchColumn() && $uv->fetchColumn()) {
+            try {
+                db()->prepare(
+                    'INSERT IGNORE INTO document_signature_requests (association_id, document_id, user_id) VALUES (?,?,?)'
+                )->execute([$assocId, $did, $uid]);
+            } catch (PDOException $e) { /* duplicate — ignore */ }
+        }
+    }
+    redirect('/dashboard/documents.php?action=edit&id=' . $did);
+}
+
+// --- Required signer: remove ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'signer_remove') {
+    csrf_check();
+    if (!$canManage) { http_response_code(403); die('Forbidden'); }
+    $did = (int)($_POST['doc_id'] ?? 0);
+    $uid = (int)($_POST['user_id'] ?? 0);
+    if ($did && $uid) {
+        db()->prepare(
+            'DELETE FROM document_signature_requests WHERE document_id = ? AND user_id = ? AND fulfilled_at IS NULL'
+        )->execute([$did, $uid]);
+    }
+    redirect('/dashboard/documents.php?action=edit&id=' . $did);
 }
 
 // --- Archive / unarchive ---
@@ -425,6 +475,46 @@ if ($canManage) {
 }
 
 $preselectUserId = (int)($_GET['user_id'] ?? 0);
+
+// Pending signature requests for the current user (any role).
+$myPendingStmt = db()->prepare(
+    'SELECT document_id FROM document_signature_requests WHERE association_id = ? AND user_id = ? AND fulfilled_at IS NULL'
+);
+$myPendingStmt->execute([$assocId, (int)$user['id']]);
+$myPending = array_flip(array_column($myPendingStmt->fetchAll(), 'document_id'));
+
+// Aggregate sig counts per document (managers see full counts, others see 0).
+$sigCounts = [];
+if ($canManage) {
+    $scStmt = db()->prepare(
+        'SELECT document_id,
+                COUNT(*) AS req_count,
+                SUM(fulfilled_at IS NOT NULL) AS done_count
+           FROM document_signature_requests
+          WHERE association_id = ?
+          GROUP BY document_id'
+    );
+    $scStmt->execute([$assocId]);
+    foreach ($scStmt->fetchAll() as $sc) {
+        $sigCounts[(int)$sc['document_id']] = $sc;
+    }
+}
+
+// Current required signers for the edit-doc panel (populated only when editing).
+$editDocSigners = [];
+if (isset($editDoc) && $editDoc && $canManage) {
+    $eSt = db()->prepare(
+        'SELECT r.user_id, r.fulfilled_at,
+                CONCAT(u.first_name, " ", u.last_name) AS signer_name, u.email
+           FROM document_signature_requests r
+           JOIN users u ON u.id = r.user_id
+          WHERE r.document_id = ?
+          ORDER BY r.created_at'
+    );
+    $eSt->execute([(int)$editDoc['id']]);
+    $editDocSigners = $eSt->fetchAll();
+}
+
 $page_title = 'Documents — ' . $association['name'];
 require __DIR__ . '/../includes/header.php';
 ?>
@@ -598,6 +688,73 @@ require __DIR__ . '/../includes/header.php';
                 </div>
             </div>
         </form>
+
+        <?php if ($editDoc && $editDoc['file_type'] === 'application/pdf'): ?>
+        <div class="card card--padded" style="margin-top: var(--sp-4); border-top: 2px solid var(--color-border);">
+            <h4 style="font-size: var(--fs-base); margin: 0 0 var(--sp-3);">Required signers</h4>
+
+            <?php if ($editDocSigners): ?>
+            <table class="table" style="margin-bottom: var(--sp-3);">
+                <thead><tr><th>Name</th><th>Email</th><th>Status</th><th></th></tr></thead>
+                <tbody>
+                <?php foreach ($editDocSigners as $es): ?>
+                <tr>
+                    <td><?= e((string)$es['signer_name']) ?></td>
+                    <td style="font-size:var(--fs-xs);"><?= e((string)$es['email']) ?></td>
+                    <td>
+                        <?php if ($es['fulfilled_at']): ?>
+                            <span class="badge badge--success">Signed <?= e(udate('M j', strtotime((string)$es['fulfilled_at']))) ?></span>
+                        <?php else: ?>
+                            <span class="badge badge--warning">Pending</span>
+                        <?php endif; ?>
+                    </td>
+                    <td style="text-align:right;">
+                        <?php if (!$es['fulfilled_at']): ?>
+                        <form method="post" style="display:inline;">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="form"    value="signer_remove">
+                            <input type="hidden" name="doc_id"  value="<?= (int)$editDoc['id'] ?>">
+                            <input type="hidden" name="user_id" value="<?= (int)$es['user_id'] ?>">
+                            <button class="btn btn--ghost" type="submit"
+                                    style="padding:0.2rem 0.5rem; font-size:var(--fs-xs); color:var(--color-error);">Remove</button>
+                        </form>
+                        <?php endif; ?>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+            <?php else: ?>
+                <p class="muted" style="font-size:var(--fs-sm); margin-bottom:var(--sp-3);">No required signers set.</p>
+            <?php endif; ?>
+
+            <?php
+            $alreadyAssigned = array_column($editDocSigners, 'user_id');
+            $addableMembers  = array_filter($membersList, fn($m) => !in_array((int)$m['id'], $alreadyAssigned, true));
+            ?>
+            <?php if ($addableMembers): ?>
+            <form method="post" class="row" style="gap:var(--sp-2); align-items:flex-end; flex-wrap:wrap;">
+                <?= csrf_field() ?>
+                <input type="hidden" name="form"   value="signer_add">
+                <input type="hidden" name="doc_id" value="<?= (int)$editDoc['id'] ?>">
+                <div class="field" style="flex:1; min-width:160px; margin:0;">
+                    <label class="field__label" style="font-size:var(--fs-xs);">Add signer</label>
+                    <select class="select" name="user_id" required>
+                        <option value="">— pick a member —</option>
+                        <?php foreach ($addableMembers as $am):
+                            $nm = trim($am['first_name'] . ' ' . $am['last_name']);
+                            if ($nm === '') continue;
+                        ?>
+                            <option value="<?= (int)$am['id'] ?>"><?= e($nm) ?><?= !empty($am['unit_number']) ? ' · ' . e((string)$am['unit_number']) : '' ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <button class="btn btn--ghost" type="submit" style="padding:0.45rem 0.9rem; font-size:var(--fs-sm);">Add</button>
+            </form>
+            <?php endif; ?>
+        </div>
+        <?php endif; ?>
+
     </div>
     <?php endif; ?>
 
@@ -823,6 +980,20 @@ require __DIR__ . '/../includes/header.php';
                 <label class="field__label" for="description">Description (optional)</label>
                 <textarea class="textarea" id="description" name="description" rows="3"></textarea>
             </div>
+            <?php if ($membersList): ?>
+            <div class="field">
+                <label class="field__label" for="req-signers">Required signers <span class="muted" style="font-weight:400;">(optional)</span></label>
+                <select class="select" id="req-signers" name="required_signers[]" multiple size="4">
+                    <?php foreach ($membersList as $m_):
+                        $nm = trim($m_['first_name'] . ' ' . $m_['last_name']);
+                        if ($nm === '') continue;
+                    ?>
+                        <option value="<?= (int)$m_['id'] ?>"><?= e($nm) ?><?= !empty($m_['unit_number']) ? ' · ' . e((string)$m_['unit_number']) : '' ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <div class="field__hint">Hold Ctrl / Cmd to select multiple. Leave empty if no signatures are required — the Sign button only appears for required signers.</div>
+            </div>
+            <?php endif; ?>
             <div class="row" style="justify-content: flex-end;">
                 <a class="btn btn--ghost" href="/dashboard/documents.php">Cancel</a>
                 <button class="btn btn--primary" type="submit">Upload</button>
@@ -873,18 +1044,26 @@ require __DIR__ . '/../includes/header.php';
         </thead>
         <tbody>
         <?php foreach ($rows as $r):
-            $accessClass = match ($r['access_level']) {
+            $accessClass  = match ($r['access_level']) {
                 'board_only' => 'badge--navy',
                 'public'     => 'badge--success',
                 'unit_only'  => 'badge--orange',
                 default      => 'badge--info',
             };
+            $sigInfo      = $sigCounts[(int)$r['id']] ?? null;
+            $myPendingSig = isset($myPending[(int)$r['id']]);
+            $allSigned    = $sigInfo && (int)$sigInfo['done_count'] >= (int)$sigInfo['req_count'];
         ?>
             <tr<?= !empty($r['archived_at']) ? ' style="opacity:.6;"' : '' ?>>
                 <td>
                     <strong><?= e($r['title']) ?></strong>
                     <?php if (!empty($r['archived_at'])): ?>
                         <span class="badge" style="font-size: var(--fs-xs); margin-left: 4px;">archived</span>
+                    <?php endif; ?>
+                    <?php if ($sigInfo): ?>
+                        <span class="badge <?= $allSigned ? 'badge--success' : 'badge--warning' ?>" style="font-size: var(--fs-xs); margin-left: 4px;">
+                            <?= (int)$sigInfo['done_count'] ?>/<?= (int)$sigInfo['req_count'] ?> signed
+                        </span>
                     <?php endif; ?>
                     <?php if ($r['description']): ?>
                         <div class="muted rule-body-clamp" style="font-size: var(--fs-xs); white-space: pre-wrap; -webkit-line-clamp: 2;"><?= e((string)$r['description']) ?></div>
@@ -907,8 +1086,11 @@ require __DIR__ . '/../includes/header.php';
                     <?php $viewUrl = !empty($r['file_path']) ? '/dashboard/file.php?type=document&id=' . (int)$r['id'] : '/dashboard/document.php?id=' . (int)$r['id']; ?>
                     <?php if (empty($r['archived_at'])): ?>
                         <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="<?= e($viewUrl) ?>" <?= !empty($r['file_path']) ? 'target="_blank" rel="noopener"' : '' ?>>View</a>
-                        <?php if (!empty($r['file_path']) && ($r['file_type'] ?? '') === 'application/pdf'): ?>
+                        <?php if ($myPendingSig && !empty($r['file_path']) && ($r['file_type'] ?? '') === 'application/pdf'): ?>
                             <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="/dashboard/sign-pdf.php?doc_id=<?= (int)$r['id'] ?>">Sign</a>
+                        <?php endif; ?>
+                        <?php if ($canManage && $sigInfo): ?>
+                            <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="/dashboard/document-audit.php?doc_id=<?= (int)$r['id'] ?>">Audit</a>
                         <?php endif; ?>
                     <?php endif; ?>
                     <?php if ($canManage): ?>

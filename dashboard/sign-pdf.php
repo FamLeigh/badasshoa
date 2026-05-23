@@ -94,17 +94,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'sign_pd
         $sigImgPath = $sq->fetchColumn() ?: null;
     }
 
+    // Build tamper-evident event token: SHA-256 of (doc+user+time+random nonce).
+    $signToken = hash('sha256', $docId . ':' . $user['id'] . ':' . microtime(true) . ':' . bin2hex(random_bytes(16)));
+    $signerIp  = (string)($_SERVER['REMOTE_ADDR'] ?? '');
+    $signerAgent = mb_substr((string)($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 500);
+
     db()->prepare(
-        'INSERT INTO document_signatures (association_id, document_id, signer_user_id, signed_file_path, signature_image_path, page_num)
-         VALUES (?, ?, ?, ?, ?, ?)'
-    )->execute([$assocId, $docId, (int)$user['id'], $relPath, $sigImgPath, $pageNum]);
+        'INSERT INTO document_signatures
+             (association_id, document_id, signer_user_id, signed_file_path, signature_image_path, page_num, signer_ip, signer_agent, sign_token)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    )->execute([$assocId, $docId, (int)$user['id'], $relPath, $sigImgPath, $pageNum, $signerIp, $signerAgent, $signToken]);
     $recId = (int)db()->lastInsertId();
 
+    // Mark the signature request as fulfilled (if one exists for this user).
+    db()->prepare(
+        'UPDATE document_signature_requests
+            SET fulfilled_at = NOW(), fulfilled_sig_id = ?
+          WHERE document_id = ? AND user_id = ? AND fulfilled_at IS NULL'
+    )->execute([$recId, $docId, (int)$user['id']]);
+
     audit('document.signed', [
-        'doc_id'    => $docId,
-        'doc_title' => (string)$doc['title'],
-        'page'      => $pageNum,
-        'sig_id'    => $sigId ?: null,
+        'doc_id'     => $docId,
+        'doc_title'  => (string)$doc['title'],
+        'page'       => $pageNum,
+        'sig_id'     => $sigId ?: null,
+        'sign_token' => $signToken,
     ], $recId, 'document_signatures');
 
     if ($sigId) touch_user_signature((int)$user['id'], $sigId);
@@ -520,11 +534,87 @@ require __DIR__ . '/../includes/header.php';
         ov.style.top    = (cssY - cssH / 2) + 'px';
         ov.style.width  = cssW + 'px';
         ov.style.height = cssH + 'px';
+        ov.style.pointerEvents = 'none'; // set on wrapper, not here
 
         const img = document.createElement('img');
         img.src = activeSigUrl;
         ov.appendChild(img);
+
+        // Bottom-right resize handle
+        const handle = document.createElement('div');
+        handle.className = 'sig-resize-handle';
+        handle.style.cssText = [
+            'position:absolute', 'right:-6px', 'bottom:-6px',
+            'width:14px', 'height:14px',
+            'background:var(--color-primary)', 'border-radius:50%',
+            'cursor:se-resize', 'pointer-events:all',
+            'border:2px solid #fff', 'box-sizing:border-box',
+        ].join(';');
+        ov.appendChild(handle);
+        ov.style.pointerEvents = 'none'; // restore — handle is all
         pageData.wrapper.appendChild(ov);
+
+        // Make the overlay itself draggable
+        ov.style.cursor    = 'move';
+        ov.style.pointerEvents = 'all';
+        img.style.pointerEvents = 'none';
+
+        // Drag-to-move
+        (function setupDrag(el, pd) {
+            let dragging = false, startX, startY, startLeft, startTop;
+            el.addEventListener('mousedown', function (e) {
+                if (e.target === handle) return; // let resize handle own this
+                dragging = true;
+                startX = e.clientX; startY = e.clientY;
+                startLeft = parseFloat(el.style.left);
+                startTop  = parseFloat(el.style.top);
+                e.preventDefault();
+            });
+            window.addEventListener('mousemove', function (e) {
+                if (!dragging) return;
+                const dx = e.clientX - startX;
+                const dy = e.clientY - startY;
+                const newLeft = startLeft + dx;
+                const newTop  = startTop  + dy;
+                el.style.left = newLeft + 'px';
+                el.style.top  = newTop  + 'px';
+                // Keep placement.pdfX/Y in sync
+                const w = parseFloat(el.style.width);
+                const h = parseFloat(el.style.height);
+                const sx = pd.canvas.width  / pd.canvas.getBoundingClientRect().width;
+                const sy = pd.canvas.height / pd.canvas.getBoundingClientRect().height;
+                placement.pdfX = (newLeft * sx) / pd.viewport.scale;
+                placement.pdfY = pd.viewport.height / pd.viewport.scale
+                                 - ((newTop + h) * sy) / pd.viewport.scale;
+            });
+            window.addEventListener('mouseup', function () { dragging = false; });
+        })(ov, pageData);
+
+        // Drag-to-resize (bottom-right corner)
+        (function setupResize(el, pd) {
+            let resizing = false, startX, startY, startW, startH;
+            handle.addEventListener('mousedown', function (e) {
+                resizing = true;
+                startX = e.clientX; startY = e.clientY;
+                startW = parseFloat(el.style.width);
+                startH = parseFloat(el.style.height);
+                e.preventDefault();
+                e.stopPropagation();
+            });
+            window.addEventListener('mousemove', function (e) {
+                if (!resizing) return;
+                const newW = Math.max(40, startW + (e.clientX - startX));
+                const newH = Math.max(14, startH + (e.clientY - startY));
+                el.style.width  = newW + 'px';
+                el.style.height = newH + 'px';
+                // Keep placement.pdfW/H in sync
+                const sx = pd.canvas.width  / pd.canvas.getBoundingClientRect().width;
+                const sy = pd.canvas.height / pd.canvas.getBoundingClientRect().height;
+                placement.pdfW = (newW * sx) / pd.viewport.scale;
+                placement.pdfH = (newH * sy) / pd.viewport.scale;
+            });
+            window.addEventListener('mouseup', function () { resizing = false; });
+        })(ov, pageData);
 
         // Update info
         placementInfo.style.display = '';
