@@ -1280,4 +1280,41 @@ $nbItems = array_filter($agendaItems, fn($i) => in_array($i['category'], ['new_b
 
 </div><!-- /container -->
 
+<script>
+function moveItem(id, dir) {
+    var list = document.getElementById('agenda-list');
+    if (!list) return;
+    var items = Array.from(list.querySelectorAll('[data-item-id]'));
+    var idx = items.findIndex(function(el) { return +el.dataset.itemId === id; });
+    if (idx < 0) return;
+
+    // Skip over locked standard items (no move buttons) when looking for swap target.
+    var target = idx + dir;
+    while (target >= 0 && target < items.length) {
+        if (items[target].querySelector('button[onclick*="moveItem"]')) break;
+        target += dir;
+    }
+    if (target < 0 || target >= items.length) return;
+
+    // Swap in the DOM.
+    if (dir < 0) {
+        list.insertBefore(items[idx], items[target]);
+    } else {
+        list.insertBefore(items[target], items[idx]);
+    }
+
+    // Collect new ID order and POST to server.
+    var newOrder = Array.from(list.querySelectorAll('[data-item-id]'))
+        .map(function(el) { return +el.dataset.itemId; });
+    var idsDiv = document.getElementById('reorder-ids');
+    idsDiv.innerHTML = newOrder
+        .map(function(i) { return '<input type="hidden" name="order[]" value="' + i + '">'; })
+        .join('');
+
+    var fd = new FormData(document.getElementById('reorder-form'));
+    fetch(window.location.pathname + window.location.search, { method: 'POST', body: fd })
+        .catch(function() { location.reload(); });
+}
+</script>
+
 <?php require __DIR__ . '/../includes/footer.php'; ?>
