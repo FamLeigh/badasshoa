@@ -143,25 +143,9 @@ if ($page_layout === 'app' && isset($assocId) && function_exists('db')) {
 }
 
 // Platform messages pushed from the BadassHOA team to this association.
+// Platform messages are fetched and rendered inline on the dashboard (index.php),
+// not as a global banner here. Query happens in dashboard/index.php.
 $_platformMessages = [];
-if ($page_layout === 'app' && isset($assocId) && function_exists('db')) {
-    try {
-        $role = function_exists('viewing_role') ? (string)viewing_role() : (string)($_SESSION['role'] ?? '');
-        $isBoard = in_array($role, ['board_member','board_admin','super_admin','property_manager'], true);
-        $pmAud = $isBoard ? "AND audience IN ('all','board')" : "AND audience = 'all'";
-        $_pmStmt = db()->prepare(
-            "SELECT id, message FROM platform_messages
-              WHERE (association_id = ? OR association_id IS NULL)
-                AND active = 1
-                AND (expires_at IS NULL OR expires_at > NOW())
-                $pmAud
-              ORDER BY created_at DESC
-              LIMIT 5"
-        );
-        $_pmStmt->execute([$assocId]);
-        $_platformMessages = $_pmStmt->fetchAll();
-    } catch (Throwable $_) {}
-}
 ?><!doctype html>
 <html lang="en">
 <head>
@@ -189,11 +173,6 @@ if ($page_layout === 'app' && isset($assocId) && function_exists('db')) {
     .emergency-banner__body{font-size:13px;opacity:.9}
     .emergency-banner__link{flex-shrink:0;color:#fff;font-size:12px;font-weight:700;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.3);border-radius:4px;padding:5px 12px;text-decoration:none;white-space:nowrap;letter-spacing:.02em}
     .emergency-banner__link:hover{background:rgba(0,0,0,.4);text-decoration:none}
-    .platform-msg-banner{background:#0f1f3d;color:#fff;padding:10px 20px;font-size:13px;line-height:1.5}
-    .platform-msg-banner+.platform-msg-banner{border-top:1px solid rgba(255,255,255,.15)}
-    .platform-msg-banner__inner{max-width:1500px;margin:0 auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-    .platform-msg-banner__label{font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.08em;opacity:.65;white-space:nowrap;flex-shrink:0}
-    .platform-msg-banner__text{flex:1;min-width:0}
     </style>
     <?php if ($shellClass): ?>
     <!-- Pre-paint sidebar collapsed-state hint (avoids flash) -->
@@ -283,15 +262,6 @@ if ($_envProd && $_mailDriver === 'log' && ($_SESSION['role'] ?? '') === 'super_
             <?php endif; ?>
         </div>
         <a href="/dashboard/communications.php?type=emergency" class="emergency-banner__link">Full announcement →</a>
-    </div>
-</div>
-<?php endforeach; ?>
-
-<?php foreach ($_platformMessages as $_pm): ?>
-<div class="platform-msg-banner" role="status">
-    <div class="platform-msg-banner__inner">
-        <span class="platform-msg-banner__label">From BadassHOA</span>
-        <span class="platform-msg-banner__text"><?= e((string)$_pm['message']) ?></span>
     </div>
 </div>
 <?php endforeach; ?>

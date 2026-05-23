@@ -184,6 +184,30 @@ require __DIR__ . '/../includes/header.php';
             <div id="weather-desc" style="font-size: var(--fs-sm); color: var(--color-text-soft); margin-top: 2px; min-height: 1.3em;"></div>
         </div>
     </div>
+    <?php
+    // Platform messages from the BadassHOA team — shown inline on the dashboard only.
+    $role = function_exists('viewing_role') ? (string)viewing_role() : (string)($_SESSION['role'] ?? '');
+    $isBoard = in_array($role, ['board_member','board_admin','super_admin','property_manager'], true);
+    $pmAud = $isBoard ? "AND audience IN ('all','board')" : "AND audience = 'all'";
+    try {
+        $_pmStmt = db()->prepare(
+            "SELECT message FROM platform_messages
+              WHERE (association_id = ? OR association_id IS NULL)
+                AND active = 1
+                AND (expires_at IS NULL OR expires_at > NOW())
+                $pmAud
+              ORDER BY created_at DESC
+              LIMIT 5"
+        );
+        $_pmStmt->execute([$assocId]);
+        $_platformMsgs = $_pmStmt->fetchAll(PDO::FETCH_COLUMN);
+    } catch (Throwable $_) { $_platformMsgs = []; }
+    foreach ($_platformMsgs as $_pmText): ?>
+    <div style="background:#e8edf5; border-left:3px solid #0f1f3d; border-radius:var(--r-sm); padding: var(--sp-3) var(--sp-4); margin-top: var(--sp-4); font-size: var(--fs-sm); color: var(--color-text);">
+        <?= e($_pmText) ?>
+    </div>
+    <?php endforeach; ?>
+
     <script>
         // Greeting + live clock — both derived from the browser's local time
         // because the server is UTC-pinned (CLAUDE.md). Time refreshes every
