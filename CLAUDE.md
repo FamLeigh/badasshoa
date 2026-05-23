@@ -260,40 +260,26 @@ This file (CLAUDE.md) keeps an internal-only summary in the section below for cr
 
 ## Where we left off (resume here next session)
 
-**Last session ended:** 2026-05-20 (session 10) — **Board notes overhaul, media thumbnails, audit log viewer, tenant import, directory polish.**
+**Last session ended:** 2026-05-23 (session 11) — **Board meeting agenda builder, platform messages, invite email overhaul, free tier, directory last-login column.**
 
 **What got built this session:**
 
-- **Migration 069 (Bellair agent import)** — applied to prod. 8 rental agent contacts inserted, 14 units linked.
+- **Board meeting agenda builder** — `/dashboard/meetings.php` (list + create), `/dashboard/meeting-detail.php` (4-tab: Agenda / Resolutions / Notice / Minutes), `/dashboard/meeting-print.php` (print-only: Proof of Notice Affidavit per FL §718.112, Notice of Board Meeting with virtual platform info, numbered Agenda, Resolutions with per-member vote tallies). Migrations 076–078 (board_meetings, agenda_items, resolutions, resolution_votes).
 
-- **Migration 070 (Bellair tenant import)** — 37 renters imported. Placeholder email format `r{unit}x{n}@noemail.bellair.com`. Email conflicts resolved: kallyp61 → unit 119 owner keeps it, unit 119 tenant gets placeholder; Kevmcamp42 → unit 704 (current resident) gets real email; Kortbanks → Kori Banks unit 521 keeps it, unit 214 gets placeholder.
+- **Member invite flow** — `invite.php` (token-based password-set page for new members), migration 075 (invite_token / invite_sent_at / invite_expires_at on users table). `dashboard/send-invite.php` is the POST-only handler called from activity.php and directory.php.
 
-- **Directory nav rename** — "Directory" → "Owners / Renters" in sidebar.
+- **Invite email overhaul** — Full HTML/text multipart email with association logo, orange CTA button, portal bookmark link, 7-item feature list, sender sign-off (name/email/phone), and styled footer linking both the association portal and BadassHOA. `send_mail()` in functions.php now accepts optional `$html` parameter for multipart/alternative; existing callers unaffected.
 
-- **Dashboard tile** — Members tile replaced with two-large-number Owners / Renters layout.
+- **Platform messages** — Super admins push banners to association dashboards from `/admin/associations.php` edit view. Messages rendered as navy "From BadassHOA" banner in `includes/header.php` for all dashboard pages. Audience = all members or board-only roles. Optional expiry date. Migration 079 + POST handlers (add / toggle / delete) + header query + render.
 
-- **3-way member type radio** — replaced Owner/Renter checkbox with Owner / Renter / Staff radio group on add and edit forms.
+- **Free plan tier** — 'free' added to `associations.plan` ENUM (migration 080), plan dropdowns, and validation allowlists. No feature gating — plan is a label only right now.
 
-- **CSV import email suppression** — welcome email suppressed on CSV import (manual add only).
+- **Directory: last login column** — `last_login_at` shown per member row for canManage roles. "Never" in red + "invite sent" sub-note for real-email members who haven't logged in yet.
 
-- **Media thumbnails** — `make_thumbnail()` in functions.php generates 400×400 max JPEG at 82q into `uploads/{aid}/media/thumbs/`. `file.php?type=media&thumb=1` serves thumb with original fallback. Grid uses thumbs.
-
-- **Audit log viewer** — Activity log accordion on `/dashboard/settings.php` (board_admin+), last 200 entries, client-side keyword filter.
-
-- **Marketplace seller info** — unit number and phone shown on listing cards, detail view, and Lobby TV marketplace pills.
-
-- **Landing page** — amenities 3 columns, FAQs 2 columns.
-
-- **Board notes** — full feature:
-  - Migration 071: `board_notes` table (association_id, author_user_id, unit_id nullable, subject_user_id nullable, note_text, created_at).
-  - Migration 072: added `note_type` VARCHAR(20) default 'general' and `note_date` DATE nullable.
-  - Types: 📋 General, 📞 Call, 📧 Email, 💬 Text, 🤝 In person.
-  - Unit page: 📋 Notes button in unit header (with count badge); per-occupant 📋 icon+count in occupants table. Big inline Board Notes section removed.
-  - Directory: 📋 icon+count on every member row (board-visible only).
-  - `dashboard/board-note.php`: works with `?unit_id=X`, `?user_id=Y`, or both. Add / edit (inline) / delete on one page. Date field for backdating. Notes sorted by interaction date DESC.
+- **Minutes enhancements** — Migrations 073 (attendee_user_ids) and 074 (signin_sheet_path / signin_sheet_type).
 
 **Production state in DB:**
-- Migrations through **072** applied to `u535581001_badassHOA`
+- Migrations through **080** applied to `u535581001_badassHOA`
 - 232 FL statutes in the `statutes` table (chapters 718, 719, 720, 553)
 - 37 Bellair tenants imported (migration 070)
 - 8 rental agents + 14 unit links (migration 069)
@@ -301,13 +287,14 @@ This file (CLAUDE.md) keeps an internal-only summary in the section below for cr
 
 **Logins:**
 - **Prod** super admin: `me@kevinleigh.com / bhoaK0m3r2.6`
-- Local MAMP DB is well behind prod. If reviving local dev, run migrations 014–072 in order.
+- Local MAMP DB is well behind prod. If reviving local dev, run migrations 014–080 in order.
 
 **Quick visual check (prod):**
 - Dashboard: https://badasshoa.com/dashboard/
+- Meetings: https://badasshoa.com/dashboard/meetings.php
 - Directory: https://badasshoa.com/dashboard/directory.php
-- Unit detail: https://badasshoa.com/dashboard/unit.php?id=1
 - Board notes: https://badasshoa.com/dashboard/board-note.php?unit_id=1
+- Admin associations: https://badasshoa.com/admin/associations.php
 - Lobby TV: https://badasshoa.com/tv.php?token=affaad783b77ff313ca3ca047c9f8a53ddd285e6c7787ad4
 
 **Known gotchas to not regress:**
@@ -318,6 +305,7 @@ This file (CLAUDE.md) keeps an internal-only summary in the section below for cr
 - Pool FAQ (id 8) still has `[VERIFY]` markers in the answer text.
 - First Bellair user form (temp parking pass) never test-filed.
 - Bellair contact exceptions (8 email mismatches flagged in session 9) still unresolved — kept original DB data pending Kevin's review.
+- `send_mail()` signature changed to `(to, subject, body, html = '')` — the 4th param is optional, all existing callers pass only 3 args and are unaffected.
 
 **Candidates for next session** (queued + roughly prioritized):
 1. **Board voting module** — board creates ballot with options + deadline; members cast one vote; results reveal after deadline. Tables: `votes` (id, association_id, title, description, options JSON, deadline, status) + `vote_responses` (vote_id, user_id, choice, cast_at). Page: `/dashboard/voting.php`.
@@ -387,6 +375,14 @@ All four share a `broadcasts` table (kind / audience / subject / body / schedule
 ---
 
 ## Changelog
+
+- **2026-05-23 (session 11) — Board meetings, platform messages, invite email, free tier.**
+    - Board meeting agenda builder: `/dashboard/meetings.php` + `meeting-detail.php` + `meeting-print.php`. Agenda items proposed/approved, resolutions with per-member yes/no/abstain votes, print-ready FL §718.112 documents. Migrations 073–078.
+    - Invite email: full HTML multipart with association logo, CTA button, 7-item feature list, sender sign-off. `send_mail()` accepts optional `$html` 4th param.
+    - `invite.php` — token-based account-setup page for new members (migration 075).
+    - Directory: last login column per member row; "Never" badge for never-logged-in members.
+    - Platform messages: super admins push navy banners to association dashboards with audience/expiry. Migration 079.
+    - Free plan tier: added to ENUM, dropdowns, and validation. Migration 080.
 
 - **2026-05-14 (session 8) — Legal reference, Lobby TV overhaul, events All-tab.**
     - Legal Reference: new `dashboard/legal.php` for all members — FULLTEXT search + browse FL statutes by chapter/applies_to/category. In-app full-text expand for 61 sections; "Official site" button for the rest. `admin/legal.php` CSV import. 232 FL statutes live (ch. 718/719/720/553).

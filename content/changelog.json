@@ -1,5 +1,50 @@
 [
     {
+        "id": "cl-20260523-platform-messages",
+        "at": "2026-05-23T20:00:00-04:00",
+        "type": "feature",
+        "title": "Platform messages — BadassHOA team can push banners to association dashboards",
+        "description": "Super admins can now post messages directly to any association's dashboard from the admin panel. Messages appear as a navy banner labeled "From BadassHOA" at the top of every dashboard page. Each message can target all members or board-only roles, carry an optional expiry date, and be paused or deleted at any time.",
+        "author": "Reboooot",
+        "link": "/admin/associations.php"
+    },
+    {
+        "id": "cl-20260523-board-meetings",
+        "at": "2026-05-23T19:00:00-04:00",
+        "type": "feature",
+        "title": "Board meeting agenda builder — agendas, resolutions, notices, and proof of notice",
+        "description": "Board members and managers can now build and manage full board meeting agendas. Propose agenda items throughout the month, approve or table them, and attach resolutions with per-member yes/no/abstain votes. Print-ready outputs match Florida statute requirements: Proof of Notice Affidavit (§718.112), Notice of Board Meeting (with Zoom/Google Meet info), numbered Agenda, and a Resolution record with individual vote tallies.",
+        "author": "Reboooot",
+        "link": "/dashboard/meetings.php"
+    },
+    {
+        "id": "cl-20260523-invite-email",
+        "at": "2026-05-23T18:00:00-04:00",
+        "type": "improvement",
+        "title": "Member invite email — branded HTML, feature list, and sender sign-off",
+        "description": "Invite emails now send as full HTML with the association's logo, an orange CTA button, a portal bookmark link, and a 7-item feature list explaining what members can do once logged in. The sign-off shows the name, email, and phone of whoever sent the invite. The footer links both the association name and BadassHOA back to their respective portals.",
+        "author": "Reboooot",
+        "link": "/dashboard/directory.php"
+    },
+    {
+        "id": "cl-20260523-last-login-column",
+        "at": "2026-05-23T17:00:00-04:00",
+        "type": "improvement",
+        "title": "Directory: last login date visible per member row",
+        "description": "Board admins and managers can now see when each member last logged in directly from the directory. Members who have never logged in but have a real email on file show a red "Never" label alongside the invite button, making it easy to spot who still needs onboarding.",
+        "author": "Reboooot",
+        "link": "/dashboard/directory.php"
+    },
+    {
+        "id": "cl-20260523-free-plan",
+        "at": "2026-05-23T16:00:00-04:00",
+        "type": "improvement",
+        "title": "Free plan tier — super admins can grant free access to any association",
+        "description": "A new 'Free' tier is available in the association plan dropdown. Super admins can set any association to Free, giving them full access at no cost until the tier is changed.",
+        "author": "Reboooot",
+        "link": "/admin/associations.php"
+    },
+    {
         "id": "cl-20260520-board-notes",
         "at": "2026-05-20T20:00:00-04:00",
         "type": "feature",
