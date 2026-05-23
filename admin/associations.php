@@ -74,7 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'set_sta
     csrf_check();
     $aid = (int)($_POST['id'] ?? 0);
     $st  = $_POST['status'] ?? 'active';
-    if (in_array($st, ['active','inactive','trial'], true)) {
+    if (in_array($st, ['active','inactive','trial','gifted'], true)) {
         db()->prepare('UPDATE associations SET status = ? WHERE id = ?')->execute([$st, $aid]);
         audit('association.status_changed', ['status' => $st], $aid, 'association');
         flash('success', "Set association #$aid status to $st.");
@@ -105,8 +105,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'create_
     $color     = trim((string)($_POST['primary_color'] ?? '#0f1f3d'));
     $publicLanding = isset($_POST['public_landing_enabled']) ? 1 : 0;
 
-    if (!in_array($plan, ['free','starter','growth','professional','enterprise'], true)) $plan = 'starter';
-    if (!in_array($status, ['active','inactive','trial'], true))                        $status = 'trial';
+    if (!in_array($plan, ['starter','growth','professional','enterprise'], true))              $plan = 'starter';
+    if (!in_array($status, ['active','inactive','trial','gifted'], true))                     $status = 'trial';
     if (!preg_match('/^#[0-9a-f]{6}$/i', $color))                                      $color = '#0f1f3d';
     if (!preg_match('/^[A-Z]{2}$/', $country))                                         $country = 'US';
 
@@ -201,8 +201,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit_as
     $publicLanding = isset($_POST['public_landing_enabled']) ? 1 : 0;
     $paidGb    = max(0, (int)($_POST['storage_paid_extra_gb'] ?? 0));
 
-    if (!in_array($plan, ['free','starter','growth','professional','enterprise'], true)) $plan = 'starter';
-    if (!in_array($status, ['active','inactive','trial'], true))                        $status = 'trial';
+    if (!in_array($plan, ['starter','growth','professional','enterprise'], true))              $plan = 'starter';
+    if (!in_array($status, ['active','inactive','trial','gifted'], true))                     $status = 'trial';
     if (!preg_match('/^#[0-9a-f]{6}$/i', $color))                                      $color = '#0f1f3d';
     if (!preg_match('/^[A-Z]{2}$/', $country))                                         $country = 'US';
     // Slug normalize
@@ -435,7 +435,7 @@ require __DIR__ . '/../includes/header.php';
                         // Professional was dropped 2026-05-13. We still tolerate it as a legacy
                         // value (in_array allowlist below) so existing rows render, but new
                         // selections are limited to the current three tiers.
-                        $planOptions = ['free'=>'Free (gifted)','starter'=>'Starter','growth'=>'Growth','enterprise'=>'Enterprise'];
+                        $planOptions = ['starter'=>'Starter','growth'=>'Growth','enterprise'=>'Enterprise'];
                         if (isset($editAssoc['plan']) && $editAssoc['plan'] === 'professional') {
                             $planOptions['professional'] = 'Professional (legacy)';
                         }
@@ -549,7 +549,7 @@ require __DIR__ . '/../includes/header.php';
                         // Professional was dropped 2026-05-13. We still tolerate it as a legacy
                         // value (in_array allowlist below) so existing rows render, but new
                         // selections are limited to the current three tiers.
-                        $planOptions = ['free'=>'Free (gifted)','starter'=>'Starter','growth'=>'Growth','enterprise'=>'Enterprise'];
+                        $planOptions = ['starter'=>'Starter','growth'=>'Growth','enterprise'=>'Enterprise'];
                         if (isset($editAssoc['plan']) && $editAssoc['plan'] === 'professional') {
                             $planOptions['professional'] = 'Professional (legacy)';
                         }
@@ -561,7 +561,7 @@ require __DIR__ . '/../includes/header.php';
                 <div class="field">
                     <label class="field__label" for="ea-status">Status</label>
                     <select class="select" id="ea-status" name="status">
-                        <?php foreach (['active'=>'Active','trial'=>'Trial','inactive'=>'Inactive'] as $val=>$lbl): ?>
+                        <?php foreach (['active'=>'Active','trial'=>'Trial','inactive'=>'Inactive','gifted'=>'Gifted (free)'] as $val=>$lbl): ?>
                             <option value="<?= e($val) ?>" <?= $editAssoc['status']===$val?'selected':'' ?>><?= e($lbl) ?></option>
                         <?php endforeach; ?>
                     </select>
@@ -771,7 +771,12 @@ require __DIR__ . '/../includes/header.php';
                 <td><?= e((string)$a['plan']) ?></td>
                 <td>
                     <?php
-                    $cls = $a['status']==='active' ? 'badge--success' : ($a['status']==='trial' ? 'badge--warning' : 'badge--error');
+                    $cls = match((string)$a['status']) {
+                        'active'   => 'badge--success',
+                        'trial'    => 'badge--warning',
+                        'gifted'   => 'badge--info',
+                        default    => 'badge--error',
+                    };
                     ?>
                     <span class="badge <?= $cls ?>"><?= e((string)$a['status']) ?></span>
                 </td>
@@ -786,6 +791,7 @@ require __DIR__ . '/../includes/header.php';
                             <option value="active"   <?= $a['status']==='active'?'selected':'' ?>>active</option>
                             <option value="trial"    <?= $a['status']==='trial'?'selected':'' ?>>trial</option>
                             <option value="inactive" <?= $a['status']==='inactive'?'selected':'' ?>>inactive</option>
+                            <option value="gifted"   <?= $a['status']==='gifted'?'selected':'' ?>>gifted</option>
                         </select>
                     </form>
                 </td>

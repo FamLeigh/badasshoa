@@ -22,7 +22,7 @@ body {
     flex-direction: column;
 }
 
-main.page { flex: 1; }
+main.page { flex: 1; min-width: 0; overflow-x: hidden; }
 
 img, svg, video { max-width: 100%; display: block; }
 img { height: auto; }
