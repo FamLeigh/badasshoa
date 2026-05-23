@@ -72,6 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'create'
         [10,  'call_to_order',    'Call to order'],
         [20,  'proof_of_notice',  'Proof of Notice'],
         [30,  'certify_quorum',   'Certify a Quorum of Officers'],
+        [40,  'approve_minutes',  'Approve Minutes from Last Meeting'],
         [990, 'motion_to_adjourn','Motion to Adjourn'],
         [999, 'public_comments',  'Public Comments / Open Forum'],
     ];

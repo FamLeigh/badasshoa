@@ -109,8 +109,8 @@ $assocAddrFull = implode(', ', array_filter([$assocAddr, $assocCity]));
 if ($assocState || $assocZip) $assocAddrFull .= ', ' . trim("$assocState $assocZip");
 
 $MEETING_TYPES = ['regular'=>'Regular Meeting','special'=>'Special Meeting','annual'=>'Annual Meeting','executive'=>'Executive Session'];
-$CATEGORIES    = ['call_to_order'=>'Call to Order','proof_of_notice'=>'Proof of Notice','certify_quorum'=>'Certify a Quorum of Officers','officers_report'=>"Officers' Report",'old_business'=>'Old Business','new_business'=>'New Business','motion_to_adjourn'=>'Motion to Adjourn','public_comments'=>'Public Comments / Open Forum','custom'=>null];
-$STANDARD_CATS = ['call_to_order','proof_of_notice','certify_quorum','motion_to_adjourn','public_comments'];
+$CATEGORIES    = ['call_to_order'=>'Call to Order','proof_of_notice'=>'Proof of Notice','certify_quorum'=>'Certify a Quorum of Officers','approve_minutes'=>'Approve Minutes from Last Meeting','officers_report'=>"Officers' Report",'old_business'=>'Old Business','new_business'=>'New Business','motion_to_adjourn'=>'Motion to Adjourn','public_comments'=>'Public Comments / Open Forum','custom'=>null];
+$STANDARD_CATS = ['call_to_order','proof_of_notice','certify_quorum','approve_minutes','motion_to_adjourn','public_comments'];
 
 // Group agenda items: standard order, old_business group, new_business group.
 $groupedAgenda = [];

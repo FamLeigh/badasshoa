@@ -35,6 +35,7 @@ $CATEGORIES = [
     'call_to_order'    => 'Call to Order',
     'proof_of_notice'  => 'Proof of Notice',
     'certify_quorum'   => 'Certify Quorum',
+    'approve_minutes'  => 'Approve Minutes',
     'officers_report'  => "Officers' Report",
     'old_business'     => 'Old Business',
     'new_business'     => 'New Business',
@@ -42,7 +43,7 @@ $CATEGORIES = [
     'public_comments'  => 'Public Comments',
     'custom'           => 'Other',
 ];
-$STANDARD_CATS = ['call_to_order','proof_of_notice','certify_quorum','motion_to_adjourn','public_comments'];
+$STANDARD_CATS = ['call_to_order','proof_of_notice','certify_quorum','approve_minutes','motion_to_adjourn','public_comments'];
 $STATUS_LABELS = ['draft'=>'Draft','notice_posted'=>'Notice Posted','completed'=>'Completed','cancelled'=>'Cancelled'];
 
 // Board + management members for pickers.
