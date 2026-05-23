@@ -1076,8 +1076,9 @@ require __DIR__ . '/../includes/header.php';
             </div>
             <?php if ($membersList): ?>
             <div class="field">
-                <label class="field__label" for="req-signers">Required signers <span class="muted" style="font-weight:400;">(optional)</span></label>
-                <select class="select" id="req-signers" name="required_signers[]" multiple size="4">
+                <label class="field__label">Required signers <span class="muted" style="font-weight:400;">(optional)</span></label>
+                <!-- hidden multi-select — updated by JS, submitted with form -->
+                <select id="req-signers" name="required_signers[]" multiple style="display:none;">
                     <?php foreach ($membersList as $m_):
                         $nm = trim($m_['first_name'] . ' ' . $m_['last_name']);
                         if ($nm === '') continue;
@@ -1085,7 +1086,13 @@ require __DIR__ . '/../includes/header.php';
                         <option value="<?= (int)$m_['id'] ?>"><?= e($nm) ?><?= !empty($m_['unit_number']) ? ' · ' . e((string)$m_['unit_number']) : '' ?></option>
                     <?php endforeach; ?>
                 </select>
-                <div class="field__hint">Hold Ctrl / Cmd to select multiple. Leave empty if no signatures are required — the Sign button only appears for required signers.</div>
+                <div id="req-signers-widget" style="border:1px solid var(--color-border-strong); border-radius:var(--r-md); background:#fff; padding:6px 8px; min-height:42px; cursor:text;" onclick="document.getElementById('req-signers-input').focus()">
+                    <span id="req-signers-chips" style="display:inline;"></span>
+                    <input type="text" id="req-signers-input" autocomplete="off" placeholder="Type a name…"
+                           style="border:none; outline:none; font-size:var(--fs-md); background:transparent; width:140px; padding:2px 4px;">
+                </div>
+                <ul id="req-signers-list" style="display:none; position:absolute; background:#fff; border:1px solid var(--color-border); border-radius:var(--r-md); max-height:200px; overflow-y:auto; z-index:300; list-style:none; margin:2px 0 0; padding:4px 0; box-shadow:0 6px 18px rgba(0,0,0,.12); min-width:260px;"></ul>
+                <div class="field__hint">Type to search, click to add. Leave empty if no signatures required.</div>
             </div>
             <?php endif; ?>
             <div class="row" style="justify-content: flex-end;">
@@ -1233,10 +1240,95 @@ require __DIR__ . '/../includes/header.php';
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    // ── Single-select add-signer picker (edit page) ──────────────────────────
     var sel = document.getElementById('add-signer-picker');
     if (sel && typeof window.initSearchableSelect === 'function') {
         window.initSearchableSelect(sel);
     }
+
+    // ── Multi-select required signers (upload form) ──────────────────────────
+    var mSel    = document.getElementById('req-signers');
+    var widget  = document.getElementById('req-signers-widget');
+    var chips   = document.getElementById('req-signers-chips');
+    var inp     = document.getElementById('req-signers-input');
+    var list    = document.getElementById('req-signers-list');
+    if (!mSel || !widget || !chips || !inp || !list) return;
+
+    var allOpts = Array.from(mSel.options).map(function(o) {
+        return { value: o.value, label: o.text };
+    });
+    var selected = [];
+
+    function syncSelect() {
+        Array.from(mSel.options).forEach(function(o) {
+            o.selected = selected.some(function(s) { return s.value === o.value; });
+        });
+    }
+
+    function renderChips() {
+        chips.innerHTML = '';
+        selected.forEach(function(s) {
+            var chip = document.createElement('span');
+            chip.style.cssText = 'display:inline-flex;align-items:center;background:var(--color-navy,#0f1f3d);color:#fff;border-radius:4px;padding:2px 8px 2px 10px;font-size:var(--fs-sm);margin:2px 4px 2px 0;gap:4px;';
+            chip.textContent = s.label;
+            var x = document.createElement('button');
+            x.type = 'button';
+            x.textContent = '×';
+            x.style.cssText = 'background:none;border:none;color:#fff;cursor:pointer;padding:0 0 0 2px;font-size:1rem;line-height:1;';
+            x.addEventListener('click', function(e) {
+                e.stopPropagation();
+                selected = selected.filter(function(t) { return t.value !== s.value; });
+                renderChips();
+                syncSelect();
+                renderList(inp.value);
+            });
+            chip.appendChild(x);
+            chips.appendChild(chip);
+        });
+    }
+
+    function renderList(q) {
+        var q_lc = q.toLowerCase().trim();
+        var alreadyIds = selected.map(function(s) { return s.value; });
+        var filtered = allOpts.filter(function(o) {
+            return !alreadyIds.includes(o.value) && (!q_lc || o.label.toLowerCase().includes(q_lc));
+        });
+        list.innerHTML = '';
+        if (!filtered.length) { list.style.display = 'none'; return; }
+        filtered.forEach(function(o) {
+            var li = document.createElement('li');
+            li.textContent = o.label;
+            li.style.cssText = 'padding:7px 12px;cursor:pointer;font-size:var(--fs-sm);';
+            li.addEventListener('mouseenter', function() { li.style.background = 'var(--color-navy-10,#eef2ff)'; });
+            li.addEventListener('mouseleave', function() { li.style.background = ''; });
+            li.addEventListener('mousedown', function(e) {
+                e.preventDefault();
+                selected.push(o);
+                inp.value = '';
+                renderChips();
+                syncSelect();
+                renderList('');
+                inp.focus();
+            });
+            list.appendChild(li);
+        });
+        list.style.display = 'block';
+    }
+
+    inp.addEventListener('input', function() { renderList(this.value); });
+    inp.addEventListener('focus', function() { renderList(this.value); });
+    inp.addEventListener('blur',  function() { setTimeout(function() { list.style.display = 'none'; }, 150); });
+
+    // position the dropdown under the widget
+    inp.addEventListener('focus', function() {
+        var r = widget.getBoundingClientRect();
+        list.style.top  = (widget.offsetTop + widget.offsetHeight) + 'px';
+        list.style.left = widget.offsetLeft + 'px';
+    });
+
+    // keep list positioned alongside the widget in the DOM
+    widget.parentNode.style.position = 'relative';
+    widget.parentNode.appendChild(list);
 });
 </script>
 <?php require __DIR__ . '/../includes/footer.php'; ?>
