@@ -49,7 +49,7 @@ $STATUS_LABELS = ['draft'=>'Draft','notice_posted'=>'Notice Posted','completed'=
 // Board + management members for pickers.
 $boardStmt = db()->prepare(
     "SELECT id, first_name, last_name, board_office, role FROM users
-      WHERE association_id = ? AND role IN ('board_admin','board_member','property_manager') AND status <> 'inactive'
+      WHERE association_id = ? AND role IN ('board_admin','board_member') AND status <> 'inactive'
       ORDER BY FIELD(board_office,'president','vice_president','secretary','treasurer','secretary_treasurer','director') = 0,
                FIELD(board_office,'president','vice_president','secretary','treasurer','secretary_treasurer','director'),
                last_name, first_name"
@@ -201,7 +201,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             foreach ($boardMembers as $bm) {
                 $bmid = (int)$bm['id'];
                 $v = $_POST['vote_'.$bmid] ?? '';
-                if (in_array($v, ['yes','no','abstain'], true)) {
+                if (in_array($v, ['yes','no','abstain','not_present','na'], true)) {
                     $vStmt->execute([$rid,$bmid,$v,$uid]);
                 }
             }
@@ -243,7 +243,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             foreach ($boardMembers as $bm) {
                 $bmid = (int)$bm['id'];
                 $v = $_POST['vote_'.$bmid] ?? '';
-                if (in_array($v, ['yes','no','abstain'], true)) {
+                if (in_array($v, ['yes','no','abstain','not_present','na'], true)) {
                     $vStmt->execute([$rid,$bmid,$v,$uid]);
                 } else {
                     $dStmt->execute([$rid,$bmid]);
@@ -336,10 +336,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 function update_resolution_result(int $rid): void {
     $vs = db()->prepare('SELECT vote, COUNT(*) cnt FROM resolution_votes WHERE resolution_id=? GROUP BY vote');
     $vs->execute([$rid]);
-    $tally = ['yes'=>0,'no'=>0,'abstain'=>0];
+    $tally = ['yes'=>0,'no'=>0,'abstain'=>0,'not_present'=>0,'na'=>0];
     foreach ($vs->fetchAll() as $v) $tally[$v['vote']] = (int)$v['cnt'];
     $result = 'pending';
-    if ($tally['yes'] > 0 || $tally['no'] > 0 || $tally['abstain'] > 0) {
+    // Only yes/no count toward pass/fail; abstain, not_present, na are excluded from the majority.
+    if ($tally['yes'] > 0 || $tally['no'] > 0) {
         $result = $tally['yes'] > $tally['no'] ? 'passed' : 'failed';
     }
     db()->prepare('UPDATE resolutions SET result=? WHERE id=?')->execute([$result,$rid]);
@@ -440,10 +441,12 @@ function res_result_badge(string $r): string {
 }
 function vote_icon(string $v): string {
     return match($v) {
-        'yes'     => '<span style="color:var(--color-success,#16a34a);font-weight:700;">Yes</span>',
-        'no'      => '<span style="color:var(--color-error);font-weight:700;">No</span>',
-        'abstain' => '<span class="muted">Abstain</span>',
-        default   => '<span class="muted">—</span>',
+        'yes'         => '<span style="color:var(--color-success,#16a34a);font-weight:700;">Yes</span>',
+        'no'          => '<span style="color:var(--color-error);font-weight:700;">No</span>',
+        'abstain'     => '<span class="muted">Abstain</span>',
+        'not_present' => '<span class="muted">Not present</span>',
+        'na'          => '<span class="muted">N/A</span>',
+        default       => '<span class="muted">—</span>',
     };
 }
 function board_label(array $bm): string {
@@ -765,9 +768,10 @@ $nbItems = array_filter($agendaItems, fn($i) => in_array($i['category'], ['new_b
                    placeholder="e.g. Authorize elevator repair by Raymond Key Co. up to $6,000">
         </div>
         <div class="field">
-            <label class="field__label">Resolution text <span class="muted" style="font-weight:400;">(optional — printed on the resolution sheet)</span></label>
-            <textarea class="textarea" name="body_text" rows="3"
-                      placeholder="BE IT RESOLVED that the Board of Directors hereby authorizes…"></textarea>
+            <label class="field__label">Resolution clauses <span class="muted" style="font-weight:400;">(one clause per line — printed with "BE IT RESOLVED THAT" before each)</span></label>
+            <textarea class="textarea" name="body_text" rows="4"
+                      placeholder="the Board of Directors hereby authorizes Raymond Key Co. to perform elevator repairs up to $6,000&#10;the property manager is directed to obtain three bids before proceeding"></textarea>
+            <div class="field__hint">Each line becomes a numbered "BE IT RESOLVED THAT…" clause on the printed resolution.</div>
         </div>
         <?php if ($nbItems): ?>
         <div class="field">
@@ -812,13 +816,14 @@ $nbItems = array_filter($agendaItems, fn($i) => in_array($i['category'], ['new_b
                             <th style="padding:var(--sp-2) var(--sp-3);text-align:center;color:var(--color-error);">No</th>
                             <th style="padding:var(--sp-2) var(--sp-3);text-align:center;color:var(--color-text-muted);">Abstain</th>
                             <th style="padding:var(--sp-2) var(--sp-3);text-align:center;color:var(--color-text-muted);">Not present</th>
+                            <th style="padding:var(--sp-2) var(--sp-3);text-align:center;color:var(--color-text-muted);">N/A</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php foreach ($boardMembers as $bm): ?>
                         <tr style="border-top:1px solid var(--color-border);">
                             <td style="padding:var(--sp-2) var(--sp-3);"><?= e(board_label($bm)) ?></td>
-                            <?php foreach (['yes','no','abstain',''] as $vv): ?>
+                            <?php foreach (['yes','no','abstain','not_present','na',''] as $vv): ?>
                             <td style="text-align:center;padding:var(--sp-2);">
                                 <input type="radio" name="vote_<?= (int)$bm['id'] ?>"
                                        value="<?= $vv ?>" <?= $vv===''?'checked':'' ?>
@@ -850,10 +855,12 @@ $nbItems = array_filter($agendaItems, fn($i) => in_array($i['category'], ['new_b
 <div class="stack-md">
 <?php foreach ($resolutions as $ri => $res): ?>
 <?php
-$votes  = $allVotes[(int)$res['id']] ?? [];
-$yes    = count(array_filter($votes, fn($v) => $v === 'yes'));
-$no     = count(array_filter($votes, fn($v) => $v === 'no'));
-$abs    = count(array_filter($votes, fn($v) => $v === 'abstain'));
+$votes       = $allVotes[(int)$res['id']] ?? [];
+$yes         = count(array_filter($votes, fn($v) => $v === 'yes'));
+$no          = count(array_filter($votes, fn($v) => $v === 'no'));
+$abs         = count(array_filter($votes, fn($v) => $v === 'abstain'));
+$notPresent  = count(array_filter($votes, fn($v) => $v === 'not_present'));
+$na          = count(array_filter($votes, fn($v) => $v === 'na'));
 $isEdit = ($editResId === (int)$res['id']) && $canManage;
 $nbItems = array_filter($agendaItems, fn($i) => in_array($i['category'], ['new_business','old_business','custom'], true) && $i['status'] === 'approved');
 ?>
@@ -901,7 +908,7 @@ $nbItems = array_filter($agendaItems, fn($i) => in_array($i['category'], ['new_b
         <div>
             <span class="muted" style="font-size:var(--fs-xs);display:block;">TALLY</span>
             <span style="color:var(--color-success,#16a34a);font-weight:700;"><?= $yes ?></span>–<span style="color:var(--color-error);font-weight:700;"><?= $no ?></span>–<span class="muted"><?= $abs ?></span>
-            <span class="muted" style="font-size:var(--fs-xs);">(yes–no–abstain)</span>
+            <span class="muted" style="font-size:var(--fs-xs);">(yes–no–abstain<?= $notPresent ? ', '.$notPresent.' absent' : '' ?><?= $na ? ', '.$na.' N/A' : '' ?>)</span>
         </div>
         <?php endif; ?>
     </div>
@@ -928,8 +935,9 @@ $nbItems = array_filter($agendaItems, fn($i) => in_array($i['category'], ['new_b
             <input class="input" name="title" required maxlength="500" value="<?= e((string)$res['title']) ?>">
         </div>
         <div class="field">
-            <label class="field__label">Resolution text</label>
-            <textarea class="textarea" name="body_text" rows="3"><?= e((string)($res['body_text']??'')) ?></textarea>
+            <label class="field__label">Resolution clauses <span class="muted" style="font-weight:400;">(one clause per line)</span></label>
+            <textarea class="textarea" name="body_text" rows="4"><?= e((string)($res['body_text']??'')) ?></textarea>
+            <div class="field__hint">Each line prints as a numbered "BE IT RESOLVED THAT…" clause.</div>
         </div>
         <?php if ($nbItems): ?>
         <div class="field">
@@ -973,6 +981,7 @@ $nbItems = array_filter($agendaItems, fn($i) => in_array($i['category'], ['new_b
                             <th style="padding:var(--sp-2) var(--sp-3);text-align:center;color:var(--color-error);">No</th>
                             <th style="padding:var(--sp-2) var(--sp-3);text-align:center;color:var(--color-text-muted);">Abstain</th>
                             <th style="padding:var(--sp-2) var(--sp-3);text-align:center;color:var(--color-text-muted);">Not present</th>
+                            <th style="padding:var(--sp-2) var(--sp-3);text-align:center;color:var(--color-text-muted);">N/A</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -980,7 +989,7 @@ $nbItems = array_filter($agendaItems, fn($i) => in_array($i['category'], ['new_b
                         <?php $curVote = $votes[(int)$bm['id']] ?? ''; ?>
                         <tr style="border-top:1px solid var(--color-border);">
                             <td style="padding:var(--sp-2) var(--sp-3);"><?= e(board_label($bm)) ?></td>
-                            <?php foreach (['yes','no','abstain',''] as $vv): ?>
+                            <?php foreach (['yes','no','abstain','not_present','na',''] as $vv): ?>
                             <td style="text-align:center;padding:var(--sp-2);">
                                 <input type="radio" name="vote_<?= (int)$bm['id'] ?>"
                                        value="<?= $vv ?>" <?= $curVote===$vv?'checked':'' ?>

@@ -460,9 +460,15 @@ function render_resolutions(array $meeting, array $resolutions, array $allVotes,
     <?php foreach ($resolutions as $ri => $res): ?>
     <div class="resolution-block">
         <h3>Resolution <?= $ri + 1 ?>: <?= e((string)$res['title']) ?></h3>
-        <?php if (!empty($res['body_text'])): ?>
-            <p class="indent"><?= nl2br(e((string)$res['body_text'])) ?></p>
-        <?php endif; ?>
+        <?php
+        $clauses = array_values(array_filter(array_map('trim', explode("\n", (string)($res['body_text'] ?? '')))));
+        if ($clauses):
+            foreach ($clauses as $ci => $clause): ?>
+            <p class="indent">
+                <?php if (count($clauses) > 1): ?><strong><?= $ci + 1 ?>.</strong> <?php endif; ?>
+                <strong>BE IT RESOLVED THAT</strong> <?= e($clause) ?>
+            </p>
+        <?php endforeach; endif; ?>
         <p style="margin-top:8pt;">
             <strong>Moved by:</strong> <?= $res['mover_name'] ? e(trim((string)$res['mover_name']) . ($res['mover_office'] ? ', ' . e(board_office_label((string)$res['mover_office'])) : '')) : '___________________________' ?>
         </p>
@@ -472,11 +478,13 @@ function render_resolutions(array $meeting, array $resolutions, array $allVotes,
         <?php
         $votes = $allVotes[(int)$res['id']] ?? [];
         if ($votes):
-            $yes = 0; $no = 0; $abs = 0;
+            $yes = 0; $no = 0; $abs = 0; $notPres = 0; $na = 0;
             foreach ($votes as $v) {
                 if ($v['vote']==='yes') $yes++;
                 elseif ($v['vote']==='no') $no++;
-                else $abs++;
+                elseif ($v['vote']==='abstain') $abs++;
+                elseif ($v['vote']==='not_present') $notPres++;
+                else $na++;
             }
         ?>
         <div style="margin-top:6pt;"><strong>Vote:</strong></div>
@@ -485,12 +493,12 @@ function render_resolutions(array $meeting, array $resolutions, array $allVotes,
             <div class="vote-item">
                 <?= e(trim((string)$v['voter_name'])) ?>
                 <?php if (!empty($v['board_office'])): ?> (<?= e(board_office_label((string)$v['board_office'])) ?>)<?php endif; ?>
-                — <strong><?= strtoupper(e($v['vote'])) ?></strong>
+                — <strong><?= e(match($v['vote']) { 'yes'=>'YES','no'=>'NO','abstain'=>'ABSTAIN','not_present'=>'NOT PRESENT','na'=>'N/A',default=>strtoupper($v['vote']) }) ?></strong>
             </div>
             <?php endforeach; ?>
         </div>
         <p style="margin-top:6pt;">
-            <strong>Tally:</strong> <?= $yes ?> yes — <?= $no ?> no — <?= $abs ?> abstain
+            <strong>Tally:</strong> <?= $yes ?> yes — <?= $no ?> no — <?= $abs ?> abstain<?= $notPres ? ' — '.$notPres.' not present' : '' ?><?= $na ? ' — '.$na.' N/A' : '' ?>
         </p>
         <?php endif; ?>
         <?php
