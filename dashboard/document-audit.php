@@ -6,7 +6,6 @@ require __DIR__ . '/_bootstrap.php';
 require_login();
 
 $canManage = role_can_manage(viewing_role());
-if (!$canManage) { http_response_code(403); die('Access denied'); }
 
 $docId = (int)($_GET['doc_id'] ?? 0);
 if (!$docId) { http_response_code(400); die('doc_id required'); }
@@ -15,6 +14,15 @@ $stmt = db()->prepare('SELECT * FROM documents WHERE id = ? AND association_id =
 $stmt->execute([$docId, $assocId]);
 $doc = $stmt->fetch();
 if (!$doc) { http_response_code(404); die('Document not found'); }
+
+// Access: same rules as the underlying document.
+$access = (string)($doc['access_level'] ?? 'members_only');
+if ($access === 'board_only' && !$canManage) { http_response_code(403); die('Access denied'); }
+if ($access === 'unit_only' && !$canManage) {
+    $uc = db()->prepare('SELECT 1 FROM unit_occupants WHERE unit_id = ? AND user_id = ? LIMIT 1');
+    $uc->execute([(int)$doc['unit_id'], (int)current_user()['id']]);
+    if (!$uc->fetchColumn()) { http_response_code(403); die('Access denied'); }
+}
 
 // All signature requests for this document.
 $reqStmt = db()->prepare(
@@ -167,6 +175,7 @@ require __DIR__ . '/../includes/header.php';
                 <dt class="muted">Page signed</dt>
                 <dd style="margin:0;">Page <?= (int)$ev['page_num'] + 1 ?></dd>
 
+                <?php if ($canManage): ?>
                 <dt class="muted">IP address</dt>
                 <dd style="margin:0; font-family:monospace;"><?= e($ev['signer_ip'] ?: '—') ?></dd>
 
@@ -176,6 +185,7 @@ require __DIR__ . '/../includes/header.php';
                 <?php if (!empty($ev['sign_token'])): ?>
                 <dt class="muted">Event token</dt>
                 <dd style="margin:0; font-family:monospace; font-size:var(--fs-xs); word-break:break-all;"><?= e((string)$ev['sign_token']) ?></dd>
+                <?php endif; ?>
                 <?php endif; ?>
 
                 <dt class="muted">Signed file</dt>

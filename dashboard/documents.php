@@ -298,16 +298,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'signer_
     $did = (int)($_POST['doc_id'] ?? 0);
     $uid = (int)($_POST['user_id'] ?? 0);
     if ($did && $uid) {
+        // Verify doc belongs to this association.
         $cv = db()->prepare('SELECT 1 FROM documents WHERE id = ? AND association_id = ?');
         $cv->execute([$did, $assocId]);
-        $uv = db()->prepare('SELECT 1 FROM users WHERE id = ? AND association_id = ?');
-        $uv->execute([$uid, $assocId]);
+        // Verify user exists — no association_id check: super_admins may have a
+        // different association_id than the tenant they manage.
+        $uv = db()->prepare('SELECT 1 FROM users WHERE id = ?');
+        $uv->execute([$uid]);
         if ($cv->fetchColumn() && $uv->fetchColumn()) {
             try {
                 db()->prepare(
                     'INSERT IGNORE INTO document_signature_requests (association_id, document_id, user_id) VALUES (?,?,?)'
                 )->execute([$assocId, $did, $uid]);
+                flash('success', 'Signer added.');
             } catch (PDOException $e) { /* duplicate — ignore */ }
+        } else {
+            flash('error', 'Could not add signer — user or document not found.');
         }
     }
     redirect('/dashboard/documents.php?action=edit&id=' . $did);
@@ -527,6 +533,32 @@ if ($canManage) {
 }
 
 $preselectUserId = (int)($_GET['user_id'] ?? 0);
+
+// Ensure the logged-in user always appears in the required-signers dropdown, even
+// if they're a super_admin whose users.association_id differs from this tenant.
+if ($canManage) {
+    $inList = array_filter($membersList, fn($m) => (int)$m['id'] === (int)$user['id']);
+    if (!$inList) {
+        array_unshift($membersList, [
+            'id'          => $user['id'],
+            'first_name'  => $user['first_name'],
+            'last_name'   => $user['last_name'],
+            'unit_number' => '',
+        ]);
+    }
+}
+
+// Count of completed signing events per document (all users — drives the "signed copies" link).
+$sigEventCounts = [];
+try {
+    $seStmt = db()->prepare(
+        'SELECT document_id, COUNT(*) AS cnt FROM document_signatures WHERE association_id = ? GROUP BY document_id'
+    );
+    $seStmt->execute([$assocId]);
+    foreach ($seStmt->fetchAll() as $se) {
+        $sigEventCounts[(int)$se['document_id']] = (int)$se['cnt'];
+    }
+} catch (Throwable $e) { /* table may not exist on older installs */ }
 
 // Pending signature requests for the current user (any role).
 $myPendingStmt = db()->prepare(
@@ -1110,9 +1142,10 @@ require __DIR__ . '/../includes/header.php';
                 'unit_only'  => 'badge--orange',
                 default      => 'badge--info',
             };
-            $sigInfo      = $sigCounts[(int)$r['id']] ?? null;
-            $myPendingSig = isset($myPending[(int)$r['id']]);
-            $allSigned    = $sigInfo && (int)$sigInfo['done_count'] >= (int)$sigInfo['req_count'];
+            $sigInfo       = $sigCounts[(int)$r['id']] ?? null;
+            $myPendingSig  = isset($myPending[(int)$r['id']]);
+            $allSigned     = $sigInfo && (int)$sigInfo['done_count'] >= (int)$sigInfo['req_count'];
+            $sigEventCount = $sigEventCounts[(int)$r['id']] ?? 0;
         ?>
             <tr<?= !empty($r['archived_at']) ? ' style="opacity:.6;"' : '' ?>>
                 <td>
@@ -1124,6 +1157,13 @@ require __DIR__ . '/../includes/header.php';
                         <span class="badge <?= $allSigned ? 'badge--success' : 'badge--warning' ?>" style="font-size: var(--fs-xs); margin-left: 4px;">
                             <?= (int)$sigInfo['done_count'] ?>/<?= (int)$sigInfo['req_count'] ?> signed
                         </span>
+                    <?php endif; ?>
+                    <?php if ($sigEventCount && empty($r['archived_at'])): ?>
+                        <div style="font-size:var(--fs-xs); margin-top:2px;">
+                            <a href="/dashboard/document-audit.php?doc_id=<?= (int)$r['id'] ?>">
+                                <?= $sigEventCount ?> signed cop<?= $sigEventCount === 1 ? 'y' : 'ies' ?> →
+                            </a>
+                        </div>
                     <?php endif; ?>
                     <?php if ($r['description']): ?>
                         <div class="muted rule-body-clamp" style="font-size: var(--fs-xs); white-space: pre-wrap; -webkit-line-clamp: 2;"><?= e((string)$r['description']) ?></div>
@@ -1151,6 +1191,8 @@ require __DIR__ . '/../includes/header.php';
                         <?php endif; ?>
                         <?php if ($canManage && $sigInfo): ?>
                             <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="/dashboard/document-audit.php?doc_id=<?= (int)$r['id'] ?>">Audit</a>
+                        <?php elseif (!$canManage && $sigEventCount): ?>
+                            <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);" href="/dashboard/document-audit.php?doc_id=<?= (int)$r['id'] ?>">Signed</a>
                         <?php endif; ?>
                     <?php endif; ?>
                     <?php if ($canManage): ?>

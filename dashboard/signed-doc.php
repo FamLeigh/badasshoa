@@ -11,7 +11,7 @@ $user      = current_user();
 if (!$id) { http_response_code(400); die('id required'); }
 
 $stmt = db()->prepare(
-    'SELECT s.*, d.title
+    'SELECT s.*, d.title, d.access_level, d.unit_id
        FROM document_signatures s
        JOIN documents d ON d.id = s.document_id
       WHERE s.id = ? AND s.association_id = ?'
@@ -21,9 +21,20 @@ $row = $stmt->fetch();
 
 if (!$row) { http_response_code(404); die('Not found'); }
 
-// Authorize: the signer or a manager.
-if (!$canManage && (int)$row['signer_user_id'] !== (int)$user['id']) {
-    http_response_code(403); die('Access denied');
+// Authorize: respect the original document's access level.
+// Managers always pass. Others follow the same rules as file.php.
+if (!$canManage) {
+    $access = (string)($row['access_level'] ?? 'members_only');
+    if ($access === 'board_only') {
+        http_response_code(403); die('Access denied');
+    }
+    if ($access === 'unit_only') {
+        if (empty($row['unit_id'])) { http_response_code(403); die('Access denied'); }
+        $uc = db()->prepare('SELECT 1 FROM unit_occupants WHERE unit_id = ? AND user_id = ? LIMIT 1');
+        $uc->execute([(int)$row['unit_id'], (int)$user['id']]);
+        if (!$uc->fetchColumn()) { http_response_code(403); die('Access denied'); }
+    }
+    // public + members_only: any authenticated user passes.
 }
 
 $abs = storage_path((string)$row['signed_file_path']);
