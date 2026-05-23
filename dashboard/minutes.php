@@ -37,29 +37,93 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array(($_POST['form'] ?? ''), ['
     $bodyHtml    = trim((string)($_POST['body_html'] ?? ''));
     $attendees   = trim((string)($_POST['attendees'] ?? ''));
 
+    // Validate and store checked board member IDs — verify they belong to this association.
+    $rawIds = array_filter(array_map('intval', (array)($_POST['attendee_ids'] ?? [])));
+    $attendeeUserIds = '';
+    if ($rawIds) {
+        $ph    = implode(',', array_fill(0, count($rawIds), '?'));
+        $vStmt = db()->prepare("SELECT id FROM users WHERE id IN ($ph) AND association_id = ?");
+        $vStmt->execute(array_merge(array_values($rawIds), [$assocId]));
+        $validIds = $vStmt->fetchAll(PDO::FETCH_COLUMN);
+        // Preserve the submitted order so display matches the checkbox order.
+        $ordered = array_filter($rawIds, fn($id) => in_array($id, $validIds, false));
+        $attendeeUserIds = implode(',', $ordered);
+    }
+
+    // Sign-in sheet upload (optional; images + PDF only).
+    $signinPath = null;
+    $signinType = null;
+    $signinError = null;
+    try {
+        $uploaded = save_attachment($assocId, 'minutes/signin', 'signin_sheet');
+        if ($uploaded) {
+            $signinPath = $uploaded['file_path'];
+            $signinType = $uploaded['file_type'];
+        }
+    } catch (RuntimeException $e) {
+        $signinError = $e->getMessage();
+    }
+
     if (!array_key_exists($mtype, $MEETING_TYPES)) $mtype = 'regular';
     if ($meetingDate === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $meetingDate)) {
         $flashError = 'Meeting date is required.';
     } elseif ($title === '') {
         $flashError = 'Title is required.';
+    } elseif ($signinError) {
+        $flashError = 'Sign-in sheet: ' . $signinError;
     } else {
         if ($isEdit) {
-            $chk = db()->prepare('SELECT 1 FROM meeting_minutes WHERE id = ? AND association_id = ?');
+            $chk = db()->prepare('SELECT signin_sheet_path FROM meeting_minutes WHERE id = ? AND association_id = ?');
             $chk->execute([$mid, $assocId]);
-            if (!$chk->fetchColumn()) { http_response_code(404); die('Not found'); }
+            $existing = $chk->fetch();
+            if (!$existing) { http_response_code(404); die('Not found'); }
+
+            // Determine the final sheet path: new upload > explicit removal > keep existing.
+            $removeSheet = !empty($_POST['remove_signin_sheet']);
+            if ($signinPath) {
+                // New file uploaded — delete the old one if present.
+                if (!empty($existing['signin_sheet_path'])) {
+                    @unlink(storage_path($existing['signin_sheet_path']));
+                }
+                $finalPath = $signinPath;
+                $finalType = $signinType;
+            } elseif ($removeSheet) {
+                if (!empty($existing['signin_sheet_path'])) {
+                    @unlink(storage_path($existing['signin_sheet_path']));
+                }
+                $finalPath = null;
+                $finalType = null;
+            } else {
+                $finalPath = $existing['signin_sheet_path'] ?: null;
+                $finalType = null; // unchanged — leave DB value alone via COALESCE in query
+            }
+
             db()->prepare(
                 'UPDATE meeting_minutes
-                    SET meeting_date = ?, meeting_type = ?, title = ?, body_html = ?, attendees = ?
+                    SET meeting_date = ?, meeting_type = ?, title = ?, body_html = ?,
+                        attendees = ?, attendee_user_ids = ?,
+                        signin_sheet_path = ?, signin_sheet_type = COALESCE(?, signin_sheet_type)
                   WHERE id = ? AND association_id = ?'
-            )->execute([$meetingDate, $mtype, $title, $bodyHtml, $attendees ?: null, $mid, $assocId]);
+            )->execute([
+                $meetingDate, $mtype, $title, $bodyHtml,
+                $attendees ?: null, $attendeeUserIds ?: null,
+                $finalPath, $signinType,
+                $mid, $assocId,
+            ]);
             audit('minutes.edited', ['title' => $title], $mid, 'meeting_minutes');
             flash('success', 'Minutes updated.');
             redirect('/dashboard/minutes.php?id=' . $mid);
         } else {
             db()->prepare(
-                'INSERT INTO meeting_minutes (association_id, meeting_date, meeting_type, title, body_html, attendees, created_by)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)'
-            )->execute([$assocId, $meetingDate, $mtype, $title, $bodyHtml, $attendees ?: null, (int)$user['id']]);
+                'INSERT INTO meeting_minutes
+                    (association_id, meeting_date, meeting_type, title, body_html,
+                     attendees, attendee_user_ids, signin_sheet_path, signin_sheet_type, created_by)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            )->execute([
+                $assocId, $meetingDate, $mtype, $title, $bodyHtml,
+                $attendees ?: null, $attendeeUserIds ?: null,
+                $signinPath, $signinType, (int)$user['id'],
+            ]);
             $newId = (int)db()->lastInsertId();
             audit('minutes.created', ['title' => $title, 'date' => $meetingDate], $newId, 'meeting_minutes');
             flash('success', 'Minutes saved.');
@@ -117,6 +181,39 @@ if ($action === 'edit' && $detailId > 0 && $detail && $canManage) {
     $editRow = $detail;
 }
 
+// Board members for the attendance picker (always load; used on form + detail view).
+$boardMembersStmt = db()->prepare(
+    "SELECT id, first_name, last_name, board_office, role FROM users
+      WHERE association_id = ? AND role IN ('board_admin','board_member','property_manager') AND status <> 'inactive'
+      ORDER BY FIELD(board_office,'president','vice_president','secretary','treasurer','secretary_treasurer','director') = 0,
+               FIELD(board_office,'president','vice_president','secretary','treasurer','secretary_treasurer','director'),
+               last_name, first_name"
+);
+$boardMembersStmt->execute([$assocId]);
+$boardMembersForPicker = $boardMembersStmt->fetchAll();
+
+// Resolve stored attendee user IDs → user rows for the detail view.
+$resolvedAttendees = [];
+if ($detail && !empty($detail['attendee_user_ids'])) {
+    $storedIds = array_filter(array_map('intval', explode(',', (string)$detail['attendee_user_ids'])));
+    if ($storedIds) {
+        $ph    = implode(',', array_fill(0, count($storedIds), '?'));
+        $uStmt = db()->prepare("SELECT id, first_name, last_name, board_office FROM users WHERE id IN ($ph) AND association_id = ?");
+        $uStmt->execute(array_merge(array_values($storedIds), [$assocId]));
+        $uMap  = [];
+        foreach ($uStmt->fetchAll() as $u) { $uMap[(int)$u['id']] = $u; }
+        foreach ($storedIds as $uid) {
+            if (isset($uMap[$uid])) $resolvedAttendees[] = $uMap[$uid];
+        }
+    }
+}
+
+// Pre-selected IDs when editing.
+$checkedAttendeeIds = [];
+if ($editRow && !empty($editRow['attendee_user_ids'])) {
+    $checkedAttendeeIds = array_filter(array_map('intval', explode(',', (string)$editRow['attendee_user_ids'])));
+}
+
 $active     = 'minutes';
 $page_title = 'Meeting minutes — ' . $association['name'];
 
@@ -166,10 +263,38 @@ function mtype_badge(string $t): string {
         <?php endif; ?>
     </div>
 
-    <?php if (!empty($detail['attendees'])): ?>
+    <?php if ($resolvedAttendees || !empty($detail['attendees'])): ?>
     <div class="card card--padded" style="margin-bottom: var(--sp-4); border-left: 3px solid var(--color-info);">
-        <strong>In attendance:</strong>
-        <p style="margin: var(--sp-1) 0 0; white-space: pre-wrap;"><?= e((string)$detail['attendees']) ?></p>
+        <strong>In attendance</strong>
+        <?php if ($resolvedAttendees): ?>
+        <div style="display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-2);">
+            <?php foreach ($resolvedAttendees as $ra): ?>
+            <?php
+                $raName   = e(trim($ra['first_name'] . ' ' . $ra['last_name']));
+                $raOffice = board_office_label($ra['board_office'] ?? null);
+            ?>
+            <span style="display: inline-flex; align-items: center; gap: var(--sp-1); background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--r-sm); padding: 0.2rem 0.6rem; font-size: var(--fs-sm);">
+                <?= $raName ?>
+                <?php if ($raOffice): ?>
+                    <span class="muted" style="font-size: var(--fs-xs);"><?= e($raOffice) ?></span>
+                <?php endif; ?>
+            </span>
+            <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
+        <?php if (!empty($detail['attendees'])): ?>
+        <p style="margin: var(--sp-2) 0 0; white-space: pre-wrap; font-size: var(--fs-sm); color: var(--color-text-muted);"><?= e((string)$detail['attendees']) ?></p>
+        <?php endif; ?>
+    </div>
+    <?php endif; ?>
+
+    <?php if ($canManage && !empty($detail['signin_sheet_path'])): ?>
+    <div style="margin-bottom: var(--sp-4);">
+        <a href="/dashboard/file.php?type=minutes_signin&id=<?= (int)$detail['id'] ?>"
+           target="_blank" rel="noopener"
+           class="btn btn--ghost" style="font-size: var(--fs-sm);">
+            📄 View sign-in sheet
+        </a>
     </div>
     <?php endif; ?>
 
@@ -191,7 +316,7 @@ function mtype_badge(string $t): string {
 
     <?php if ($flashError): ?><div class="flash flash--error"><?= e($flashError) ?></div><?php endif; ?>
 
-    <form method="post" class="form card card--padded" id="minutes-form">
+    <form method="post" enctype="multipart/form-data" class="form card card--padded" id="minutes-form">
         <?= csrf_field() ?>
         <input type="hidden" name="form" value="<?= $editRow ? 'edit' : 'add' ?>">
         <?php if ($editRow): ?><input type="hidden" name="id" value="<?= (int)$editRow['id'] ?>"><?php endif; ?>
@@ -221,9 +346,55 @@ function mtype_badge(string $t): string {
         </div>
 
         <div class="field">
-            <label class="field__label" for="matt">In attendance <span class="muted" style="font-weight:400;">(optional — one name per line or comma-separated)</span></label>
-            <textarea class="textarea" id="matt" name="attendees" rows="3"
-                      placeholder="Kevin Leigh (President), Wayne Dictor (Treasurer)&#10;Mark Applegate (Property Manager)…"><?= e((string)($editRow['attendees'] ?? '')) ?></textarea>
+            <label class="field__label">Board &amp; management in attendance</label>
+            <?php if ($boardMembersForPicker): ?>
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--sp-2); border: 1px solid var(--color-border); border-radius: var(--r-md); padding: var(--sp-3); background: var(--color-bg);">
+                <?php foreach ($boardMembersForPicker as $bm): ?>
+                <?php
+                    $bmId      = (int)$bm['id'];
+                    $bmName    = trim($bm['first_name'] . ' ' . $bm['last_name']);
+                    $bmOffice  = board_office_label($bm['board_office'] ?? null) ?: role_label((string)$bm['role']);
+                    $bmChecked = in_array($bmId, $checkedAttendeeIds, true);
+                ?>
+                <label style="display: flex; align-items: center; gap: var(--sp-2); cursor: pointer; padding: var(--sp-1) 0;">
+                    <input type="checkbox" name="attendee_ids[]" value="<?= $bmId ?>"
+                           <?= $bmChecked ? 'checked' : '' ?>
+                           style="width: 16px; height: 16px; flex-shrink: 0; accent-color: var(--color-primary);">
+                    <span style="line-height: 1.3;">
+                        <?= e($bmName) ?>
+                        <?php if ($bmOffice): ?>
+                            <span class="muted" style="font-size: var(--fs-xs); display: block;"><?= e($bmOffice) ?></span>
+                        <?php endif; ?>
+                    </span>
+                </label>
+                <?php endforeach; ?>
+            </div>
+            <?php else: ?>
+            <p class="muted" style="font-size: var(--fs-sm);">No board members found for this association.</p>
+            <?php endif; ?>
+        </div>
+
+        <div class="field">
+            <label class="field__label" for="matt">Additional attendees <span class="muted" style="font-weight:400;">(guests, residents, attorneys, etc. — optional)</span></label>
+            <textarea class="textarea" id="matt" name="attendees" rows="2"
+                      placeholder="Mark Applegate (Property Manager), Jane Smith (HOA attorney)…"><?= e((string)($editRow['attendees'] ?? '')) ?></textarea>
+        </div>
+
+        <div class="field">
+            <label class="field__label" for="signin-sheet">Sign-in sheet <span class="muted" style="font-weight:400;">(PDF or image — board access only)</span></label>
+            <?php if ($editRow && !empty($editRow['signin_sheet_path'])): ?>
+            <div style="display: flex; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-2); padding: var(--sp-2) var(--sp-3); background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--r-sm); font-size: var(--fs-sm);">
+                <span>📄</span>
+                <a href="/dashboard/file.php?type=minutes_signin&id=<?= (int)$editRow['id'] ?>" target="_blank" rel="noopener" style="color: var(--color-primary);">Current sign-in sheet</a>
+                <label style="margin-left: auto; display: flex; align-items: center; gap: var(--sp-1); cursor: pointer; color: var(--color-error); font-size: var(--fs-xs);">
+                    <input type="checkbox" name="remove_signin_sheet" value="1" style="accent-color: var(--color-error);"> Remove
+                </label>
+            </div>
+            <div class="field__hint" style="margin-bottom: var(--sp-1);">Upload a new file to replace it, or check "Remove" to delete it.</div>
+            <?php endif; ?>
+            <input class="input" type="file" id="signin-sheet" name="signin_sheet"
+                   accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,image/*,application/pdf"
+                   style="padding: var(--sp-1) var(--sp-2);">
         </div>
 
         <div class="field">
@@ -311,7 +482,17 @@ function mtype_badge(string $t): string {
                 </div>
                 <div class="muted" style="font-size: var(--fs-sm);">
                     <?= e(udate('l, F j, Y', strtotime((string)$row['meeting_date']))) ?>
-                    <?php if (!empty($row['attendees'])): ?>
+                    <?php
+                    $listBoardCount = !empty($row['attendee_user_ids'])
+                        ? count(array_filter(explode(',', (string)$row['attendee_user_ids'])))
+                        : 0;
+                    ?>
+                    <?php if ($listBoardCount): ?>
+                        · <?= $listBoardCount ?> board member<?= $listBoardCount !== 1 ? 's' : '' ?> in attendance
+                        <?php if (!empty($row['attendees'])): ?>
+                            + guests
+                        <?php endif; ?>
+                    <?php elseif (!empty($row['attendees'])): ?>
                         · <?= e(mb_strimwidth((string)$row['attendees'], 0, 80, '…')) ?>
                     <?php endif; ?>
                 </div>

@@ -71,6 +71,15 @@ if ($type === 'document') {
         }
         // If thumb doesn't exist yet, falls through and serves the original
     }
+} elseif ($type === 'minutes_signin') {
+    if (!role_can_manage(viewing_role())) { http_response_code(403); die('Forbidden'); }
+    $stmt = db()->prepare('SELECT * FROM meeting_minutes WHERE id = ? AND association_id = ?');
+    $stmt->execute([$id, $assocId]);
+    $row = $stmt->fetch();
+    if (!$row || empty($row['signin_sheet_path'])) { http_response_code(404); die('Not found'); }
+    $relative = $row['signin_sheet_path'];
+    $filename = 'signin-sheet-' . $id . '.' . pathinfo($relative, PATHINFO_EXTENSION);
+    $type_h   = $row['signin_sheet_type'] ?: 'application/octet-stream';
 } else {
     http_response_code(400); die('Bad request');
 }

@@ -31,6 +31,7 @@ function nav_icon(string $name): string
         case 'minutes':        return "<svg $base><path d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'/><polyline points='14 2 14 8 20 8'/><line x1='16' y1='13' x2='8' y2='13'/><line x1='16' y1='17' x2='8' y2='17'/><line x1='10' y1='9' x2='8' y2='9'/></svg>";
         case 'permissions':    return "<svg $base><rect x='3' y='11' width='18' height='11' rx='2' ry='2'/><path d='M7 11V7a5 5 0 0 1 10 0v4'/></svg>";
         case 'voting':         return "<svg $base><circle cx='12' cy='12' r='10'/><polyline points='8 12 11 15 16 9'/></svg>";
+        case 'meetings':       return "<svg $base><rect x='3' y='4' width='18' height='18' rx='2' ry='2'/><line x1='16' y1='2' x2='16' y2='6'/><line x1='8' y1='2' x2='8' y2='6'/><line x1='3' y1='10' x2='21' y2='10'/><line x1='8' y1='14' x2='8.01' y2='14'/><line x1='12' y1='14' x2='12.01' y2='14'/><line x1='16' y1='14' x2='16.01' y2='14'/><line x1='8' y1='18' x2='8.01' y2='18'/><line x1='12' y1='18' x2='12.01' y2='18'/></svg>";
         case 'marketplace':    return "<svg $base><path d='M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2 5h12M10 18a1 1 0 1 1-2 0 1 1 0 0 1 2 0zm7 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0z'/></svg>";
         case 'legal':          return "<svg $base><line x1='12' y1='3' x2='12' y2='21'/><polyline points='3 6 12 3 21 6'/><path d='M6 6L3 12a3 3 0 0 0 6 0'/><path d='M18 6l-3 6a3 3 0 0 0 6 0'/><line x1='3' y1='20' x2='21' y2='20'/></svg>";
         case 'contacts':       return "<svg $base><path d='M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z'/></svg>";
@@ -64,6 +65,9 @@ function active_nav_key(): string
         '/dashboard/violations.php'     => 'violations',
         '/dashboard/minutes.php'        => 'minutes',
         '/dashboard/voting.php'         => 'voting',
+        '/dashboard/meetings.php'       => 'meetings',
+        '/dashboard/meeting-detail.php' => 'meetings',
+        '/dashboard/meeting-print.php'  => 'meetings',
         '/dashboard/marketplace.php'    => 'marketplace',
         '/dashboard/legal.php'          => 'legal',
         '/admin/legal.php'              => 'legal',
@@ -101,7 +105,7 @@ $_groupForActive = [
     'documents' => 'resources', 'forms' => 'resources', 'rules' => 'resources',
     'minutes' => 'resources', 'media' => 'resources', 'directory' => 'resources', 'contacts' => 'resources', 'legal' => 'resources',
     'committees' => 'governance', 'concerns' => 'governance', 'arc' => 'governance',
-    'violations' => 'governance', 'work-orders' => 'governance', 'voting' => 'governance',
+    'violations' => 'governance', 'work-orders' => 'governance', 'voting' => 'governance', 'meetings' => 'governance',
     'units' => 'operations', 'parking' => 'operations', 'employees' => 'operations', 'insurance' => 'operations',
     'activity' => 'configuration', 'settings' => 'configuration',
 ][$active] ?? '';
@@ -137,6 +141,27 @@ if ($page_layout === 'app' && isset($assocId) && function_exists('db')) {
         $_emergencies = $_emStmt->fetchAll();
     } catch (Throwable $_) {}
 }
+
+// Platform messages pushed from the BadassHOA team to this association.
+$_platformMessages = [];
+if ($page_layout === 'app' && isset($assocId) && function_exists('db')) {
+    try {
+        $role = function_exists('viewing_role') ? (string)viewing_role() : (string)($_SESSION['role'] ?? '');
+        $isBoard = in_array($role, ['board_member','board_admin','super_admin','property_manager'], true);
+        $pmAud = $isBoard ? "AND audience IN ('all','board')" : "AND audience = 'all'";
+        $_pmStmt = db()->prepare(
+            "SELECT id, message FROM platform_messages
+              WHERE (association_id = ? OR association_id IS NULL)
+                AND active = 1
+                AND (expires_at IS NULL OR expires_at > NOW())
+                $pmAud
+              ORDER BY created_at DESC
+              LIMIT 5"
+        );
+        $_pmStmt->execute([$assocId]);
+        $_platformMessages = $_pmStmt->fetchAll();
+    } catch (Throwable $_) {}
+}
 ?><!doctype html>
 <html lang="en">
 <head>
@@ -164,6 +189,11 @@ if ($page_layout === 'app' && isset($assocId) && function_exists('db')) {
     .emergency-banner__body{font-size:13px;opacity:.9}
     .emergency-banner__link{flex-shrink:0;color:#fff;font-size:12px;font-weight:700;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.3);border-radius:4px;padding:5px 12px;text-decoration:none;white-space:nowrap;letter-spacing:.02em}
     .emergency-banner__link:hover{background:rgba(0,0,0,.4);text-decoration:none}
+    .platform-msg-banner{background:#0f1f3d;color:#fff;padding:10px 20px;font-size:13px;line-height:1.5}
+    .platform-msg-banner+.platform-msg-banner{border-top:1px solid rgba(255,255,255,.15)}
+    .platform-msg-banner__inner{max-width:1500px;margin:0 auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .platform-msg-banner__label{font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.08em;opacity:.65;white-space:nowrap;flex-shrink:0}
+    .platform-msg-banner__text{flex:1;min-width:0}
     </style>
     <?php if ($shellClass): ?>
     <!-- Pre-paint sidebar collapsed-state hint (avoids flash) -->
@@ -253,6 +283,15 @@ if ($_envProd && $_mailDriver === 'log' && ($_SESSION['role'] ?? '') === 'super_
             <?php endif; ?>
         </div>
         <a href="/dashboard/communications.php?type=emergency" class="emergency-banner__link">Full announcement →</a>
+    </div>
+</div>
+<?php endforeach; ?>
+
+<?php foreach ($_platformMessages as $_pm): ?>
+<div class="platform-msg-banner" role="status">
+    <div class="platform-msg-banner__inner">
+        <span class="platform-msg-banner__label">From BadassHOA</span>
+        <span class="platform-msg-banner__text"><?= e((string)$_pm['message']) ?></span>
     </div>
 </div>
 <?php endforeach; ?>
@@ -545,6 +584,9 @@ if ($page_layout === 'app' && isset($association) && $association):
                 <?php endif; ?>
                 <?php if (role_can_manage(viewing_role()) || can_do('read_work_orders')): ?>
                     <?= nav_link('/dashboard/work-orders.php', 'concerns', 'Work orders', 'work-orders', $active) ?>
+                <?php endif; ?>
+                <?php if (in_array(viewing_role(), ['board_admin','board_member','property_manager','super_admin'], true)): ?>
+                    <?= nav_link('/dashboard/meetings.php', 'meetings', 'Meetings', 'meetings', $active) ?>
                 <?php endif; ?>
                 <?php if (!in_array(viewing_role(), ['renter', 'staff'], true)): ?>
                     <?= nav_link('/dashboard/voting.php', 'voting', 'Voting', 'voting', $active) ?>

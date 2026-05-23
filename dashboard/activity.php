@@ -65,7 +65,8 @@ if (viewing_role() === 'board_admin' || viewing_role() === 'super_admin') {
              COUNT(*) AS total_active,
              SUM(CASE WHEN last_login_at IS NOT NULL THEN 1 ELSE 0 END) AS ever_logged_in,
              SUM(CASE WHEN last_login_at IS NULL THEN 1 ELSE 0 END) AS never_logged_in,
-             SUM(CASE WHEN email LIKE '%@placeholder.local' THEN 1 ELSE 0 END) AS no_email
+             SUM(CASE WHEN email LIKE '%@placeholder.local' OR email LIKE '%@noemail.%' THEN 1 ELSE 0 END) AS no_email,
+             SUM(CASE WHEN email NOT LIKE '%@placeholder.local' AND email NOT LIKE '%@noemail.%' THEN 1 ELSE 0 END) AS reachable_by_email
            FROM users
           WHERE association_id = ? AND status = 'active' AND role NOT IN ('super_admin')"
     );
@@ -76,19 +77,30 @@ if (viewing_role() === 'board_admin' || viewing_role() === 'super_admin') {
         "SELECT id, first_name, last_name, unit_number, role
            FROM users
           WHERE association_id = ? AND status = 'active'
-            AND email LIKE '%@placeholder.local'
-          ORDER BY last_name, first_name LIMIT 50"
+            AND (email LIKE '%@placeholder.local' OR email LIKE '%@noemail.%')
+          ORDER BY last_name, first_name LIMIT 200"
     );
     $noEmailStmt->execute([$assocId]);
     $noEmailMembers = $noEmailStmt->fetchAll();
 
+    $reachableStmt = db()->prepare(
+        "SELECT id, first_name, last_name, email, unit_number, role
+           FROM users
+          WHERE association_id = ? AND status = 'active'
+            AND email NOT LIKE '%@placeholder.local' AND email NOT LIKE '%@noemail.%'
+          ORDER BY last_name, first_name LIMIT 200"
+    );
+    $reachableStmt->execute([$assocId]);
+    $reachableMembers = $reachableStmt->fetchAll();
+
     $neverStmt = db()->prepare(
-        "SELECT id, first_name, last_name, email, unit_number, role, created_at
+        "SELECT id, first_name, last_name, email, unit_number, role, created_at,
+                invite_sent_at, invite_expires_at
            FROM users
           WHERE association_id = ? AND status = 'active'
             AND last_login_at IS NULL
-            AND email NOT LIKE '%@placeholder.local'
-          ORDER BY created_at DESC LIMIT 50"
+            AND email NOT LIKE '%@placeholder.local' AND email NOT LIKE '%@noemail.%'
+          ORDER BY created_at DESC LIMIT 200"
     );
     $neverStmt->execute([$assocId]);
     $neverLoggedIn = $neverStmt->fetchAll();
@@ -125,6 +137,7 @@ require __DIR__ . '/../includes/header.php';
             <div class="row" style="gap: var(--sp-4); font-size: var(--fs-sm); flex-wrap: wrap;">
                 <span class="muted"><?= (int)$activityStats['total_active'] ?> active members</span>
                 <span style="color: var(--color-success);"><?= (int)$activityStats['ever_logged_in'] ?> have logged in</span>
+                <span style="color: var(--color-info);"><?= (int)$activityStats['reachable_by_email'] ?> will receive email</span>
                 <?php if ($activityStats['never_logged_in'] > 0): ?>
                     <span style="color: var(--color-warning);"><?= (int)$activityStats['never_logged_in'] ?> never logged in</span>
                 <?php endif; ?>
@@ -157,6 +170,29 @@ require __DIR__ . '/../includes/header.php';
         </details>
         <?php endif; ?>
 
+        <?php if ($reachableMembers): ?>
+        <details style="margin-bottom: var(--sp-3);">
+            <summary style="cursor: pointer; font-weight: 600; font-size: var(--fs-sm); color: var(--color-info); margin-bottom: var(--sp-2);">
+                ✉ <?= count($reachableMembers) ?> member<?= count($reachableMembers) === 1 ? '' : 's' ?> will receive email
+            </summary>
+            <div style="margin-top: var(--sp-2); overflow-x: auto;">
+            <table class="table" style="font-size: var(--fs-sm);">
+                <thead><tr><th>Name</th><th>Unit</th><th>Email</th><th>Role</th></tr></thead>
+                <tbody>
+                <?php foreach ($reachableMembers as $m): ?>
+                    <tr>
+                        <td><?= e(trim($m['first_name'] . ' ' . $m['last_name']) ?: '—') ?></td>
+                        <td><?= e($m['unit_number'] ?: '—') ?></td>
+                        <td><?= e((string)$m['email']) ?></td>
+                        <td class="muted"><?= e(role_label((string)$m['role'])) ?></td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+            </div>
+        </details>
+        <?php endif; ?>
+
         <?php if ($neverLoggedIn): ?>
         <details style="margin-bottom: var(--sp-3);">
             <summary style="cursor: pointer; font-weight: 600; font-size: var(--fs-sm); color: var(--color-warning); margin-bottom: var(--sp-2);">
@@ -164,15 +200,38 @@ require __DIR__ . '/../includes/header.php';
             </summary>
             <div style="margin-top: var(--sp-2); overflow-x: auto;">
             <table class="table" style="font-size: var(--fs-sm);">
-                <thead><tr><th>Name</th><th>Unit</th><th>Email</th><th>Added</th><th></th></tr></thead>
+                <thead><tr><th>Name</th><th>Unit</th><th>Email</th><th>Added</th><th>Invite</th><th></th></tr></thead>
                 <tbody>
                 <?php foreach ($neverLoggedIn as $m): ?>
+                <?php
+                    $inviteSent    = !empty($m['invite_sent_at']);
+                    $inviteExpired = $inviteSent && !empty($m['invite_expires_at'])
+                                     && strtotime((string)$m['invite_expires_at']) < time();
+                ?>
                     <tr>
                         <td><?= e(trim($m['first_name'] . ' ' . $m['last_name']) ?: '—') ?></td>
                         <td><?= e($m['unit_number'] ?: '—') ?></td>
                         <td><?= e((string)$m['email']) ?></td>
                         <td class="muted"><?= e(udate('M j, Y', strtotime((string)$m['created_at']))) ?></td>
-                        <td style="text-align:right;"><a class="btn btn--ghost" style="padding: 0.3rem 0.6rem; font-size: var(--fs-xs);" href="/dashboard/directory.php?action=edit&id=<?= (int)$m['id'] ?>">Edit</a></td>
+                        <td class="muted">
+                            <?php if ($inviteSent): ?>
+                                <?= $inviteExpired ? '<span style="color:var(--color-error);">Expired</span>' : '<span style="color:var(--color-success);">Sent</span>' ?>
+                                <span style="display:block; font-size: var(--fs-xs);"><?= e(udate('M j', strtotime((string)$m['invite_sent_at']))) ?></span>
+                            <?php else: ?>
+                                —
+                            <?php endif; ?>
+                        </td>
+                        <td style="text-align:right; white-space:nowrap;">
+                            <form method="post" action="/dashboard/send-invite.php" style="display:inline;">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="user_id" value="<?= (int)$m['id'] ?>">
+                                <input type="hidden" name="redirect" value="/dashboard/activity.php">
+                                <button class="btn btn--ghost" type="submit" style="padding: 0.3rem 0.6rem; font-size: var(--fs-xs);">
+                                    <?= $inviteSent ? 'Resend' : 'Send invite' ?>
+                                </button>
+                            </form>
+                            <a class="btn btn--ghost" style="padding: 0.3rem 0.6rem; font-size: var(--fs-xs);" href="/dashboard/directory.php?action=edit&id=<?= (int)$m['id'] ?>">Edit</a>
+                        </td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>

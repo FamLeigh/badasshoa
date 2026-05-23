@@ -7,8 +7,16 @@ if (!empty($_SESSION['user_id'])) {
     redirect(landing_for($_SESSION['role'] ?? 'owner'));
 }
 
-$email  = $_POST['email']  ?? '';
+// One-time pre-fill from the invite acceptance flow — read and clear immediately.
+$prefillEmail = '';
+if (!empty($_SESSION['invite_prefill_email'])) {
+    $prefillEmail = (string)$_SESSION['invite_prefill_email'];
+    unset($_SESSION['invite_prefill_email']);
+}
+
+$email  = $_POST['email'] ?? $prefillEmail;
 $errors = [];
+$showWelcome = isset($_GET['welcome']) && $prefillEmail !== '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
@@ -45,6 +53,9 @@ require __DIR__ . '/includes/header.php';
 
 <section class="auth-shell">
     <div class="auth-card">
+        <?php if ($showWelcome): ?>
+        <div class="flash flash--success" style="margin-bottom: var(--sp-4);">Password set! Enter it below to get started.</div>
+        <?php endif; ?>
         <h1>Sign in</h1>
         <p class="muted">Welcome back. Sign in to your association.</p>
 

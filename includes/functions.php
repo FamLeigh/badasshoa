@@ -407,7 +407,9 @@ function board_office_rank(?string $office): int
 // address.
 function is_placeholder_email(?string $email): bool
 {
-    return is_string($email) && str_ends_with($email, '@placeholder.local');
+    if (!is_string($email) || $email === '') return false;
+    return str_ends_with($email, '@placeholder.local')
+        || str_contains($email, '@noemail.');
 }
 
 function display_email(?string $email, string $emptyLabel = '— no email on file —'): string
@@ -537,38 +539,54 @@ function audit(string $action, array $meta = [], ?int $targetId = null, ?string 
 //   'mail'  → PHP's mail() via the host's sendmail (Hostinger ships hsendmail)
 //   'msmtp' → pipe RFC822 message to msmtp -t (uses ~/.msmtprc on the server)
 // On send failure we fall through to log so the message isn't silently lost.
-function send_mail(string $to, string $subject, string $body): void
+// $html: optional HTML version. When provided, sends multipart/alternative so clients
+// that can't render HTML fall back to $body (plain text).
+function send_mail(string $to, string $subject, string $body, string $html = ''): void
 {
     $cfg    = config()['mail'] ?? [];
     $driver = $cfg['driver']     ?? 'log';
     $from   = $cfg['from']       ?? 'noreply@badasshoa.com';
     $bin    = $cfg['msmtp_path'] ?? '/usr/bin/msmtp';
 
+    $boundary = 'bhoa_' . bin2hex(random_bytes(8));
+
+    $buildHeaders = function(bool $includeTo) use ($to, $from, $subject, $html, $boundary): string {
+        $h  = "From: {$from}\r\n";
+        if ($includeTo) $h .= "To: {$to}\r\n";
+        $h .= 'Subject: ' . mb_encode_mimeheader($subject, 'UTF-8') . "\r\n";
+        $h .= "MIME-Version: 1.0\r\n";
+        if ($html !== '') {
+            $h .= "Content-Type: multipart/alternative; boundary=\"{$boundary}\"\r\n";
+        } else {
+            $h .= "Content-Type: text/plain; charset=UTF-8\r\n";
+            $h .= "Content-Transfer-Encoding: 8bit\r\n";
+        }
+        return $h;
+    };
+
+    $buildBody = function() use ($body, $html, $boundary): string {
+        if ($html === '') return $body;
+        return "--{$boundary}\r\n"
+             . "Content-Type: text/plain; charset=UTF-8\r\n"
+             . "Content-Transfer-Encoding: 8bit\r\n\r\n"
+             . $body . "\r\n"
+             . "--{$boundary}\r\n"
+             . "Content-Type: text/html; charset=UTF-8\r\n"
+             . "Content-Transfer-Encoding: 8bit\r\n\r\n"
+             . $html . "\r\n"
+             . "--{$boundary}--";
+    };
+
     if ($driver === 'mail') {
-        $headers  = "From: {$from}\r\n";
-        $headers .= "MIME-Version: 1.0\r\n";
-        $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
-        $headers .= "Content-Transfer-Encoding: 8bit\r\n";
-
-        // mb_encode_mimeheader handles non-ASCII subjects safely.
+        $headers = $buildHeaders(false);
         $encodedSubject = mb_encode_mimeheader($subject, 'UTF-8');
-
-        // -f sets the envelope sender; only honored if PHP-FPM allows it.
-        if (mail($to, $encodedSubject, $body, $headers, '-f ' . $from)) return;
-
+        if (mail($to, $encodedSubject, $buildBody(), $headers, '-f ' . $from)) return;
         error_log("send_mail mail() returned false to={$to}");
-        // fall through to log so the message isn't lost
     }
 
     if ($driver === 'msmtp') {
-        $headers  = "From: {$from}\r\n";
-        $headers .= "To: {$to}\r\n";
-        $headers .= 'Subject: ' . mb_encode_mimeheader($subject, 'UTF-8') . "\r\n";
-        $headers .= "MIME-Version: 1.0\r\n";
-        $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
-        $headers .= "Content-Transfer-Encoding: 8bit\r\n";
-
-        $message = $headers . "\r\n" . $body;
+        $headers = $buildHeaders(true);
+        $message = $headers . "\r\n" . $buildBody();
 
         // -t: read recipients from headers. -f: envelope sender (Return-Path).
         $cmd  = $bin . ' -t -f ' . escapeshellarg($from);

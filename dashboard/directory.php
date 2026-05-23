@@ -735,6 +735,44 @@ require __DIR__ . '/../includes/header.php';
                 </div>
             </div>
 
+            <?php
+            $canSendInvite = !is_placeholder_email((string)$editUser['email'])
+                             && empty($editUser['last_login_at']);
+            $inviteSent    = !empty($editUser['invite_sent_at']);
+            $inviteExpired = $inviteSent && !empty($editUser['invite_expires_at'])
+                             && strtotime((string)$editUser['invite_expires_at']) < time();
+            $invitePending = $inviteSent && !$inviteExpired;
+            ?>
+            <?php if ($canSendInvite): ?>
+            <div style="margin-top: var(--sp-4); padding: var(--sp-3) var(--sp-4); background: var(--color-surface-2); border: 1px solid var(--color-border); border-radius: var(--r-md);">
+                <div class="row row--between" style="flex-wrap: wrap; gap: var(--sp-2);">
+                    <div>
+                        <strong style="font-size: var(--fs-sm);">✉ Invite to join</strong>
+                        <?php if ($invitePending): ?>
+                            <p class="muted" style="font-size: var(--fs-xs); margin: var(--sp-1) 0 0;">
+                                Invite sent <?= e(udate('M j, Y', strtotime((string)$editUser['invite_sent_at']))) ?>
+                                · expires <?= e(udate('M j, Y', strtotime((string)$editUser['invite_expires_at']))) ?>
+                            </p>
+                        <?php elseif ($inviteExpired): ?>
+                            <p style="font-size: var(--fs-xs); color: var(--color-error); margin: var(--sp-1) 0 0;">
+                                Invite sent <?= e(udate('M j, Y', strtotime((string)$editUser['invite_sent_at']))) ?> — expired
+                            </p>
+                        <?php else: ?>
+                            <p class="muted" style="font-size: var(--fs-xs); margin: var(--sp-1) 0 0;">No invite sent yet.</p>
+                        <?php endif; ?>
+                    </div>
+                    <form method="post" action="/dashboard/send-invite.php">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="user_id" value="<?= (int)$editUser['id'] ?>">
+                        <input type="hidden" name="redirect" value="/dashboard/directory.php?action=edit&id=<?= (int)$editUser['id'] ?>">
+                        <button class="btn btn--ghost" type="submit" style="font-size: var(--fs-sm);">
+                            <?= $inviteSent ? 'Resend invite' : 'Send invite' ?>
+                        </button>
+                    </form>
+                </div>
+            </div>
+            <?php endif; ?>
+
             <div style="margin-top: var(--sp-4); padding: var(--sp-4); background: var(--color-warning-bg); border: 1px solid rgba(182,130,42,0.25); border-radius: var(--r-md);">
                 <div class="row row--between" style="margin-bottom: var(--sp-2); flex-wrap: wrap;">
                     <strong style="color: var(--color-warning);">🔑 Change password (optional)</strong>
@@ -972,7 +1010,7 @@ B2,Sam,Garcia,sam@example.com,,,,0</pre>
         <thead>
             <tr>
                 <th>Name</th><th>Unit</th><th>Role</th><th>Owner / Renter</th><th>Email</th><th>Phone</th>
-                <?php if ($canManage): ?><th></th><th></th><?php endif; ?>
+                <?php if ($canManage): ?><th style="white-space:nowrap;">Last login</th><th></th><th></th><?php endif; ?>
             </tr>
         </thead>
         <tbody>
@@ -1023,6 +1061,18 @@ B2,Sam,Garcia,sam@example.com,,,,0</pre>
                 <td><?= is_placeholder_email((string)$r['email']) ? '<em class="muted">—</em>' : e((string)$r['email']) ?></td>
                 <td><?= e($r['phone'] ?: '—') ?></td>
                 <?php if ($canManage): ?>
+                <td style="white-space:nowrap;">
+                    <?php if (!empty($r['last_login_at'])): ?>
+                        <span style="font-size:var(--fs-xs); color:var(--color-text-muted);"><?= e(udate('M j, Y', strtotime((string)$r['last_login_at']))) ?></span>
+                    <?php elseif (!is_placeholder_email((string)$r['email'])): ?>
+                        <span style="font-size:var(--fs-xs); color:var(--color-error);" title="Has a real email but has never logged in">Never</span>
+                        <?php if (!empty($r['invite_sent_at'])): ?>
+                            <div style="font-size:10px; color:var(--color-text-muted);">invite sent</div>
+                        <?php endif; ?>
+                    <?php else: ?>
+                        <span class="muted" style="font-size:var(--fs-xs);">—</span>
+                    <?php endif; ?>
+                </td>
                 <td style="text-align:center;">
                     <?php $dnc = (int)($r['note_count'] ?? 0); ?>
                     <a href="/dashboard/board-note.php?user_id=<?= (int)$r['id'] ?>"

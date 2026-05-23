@@ -105,10 +105,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'create_
     $color     = trim((string)($_POST['primary_color'] ?? '#0f1f3d'));
     $publicLanding = isset($_POST['public_landing_enabled']) ? 1 : 0;
 
-    if (!in_array($plan, ['starter','growth','professional','enterprise'], true)) $plan = 'starter';
-    if (!in_array($status, ['active','inactive','trial'], true))                   $status = 'trial';
-    if (!preg_match('/^#[0-9a-f]{6}$/i', $color))                                  $color = '#0f1f3d';
-    if (!preg_match('/^[A-Z]{2}$/', $country))                                     $country = 'US';
+    if (!in_array($plan, ['free','starter','growth','professional','enterprise'], true)) $plan = 'starter';
+    if (!in_array($status, ['active','inactive','trial'], true))                        $status = 'trial';
+    if (!preg_match('/^#[0-9a-f]{6}$/i', $color))                                      $color = '#0f1f3d';
+    if (!preg_match('/^[A-Z]{2}$/', $country))                                         $country = 'US';
 
     // Slug normalize / fall back to slugify(name)
     $subdomain = preg_replace('/[^a-z0-9-]/', '', strtolower($subdomain));
@@ -149,6 +149,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'create_
     ];
 }
 
+// --- Platform messages ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'add_platform_msg') {
+    csrf_check();
+    $aid     = (int)($_POST['assoc_id'] ?? 0);
+    $msg     = trim((string)($_POST['message'] ?? ''));
+    $aud     = in_array($_POST['audience'] ?? '', ['all','board'], true) ? $_POST['audience'] : 'all';
+    $expires = trim((string)($_POST['expires_at'] ?? '')) ?: null;
+    if ($msg && $aid) {
+        db()->prepare(
+            'INSERT INTO platform_messages (association_id, message, audience, active, expires_at, created_by)
+             VALUES (?,?,?,1,?,?)'
+        )->execute([$aid, $msg, $aud, $expires, (int)$user['id']]);
+        flash('success', 'Message added.');
+    }
+    redirect('/admin/associations.php?action=edit&id=' . $aid . '#platform-messages');
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'toggle_platform_msg') {
+    csrf_check();
+    $pmid = (int)($_POST['msg_id'] ?? 0);
+    $aid  = (int)($_POST['assoc_id'] ?? 0);
+    db()->prepare('UPDATE platform_messages SET active = 1 - active WHERE id = ?')->execute([$pmid]);
+    redirect('/admin/associations.php?action=edit&id=' . $aid . '#platform-messages');
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'delete_platform_msg') {
+    csrf_check();
+    $pmid = (int)($_POST['msg_id'] ?? 0);
+    $aid  = (int)($_POST['assoc_id'] ?? 0);
+    db()->prepare('DELETE FROM platform_messages WHERE id = ?')->execute([$pmid]);
+    flash('success', 'Message deleted.');
+    redirect('/admin/associations.php?action=edit&id=' . $aid . '#platform-messages');
+}
+
 // --- Full edit ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit_assoc') {
     csrf_check();
@@ -167,10 +201,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit_as
     $publicLanding = isset($_POST['public_landing_enabled']) ? 1 : 0;
     $paidGb    = max(0, (int)($_POST['storage_paid_extra_gb'] ?? 0));
 
-    if (!in_array($plan, ['starter','growth','professional','enterprise'], true)) $plan = 'starter';
-    if (!in_array($status, ['active','inactive','trial'], true))                   $status = 'trial';
-    if (!preg_match('/^#[0-9a-f]{6}$/i', $color))                                  $color = '#0f1f3d';
-    if (!preg_match('/^[A-Z]{2}$/', $country))                                     $country = 'US';
+    if (!in_array($plan, ['free','starter','growth','professional','enterprise'], true)) $plan = 'starter';
+    if (!in_array($status, ['active','inactive','trial'], true))                        $status = 'trial';
+    if (!preg_match('/^#[0-9a-f]{6}$/i', $color))                                      $color = '#0f1f3d';
+    if (!preg_match('/^[A-Z]{2}$/', $country))                                         $country = 'US';
     // Slug normalize
     $subdomain = preg_replace('/[^a-z0-9-]/', '', strtolower($subdomain));
     if ($subdomain === '') $subdomain = slugify($name);
@@ -401,7 +435,7 @@ require __DIR__ . '/../includes/header.php';
                         // Professional was dropped 2026-05-13. We still tolerate it as a legacy
                         // value (in_array allowlist below) so existing rows render, but new
                         // selections are limited to the current three tiers.
-                        $planOptions = ['starter'=>'Starter','growth'=>'Growth','enterprise'=>'Enterprise'];
+                        $planOptions = ['free'=>'Free','starter'=>'Starter','growth'=>'Growth','enterprise'=>'Enterprise'];
                         if (isset($editAssoc['plan']) && $editAssoc['plan'] === 'professional') {
                             $planOptions['professional'] = 'Professional (legacy)';
                         }
@@ -515,7 +549,7 @@ require __DIR__ . '/../includes/header.php';
                         // Professional was dropped 2026-05-13. We still tolerate it as a legacy
                         // value (in_array allowlist below) so existing rows render, but new
                         // selections are limited to the current three tiers.
-                        $planOptions = ['starter'=>'Starter','growth'=>'Growth','enterprise'=>'Enterprise'];
+                        $planOptions = ['free'=>'Free','starter'=>'Starter','growth'=>'Growth','enterprise'=>'Enterprise'];
                         if (isset($editAssoc['plan']) && $editAssoc['plan'] === 'professional') {
                             $planOptions['professional'] = 'Professional (legacy)';
                         }
@@ -567,6 +601,92 @@ require __DIR__ . '/../includes/header.php';
             <div class="row" style="justify-content: flex-end;">
                 <a class="btn btn--ghost" href="/admin/associations.php">Cancel</a>
                 <button class="btn btn--primary" type="submit">Save changes</button>
+            </div>
+        </form>
+    </div>
+
+    <?php
+    // Platform messages for this association
+    $_pmRows = db()->prepare(
+        'SELECT id, message, audience, active, expires_at, created_at
+           FROM platform_messages
+          WHERE association_id = ?
+          ORDER BY created_at DESC'
+    );
+    $_pmRows->execute([(int)$editAssoc['id']]);
+    $_pmList = $_pmRows->fetchAll();
+    ?>
+    <div class="card" id="platform-messages" style="margin-top: var(--sp-6);">
+        <div class="card__header">
+            <h2 class="card__title" style="font-size: var(--fs-xl);">Messages from BadassHOA</h2>
+            <p class="muted" style="font-size: var(--fs-sm); margin-top: var(--sp-1);">Banners pushed to this association's dashboard. Audience "Board" shows only to board-level roles; "All" shows to every logged-in member.</p>
+        </div>
+
+        <?php if (!$_pmList): ?>
+            <p class="muted" style="padding: var(--sp-2) 0;">No messages yet.</p>
+        <?php else: ?>
+        <div style="overflow-x:auto;">
+        <table class="table" style="margin-bottom: var(--sp-4);">
+            <thead>
+                <tr><th>Message</th><th>Audience</th><th>Expires</th><th>Active</th><th></th></tr>
+            </thead>
+            <tbody>
+            <?php foreach ($_pmList as $_pm): ?>
+                <tr style="<?= (int)$_pm['active'] === 0 ? 'opacity:.5' : '' ?>">
+                    <td style="max-width:460px;"><?= e((string)$_pm['message']) ?></td>
+                    <td><span class="badge badge--<?= $_pm['audience'] === 'board' ? 'info' : 'success' ?>"><?= e((string)$_pm['audience']) ?></span></td>
+                    <td class="muted" style="white-space:nowrap;"><?= $_pm['expires_at'] ? e(date('M j, Y', strtotime((string)$_pm['expires_at']))) : 'Never' ?></td>
+                    <td>
+                        <form method="post" style="margin:0;">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="form" value="toggle_platform_msg">
+                            <input type="hidden" name="msg_id" value="<?= (int)$_pm['id'] ?>">
+                            <input type="hidden" name="assoc_id" value="<?= (int)$editAssoc['id'] ?>">
+                            <button class="btn btn--ghost" type="submit" style="padding:2px 10px;font-size:var(--fs-sm);">
+                                <?= (int)$_pm['active'] === 1 ? 'Pause' : 'Activate' ?>
+                            </button>
+                        </form>
+                    </td>
+                    <td>
+                        <form method="post" style="margin:0;" onsubmit="return confirm('Delete this message?');">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="form" value="delete_platform_msg">
+                            <input type="hidden" name="msg_id" value="<?= (int)$_pm['id'] ?>">
+                            <input type="hidden" name="assoc_id" value="<?= (int)$editAssoc['id'] ?>">
+                            <button class="btn btn--danger-ghost" type="submit" style="padding:2px 10px;font-size:var(--fs-sm);">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+        </div>
+        <?php endif; ?>
+
+        <form method="post" style="border-top: 1px solid var(--color-border); padding-top: var(--sp-4); margin-top: var(--sp-2);">
+            <?= csrf_field() ?>
+            <input type="hidden" name="form" value="add_platform_msg">
+            <input type="hidden" name="assoc_id" value="<?= (int)$editAssoc['id'] ?>">
+            <div class="field" style="margin-bottom: var(--sp-3);">
+                <label class="field__label" for="pm-message">New message</label>
+                <textarea class="input" id="pm-message" name="message" rows="3" required placeholder="Type a message to display on this association's dashboard…" style="resize:vertical;"></textarea>
+            </div>
+            <div class="form-row form-row--2" style="margin-bottom: var(--sp-3);">
+                <div class="field">
+                    <label class="field__label" for="pm-audience">Audience</label>
+                    <select class="select" id="pm-audience" name="audience">
+                        <option value="all">All members</option>
+                        <option value="board">Board only</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label class="field__label" for="pm-expires">Expires (optional)</label>
+                    <input class="input" type="date" id="pm-expires" name="expires_at">
+                    <div class="field__hint">Leave blank to show indefinitely until manually paused.</div>
+                </div>
+            </div>
+            <div class="row" style="justify-content: flex-end;">
+                <button class="btn btn--primary" type="submit">Add message</button>
             </div>
         </form>
     </div>
