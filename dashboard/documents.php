@@ -416,6 +416,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'delete'
     if ($row) {
         $abs = storage_path($row['file_path']);
         if (is_file($abs)) @unlink($abs);
+        db()->prepare('DELETE FROM document_signature_requests WHERE document_id = ?')->execute([$id]);
+        db()->prepare('DELETE FROM document_signatures WHERE document_id = ?')->execute([$id]);
         db()->prepare('DELETE FROM documents WHERE id = ? AND association_id = ?')->execute([$id, $assocId]);
         audit('document.deleted', ['title' => $row['title']], $id, 'document');
         flash('success', "Deleted \"{$row['title']}\".");
