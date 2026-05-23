@@ -739,7 +739,7 @@ require __DIR__ . '/../includes/header.php';
                 <input type="hidden" name="doc_id" value="<?= (int)$editDoc['id'] ?>">
                 <div class="field" style="flex:1; min-width:160px; margin:0;">
                     <label class="field__label" style="font-size:var(--fs-xs);">Add signer</label>
-                    <select class="select" name="user_id" required>
+                    <select class="select js-searchable-select" name="user_id" required>
                         <option value="">— pick a member —</option>
                         <?php foreach ($addableMembers as $am):
                             $nm = trim($am['first_name'] . ' ' . $am['last_name']);
