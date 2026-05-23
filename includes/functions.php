@@ -251,12 +251,13 @@ function ensure_default_document_categories(int $assocId): void
     if ((int)$stmt->fetchColumn() > 0) return;
 
     $defaults = [
-        ['Bylaws',    10],
-        ['Minutes',   20],
-        ['Insurance', 30],
-        ['Forms',     40],
-        ['Renters',   50],
-        ['General',   60],
+        ['Bylaws',       10],
+        ['Minutes',      20],
+        ['Resolutions',  25],
+        ['Insurance',    30],
+        ['Forms',        40],
+        ['Renters',      50],
+        ['General',      60],
     ];
     $ins = db()->prepare(
         'INSERT IGNORE INTO document_categories (association_id, name, sort_order) VALUES (?, ?, ?)'

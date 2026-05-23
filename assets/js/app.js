@@ -584,6 +584,7 @@
         wrap.appendChild(sel);
     }
 
+    window.initSearchableSelect = initSearchableSelect;
     document.querySelectorAll('select.js-searchable-select').forEach(initSearchableSelect);
 
 })();
