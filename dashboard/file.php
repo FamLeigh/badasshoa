@@ -34,6 +34,23 @@ if ($type === 'document') {
     $relative = $row['file_path'];
     $filename = $row['title'];
     $type_h   = $row['file_type'];
+
+    // For PDFs: if the current user has a signed copy, serve that instead of the original.
+    if (($type_h ?? '') === 'application/pdf' && !empty($_SESSION['user_id'])) {
+        $sq = db()->prepare(
+            'SELECT signed_file_path FROM document_signatures
+              WHERE document_id = ? AND signer_user_id = ?
+              ORDER BY created_at DESC LIMIT 1'
+        );
+        $sq->execute([$id, (int)$_SESSION['user_id']]);
+        if ($signedPath = $sq->fetchColumn()) {
+            $signedAbs = storage_path((string)$signedPath);
+            if (is_file($signedAbs)) {
+                $relative = $signedPath;
+                // keep $filename and $type_h the same
+            }
+        }
+    }
 } elseif ($type === 'unit_media') {
     $stmt = db()->prepare('SELECT * FROM unit_media WHERE id = ? AND association_id = ?');
     $stmt->execute([$id, $assocId]);
