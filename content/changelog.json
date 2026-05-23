@@ -39,8 +39,8 @@
         "id": "cl-20260523-free-plan",
         "at": "2026-05-23T16:00:00-04:00",
         "type": "improvement",
-        "title": "Free plan tier — super admins can grant free access to any association",
-        "description": "A new 'Free' tier is available in the association plan dropdown. Super admins can set any association to Free, giving them full access at no cost until the tier is changed.",
+        "title": "Gifted plan — super admins can grant free access as a charity designation",
+        "description": "A new 'Free (gifted)' plan is available in the association plan dropdown. Super admins can set any association to gifted status, giving them full access at no cost for as long as the designation is active — intended for charitable or sponsored associations, not discounted billing.",
         "author": "Reboooot",
         "link": "/admin/associations.php"
     },

@@ -435,7 +435,7 @@ require __DIR__ . '/../includes/header.php';
                         // Professional was dropped 2026-05-13. We still tolerate it as a legacy
                         // value (in_array allowlist below) so existing rows render, but new
                         // selections are limited to the current three tiers.
-                        $planOptions = ['free'=>'Free','starter'=>'Starter','growth'=>'Growth','enterprise'=>'Enterprise'];
+                        $planOptions = ['free'=>'Free (gifted)','starter'=>'Starter','growth'=>'Growth','enterprise'=>'Enterprise'];
                         if (isset($editAssoc['plan']) && $editAssoc['plan'] === 'professional') {
                             $planOptions['professional'] = 'Professional (legacy)';
                         }
@@ -549,7 +549,7 @@ require __DIR__ . '/../includes/header.php';
                         // Professional was dropped 2026-05-13. We still tolerate it as a legacy
                         // value (in_array allowlist below) so existing rows render, but new
                         // selections are limited to the current three tiers.
-                        $planOptions = ['free'=>'Free','starter'=>'Starter','growth'=>'Growth','enterprise'=>'Enterprise'];
+                        $planOptions = ['free'=>'Free (gifted)','starter'=>'Starter','growth'=>'Growth','enterprise'=>'Enterprise'];
                         if (isset($editAssoc['plan']) && $editAssoc['plan'] === 'professional') {
                             $planOptions['professional'] = 'Professional (legacy)';
                         }
