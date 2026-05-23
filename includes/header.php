@@ -19,6 +19,7 @@ function nav_icon(string $name): string
         case 'directory':      return "<svg $base><path d='M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2'/><circle cx='9' cy='7' r='4'/><path d='M23 21v-2a4 4 0 0 0-3-3.87'/><path d='M16 3.13a4 4 0 0 1 0 7.75'/></svg>";
         case 'committees':     return "<svg $base><path d='M16 4a4 4 0 1 1-8 0'/><path d='M2 22v-2a6 6 0 0 1 6-6h8a6 6 0 0 1 6 6v2'/><circle cx='12' cy='8' r='4'/></svg>";
         case 'communications': return "<svg $base><path d='M3 11l18-8-8 18-2-8-8-2z'/></svg>";
+        case 'broadcasts':     return "<svg $base><path d='M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z'/><polyline points='22,6 12,13 2,6'/></svg>";
         case 'media':          return "<svg $base><rect x='3' y='3' width='18' height='18' rx='2' ry='2'/><circle cx='8.5' cy='8.5' r='1.5'/><polyline points='21 15 16 10 5 21'/></svg>";
         case 'settings':       return "<svg $base><circle cx='12' cy='12' r='3'/><path d='M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z'/></svg>";
         case 'overview':       return "<svg $base><rect x='3' y='3' width='7' height='7'/><rect x='14' y='3' width='7' height='7'/><rect x='14' y='14' width='7' height='7'/><rect x='3' y='14' width='7' height='7'/></svg>";
@@ -59,6 +60,7 @@ function active_nav_key(): string
         '/dashboard/committees.php'     => 'committees',
         '/dashboard/events.php'         => 'events',
         '/dashboard/communications.php' => 'communications',
+        '/dashboard/broadcasts.php'    => 'broadcasts',
         '/dashboard/media.php'          => 'media',
         '/dashboard/faq.php'            => 'faq',
         '/dashboard/settings.php'       => 'settings',
@@ -101,7 +103,7 @@ $userInitial = strtoupper(substr(trim((string)($_SESSION['name'] ?? $_SESSION['e
 // Map active page key → group id, so JS can force that group open even if the
 // user previously collapsed it.
 $_groupForActive = [
-    'home' => 'community', 'communications' => 'community', 'events' => 'community', 'faq' => 'community', 'marketplace' => 'community',
+    'home' => 'community', 'communications' => 'community', 'broadcasts' => 'community', 'events' => 'community', 'faq' => 'community', 'marketplace' => 'community',
     'documents' => 'resources', 'forms' => 'resources', 'rules' => 'resources',
     'minutes' => 'resources', 'media' => 'resources', 'directory' => 'resources', 'contacts' => 'resources', 'legal' => 'resources',
     'committees' => 'governance', 'concerns' => 'governance', 'arc' => 'governance',
@@ -533,6 +535,9 @@ if ($page_layout === 'app' && isset($association) && $association):
             ob_start(); ?>
                 <?= nav_link('/dashboard/',                   'home',           'Home',          'home',           $active) ?>
                 <?= nav_link('/dashboard/communications.php', 'communications', 'Announcements', 'communications', $active) ?>
+                <?php if (role_can_manage(viewing_role())): ?>
+                    <?= nav_link('/dashboard/broadcasts.php', 'broadcasts', 'Email Broadcasts', 'broadcasts', $active) ?>
+                <?php endif; ?>
                 <?= nav_link('/dashboard/events.php',         'committees',     'Events',        'events',         $active) ?>
                 <?= nav_link('/dashboard/faq.php',         'rules',       'FAQ',         'faq',         $active) ?>
                 <?= nav_link('/dashboard/marketplace.php', 'marketplace', 'Marketplace', 'marketplace', $active) ?>

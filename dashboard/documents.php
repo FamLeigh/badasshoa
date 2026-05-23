@@ -682,7 +682,7 @@ require __DIR__ . '/../includes/header.php';
         <p class="muted" style="font-size: var(--fs-sm); margin-bottom: var(--sp-3);">
             Editing metadata only. To replace the file itself, delete this entry and upload again.
         </p>
-        <form method="post" action="/dashboard/documents.php" class="form" novalidate>
+        <form id="edit-doc-form" method="post" action="/dashboard/documents.php" class="form" novalidate>
             <?= csrf_field() ?>
             <input type="hidden" name="form" value="edit">
             <input type="hidden" name="id" value="<?= (int)$editDoc['id'] ?>">
@@ -761,19 +761,20 @@ require __DIR__ . '/../includes/header.php';
                 <label class="field__label" for="ed-desc">Description</label>
                 <textarea class="textarea" id="ed-desc" name="description" rows="4"><?= e((string)($editDoc['description'] ?? '')) ?></textarea>
             </div>
-            <div class="row" style="justify-content: space-between; align-items: center;">
-                <form method="post" action="/dashboard/documents.php" onsubmit="return confirm('Delete this document? This cannot be undone.');">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="form" value="delete">
-                    <input type="hidden" name="id" value="<?= (int)$editDoc['id'] ?>">
-                    <button class="btn btn--ghost" type="submit" style="color: var(--color-error);">Delete</button>
-                </form>
-                <div class="row" style="gap: var(--sp-2);">
-                    <a class="btn btn--ghost" href="/dashboard/documents.php">Cancel</a>
-                    <button class="btn btn--primary" type="submit">Save changes</button>
-                </div>
-            </div>
         </form>
+
+        <div class="row" style="justify-content: space-between; align-items: center; margin-top: var(--sp-4);">
+            <form method="post" action="/dashboard/documents.php" onsubmit="return confirm('Delete this document? This cannot be undone.');">
+                <?= csrf_field() ?>
+                <input type="hidden" name="form" value="delete">
+                <input type="hidden" name="id" value="<?= (int)$editDoc['id'] ?>">
+                <button class="btn btn--ghost" type="submit" style="color: var(--color-error);">Delete</button>
+            </form>
+            <div class="row" style="gap: var(--sp-2);">
+                <a class="btn btn--ghost" href="/dashboard/documents.php">Cancel</a>
+                <button class="btn btn--primary" type="submit" form="edit-doc-form">Save changes</button>
+            </div>
+        </div>
 
         <?php if ($editDoc && $editDoc['file_type'] === 'application/pdf'): ?>
         <div class="card card--padded" style="margin-top: var(--sp-4); border-top: 2px solid var(--color-border);">

@@ -722,6 +722,43 @@ function base_url(string $path = ''): string
     return '/' . ltrim($path, '/');
 }
 
+// ── Broadcast email helpers ─────────────────────────────────────────────────
+
+function unsub_token(int $userId, string $email): string {
+    $secret = config()['app_secret'] ?? config()['db']['pass'] ?? 'bhoakey';
+    return substr(hash_hmac('sha256', $userId . ':' . strtolower(trim($email)), $secret), 0, 32);
+}
+
+function verify_unsub_token(int $userId, string $email, string $token): bool {
+    return $token !== '' && hash_equals(unsub_token($userId, $email), $token);
+}
+
+function broadcast_email_html(string $bodyHtml, string $assocName, string $assocAddress, ?string $unsubUrl): string {
+    $nameEsc = htmlspecialchars($assocName, ENT_QUOTES, 'UTF-8');
+    $addrEsc = htmlspecialchars($assocAddress, ENT_QUOTES, 'UTF-8');
+    $unsub   = $unsubUrl
+        ? '<p style="margin:0 0 4px;"><a href="' . htmlspecialchars($unsubUrl, ENT_QUOTES, 'UTF-8') . '" style="color:#999;font-size:12px;text-decoration:underline;">Unsubscribe from optional emails</a></p>'
+        : '';
+    return '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>'
+         . '<body style="margin:0;padding:0;background:#f0f0ed;font-family:Inter,Arial,sans-serif;">'
+         . '<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background:#f0f0ed;">'
+         . '<tr><td align="center" style="padding:32px 16px;">'
+         . '<table cellpadding="0" cellspacing="0" role="presentation" style="background:#ffffff;border-radius:8px;overflow:hidden;max-width:600px;width:100%;">'
+         . '<tr><td style="background:#0f1f3d;padding:20px 32px;">'
+         . '<p style="color:#ffffff;font-size:18px;font-weight:700;margin:0;">' . $nameEsc . '</p>'
+         . '</td></tr>'
+         . '<tr><td style="padding:32px;color:#1a1a2e;font-size:15px;line-height:1.7;">'
+         . $bodyHtml
+         . '</td></tr>'
+         . '<tr><td style="background:#f4f4f2;padding:20px 32px;border-top:1px solid #e8e8e4;">'
+         . '<p style="font-size:12px;color:#999;margin:0 0 4px;">You received this as a member of ' . $nameEsc . '.</p>'
+         . $unsub
+         . ($addrEsc ? '<p style="font-size:12px;color:#bbb;margin:4px 0 0;">' . $addrEsc . '</p>' : '')
+         . '<p style="font-size:11px;color:#ccc;margin:6px 0 0;">Powered by <a href="https://badasshoa.com" style="color:#ccc;text-decoration:none;">BadassHOA</a></p>'
+         . '</td></tr>'
+         . '</table></td></tr></table></body></html>';
+}
+
 // --- Geocode an address via Photon (free, no API key) ------------------
 // Returns ['lat' => float, 'lon' => float] on success, null on failure.
 // Silent fail; never throws.
