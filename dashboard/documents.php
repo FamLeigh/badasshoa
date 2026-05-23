@@ -313,6 +313,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'signer_
     redirect('/dashboard/documents.php?action=edit&id=' . $did);
 }
 
+// --- Required signer: notify ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'signer_notify') {
+    csrf_check();
+    if (!$canManage) { http_response_code(403); die('Forbidden'); }
+    $did = (int)($_POST['doc_id'] ?? 0);
+    $uid = (int)($_POST['user_id'] ?? 0);
+    if ($did && $uid) {
+        // Verify request exists and is still pending.
+        $rv = db()->prepare(
+            'SELECT r.*, CONCAT(u.first_name, " ", u.last_name) AS signer_name, u.email, u.first_name
+               FROM document_signature_requests r
+               JOIN users u ON u.id = r.user_id
+              WHERE r.document_id = ? AND r.user_id = ? AND r.fulfilled_at IS NULL'
+        );
+        $rv->execute([$did, $uid]);
+        $req = $rv->fetch();
+
+        $dv = db()->prepare('SELECT title FROM documents WHERE id = ? AND association_id = ?');
+        $dv->execute([$did, $assocId]);
+        $drow = $dv->fetch();
+
+        if ($req && $drow) {
+            $signUrl  = 'https://badasshoa.com/dashboard/sign-pdf.php?doc_id=' . $did;
+            $docTitle = (string)$drow['title'];
+            $assocName = (string)$association['name'];
+            $firstName = trim((string)$req['first_name']) ?: 'there';
+
+            $plain = "Hi {$firstName},\n\n"
+                . "{$assocName} requires your signature on the following document:\n\n"
+                . "  \"{$docTitle}\"\n\n"
+                . "Please log in to your portal and sign it:\n{$signUrl}\n\n"
+                . "If you have already signed or have questions, please contact your board or property manager.\n\n"
+                . "— {$assocName}";
+
+            $html = '<!DOCTYPE html><html><body style="font-family:sans-serif;color:#0f1f3d;max-width:560px;margin:0 auto;padding:24px;">'
+                . '<p style="font-size:16px;">Hi ' . e($firstName) . ',</p>'
+                . '<p><strong>' . e($assocName) . '</strong> requires your signature on the following document:</p>'
+                . '<p style="background:#f8f7f4;border-left:3px solid #f05a28;padding:12px 16px;border-radius:4px;font-weight:600;">'
+                . e($docTitle) . '</p>'
+                . '<p style="margin-top:24px;">'
+                . '<a href="' . e($signUrl) . '" style="background:#f05a28;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:700;display:inline-block;">Sign document →</a>'
+                . '</p>'
+                . '<p style="font-size:12px;color:#888;margin-top:32px;">If you have questions, contact your board or property manager. — ' . e($assocName) . '</p>'
+                . '</body></html>';
+
+            send_mail((string)$req['email'], 'Action required — please sign "' . $docTitle . '"', $plain, $html);
+            flash('success', 'Notification sent to ' . e((string)$req['signer_name']) . '.');
+        }
+    }
+    redirect('/dashboard/documents.php?action=edit&id=' . $did);
+}
+
 // --- Required signer: remove ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'signer_remove') {
     csrf_check();
@@ -708,8 +760,16 @@ require __DIR__ . '/../includes/header.php';
                             <span class="badge badge--warning">Pending</span>
                         <?php endif; ?>
                     </td>
-                    <td style="text-align:right;">
+                    <td style="text-align:right; white-space:nowrap;">
                         <?php if (!$es['fulfilled_at']): ?>
+                        <form method="post" style="display:inline;">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="form"    value="signer_notify">
+                            <input type="hidden" name="doc_id"  value="<?= (int)$editDoc['id'] ?>">
+                            <input type="hidden" name="user_id" value="<?= (int)$es['user_id'] ?>">
+                            <button class="btn btn--ghost" type="submit"
+                                    style="padding:0.2rem 0.5rem; font-size:var(--fs-xs);">Notify</button>
+                        </form>
                         <form method="post" style="display:inline;">
                             <?= csrf_field() ?>
                             <input type="hidden" name="form"    value="signer_remove">
