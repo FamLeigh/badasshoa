@@ -123,6 +123,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'sign_pd
 
     if ($sigId) touch_user_signature((int)$user['id'], $sigId);
 
+    // Check if every required signer has now signed; if so, notify all signers.
+    $remStmt = db()->prepare(
+        'SELECT COUNT(*) FROM document_signature_requests WHERE document_id = ? AND fulfilled_at IS NULL'
+    );
+    $remStmt->execute([$docId]);
+    if ((int)$remStmt->fetchColumn() === 0) {
+        // Fully signed — fetch every signer + their signed-copy record.
+        $notifyStmt = db()->prepare(
+            'SELECT u.email, u.first_name, u.last_name, ds.id AS sig_id
+               FROM document_signature_requests r
+               JOIN users u  ON u.id  = r.user_id
+               JOIN document_signatures ds
+                    ON ds.signer_user_id = r.user_id AND ds.document_id = r.document_id
+              WHERE r.document_id = ?
+              ORDER BY ds.created_at'
+        );
+        $notifyStmt->execute([$docId]);
+        $notifyRows = $notifyStmt->fetchAll();
+
+        $base     = base_url();
+        $auditUrl = $base . '/dashboard/document-audit.php?doc_id=' . $docId;
+        $docTitle = (string)$doc['title'];
+
+        foreach ($notifyRows as $nr) {
+            $name     = trim((string)$nr['first_name'] . ' ' . (string)$nr['last_name']);
+            $sigUrl   = $base . '/dashboard/signed-doc.php?id=' . (int)$nr['sig_id'];
+
+            $body = "Hi {$name},\n\n"
+                  . "\"{$docTitle}\" has been signed by all required signers.\n\n"
+                  . "View the signing certificate and all signed copies:\n{$auditUrl}\n\n"
+                  . "Your signed copy:\n{$sigUrl}\n\n"
+                  . "— " . (string)$association['name'];
+
+            $html = "<p>Hi {$name},</p>"
+                  . "<p><strong>\"{$docTitle}\"</strong> has been signed by all required signers.</p>"
+                  . "<p><a href=\"{$auditUrl}\" style=\"background:#f05a28;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block;margin:8px 0;\">View signing certificate</a></p>"
+                  . "<p>Or download <a href=\"{$sigUrl}\">your signed copy</a> directly.</p>"
+                  . "<p style=\"color:#666;font-size:13px;\">— " . e((string)$association['name']) . "</p>";
+
+            send_mail((string)$nr['email'], "\"{$docTitle}\" is fully signed", $body, $html);
+        }
+    }
+
     flash('success', '"' . e((string)$doc['title']) . '" signed and saved. Your signature is on page ' . ($pageNum + 1) . '.');
     redirect('/dashboard/document-audit.php?doc_id=' . $docId);
 }

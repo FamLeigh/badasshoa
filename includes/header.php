@@ -362,12 +362,26 @@ if ($page_layout === 'app' && isset($association) && $association):
             [$_aid]
         );
 
-        if ($_pending_rules) $_alerts[] = ['label' => 'Pending rule changes', 'count' => $_pending_rules, 'href' => '/dashboard/search.php'];
+        if ($_pending_rules) $_alerts[] = ['label' => 'Pending rule changes', 'count' => $_pending_rules, 'href' => '/dashboard/search.php?action=suggestions'];
         if ($_open_concerns)  $_alerts[] = ['label' => 'Open concerns',        'count' => $_open_concerns,  'href' => '/dashboard/concerns.php'];
         if ($_open_wo)        $_alerts[] = ['label' => 'Open work orders',     'count' => $_open_wo,        'href' => '/dashboard/work-orders.php'];
         if ($_pending_arc)    $_alerts[] = ['label' => 'ARC requests',         'count' => $_pending_arc,    'href' => '/dashboard/arc.php'];
         if ($_open_vio)       $_alerts[] = ['label' => 'Open violations',      'count' => $_open_vio,       'href' => '/dashboard/violations.php'];
     }
+
+    // Pending signature requests — shown for all roles (not just management).
+    if (isset($assocId) && !empty($_SESSION['user_id'])) {
+        $_sig_q = db()->prepare(
+            'SELECT COUNT(*) FROM document_signature_requests
+              WHERE association_id = ? AND user_id = ? AND fulfilled_at IS NULL'
+        );
+        $_sig_q->execute([$assocId, (int)$_SESSION['user_id']]);
+        $_pending_sigs = (int)$_sig_q->fetchColumn();
+        if ($_pending_sigs) {
+            $_alerts[] = ['label' => 'Documents awaiting your signature', 'count' => $_pending_sigs, 'href' => '/dashboard/documents.php'];
+        }
+    }
+
     $_alertTotal = array_sum(array_column($_alerts, 'count'));
 ?>
 <header class="app-topbar" role="banner">
