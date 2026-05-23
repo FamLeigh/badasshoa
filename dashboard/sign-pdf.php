@@ -271,6 +271,23 @@ require __DIR__ . '/../includes/header.php';
             <?php endif; ?>
             </div>
 
+            <!-- Type name -->
+            <details id="type-details" style="margin-top:var(--sp-2);">
+                <summary style="cursor:pointer; font-size:var(--fs-sm); color:var(--color-primary); font-weight:600; list-style:none; user-select:none;">
+                    Aa Type your name
+                </summary>
+                <div style="margin-top:var(--sp-3);">
+                    <input class="input" type="text" id="type-name-inp" maxlength="50"
+                           placeholder="Your full name or initials"
+                           style="margin-bottom:var(--sp-2); font-size:var(--fs-sm);">
+                    <div style="border:2px solid var(--color-border); border-radius:var(--r-sm); background:#fff; overflow:hidden; margin-bottom:var(--sp-2);">
+                        <canvas id="type-canvas" width="240" height="72" style="display:block; width:100%; height:72px;"></canvas>
+                    </div>
+                    <button type="button" id="type-use" class="btn btn--primary"
+                            style="width:100%; font-size:var(--fs-xs); padding:0.3rem 0.5rem;">Use this</button>
+                </div>
+            </details>
+
             <!-- Draw new -->
             <details id="draw-details" style="margin-top:var(--sp-2);">
                 <summary style="cursor:pointer; font-size:var(--fs-sm); color:var(--color-primary); font-weight:600; list-style:none; user-select:none;">
@@ -397,7 +414,11 @@ require __DIR__ . '/../includes/header.php';
 
             const rec = {canvas, viewport, wrapper, pageIndex: i - 1};
             pages.push(rec);
-            wrapper.addEventListener('click', function (evt) { onPageClick(evt, rec); });
+            wrapper.addEventListener('click', function (evt) {
+                // Ignore clicks that originate inside the overlay (drag/resize end fires a click)
+                if (evt.target.closest && evt.target.closest('.sig-overlay')) return;
+                onPageClick(evt, rec);
+            });
         }
     }
 
@@ -422,6 +443,62 @@ require __DIR__ . '/../includes/header.php';
         signHint.textContent = placement ? 'Ready — click "Sign & Save".' : 'Click the PDF to place your signature.';
         refreshSignBtn();
     }
+
+    /* ── type-signature ── */
+    (function () {
+        // Load Dancing Script for a handwritten look
+        const link = document.createElement('link');
+        link.rel  = 'stylesheet';
+        link.href = 'https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600&display=swap';
+        document.head.appendChild(link);
+
+        const typeInp    = document.getElementById('type-name-inp');
+        const typeCanvas = document.getElementById('type-canvas');
+        const typeUse    = document.getElementById('type-use');
+        if (!typeInp || !typeCanvas || !typeUse) return;
+
+        const ctx = typeCanvas.getContext('2d');
+
+        function renderType() {
+            ctx.clearRect(0, 0, typeCanvas.width, typeCanvas.height);
+            const text = typeInp.value.trim();
+            if (!text) return;
+            ctx.fillStyle = '#0f1f3d';
+            ctx.textBaseline = 'middle';
+            // Scale font size to fit width
+            let size = 42;
+            ctx.font = `${size}px 'Dancing Script', 'Brush Script MT', cursive`;
+            while (ctx.measureText(text).width > typeCanvas.width - 20 && size > 14) {
+                size -= 2;
+                ctx.font = `${size}px 'Dancing Script', 'Brush Script MT', cursive`;
+            }
+            ctx.fillText(text, 10, typeCanvas.height / 2);
+        }
+
+        typeInp.addEventListener('input', renderType);
+
+        // Re-render once the font loads (may take a moment on first load)
+        if (document.fonts && document.fonts.ready) {
+            document.fonts.ready.then(function () {
+                if (typeInp.value.trim()) renderType();
+            });
+        }
+
+        typeUse.addEventListener('click', function () {
+            if (!typeInp.value.trim()) { alert('Type your name first.'); return; }
+            renderType(); // ensure current
+            const data = typeCanvas.toDataURL('image/png');
+            drawnSigData = data;
+            activeSigId  = 0;
+            activeSigUrl = data;
+            document.getElementById('sig-id-input').value      = 0;
+            document.getElementById('new-sig-data-input').value = data;
+            document.querySelectorAll('.sig-thumb').forEach(function (t) { t.classList.remove('active'); });
+            signHint.textContent = placement ? 'Ready — click "Sign & Save".' : 'Click the PDF to place your signature.';
+            refreshSignBtn();
+            document.getElementById('type-details').removeAttribute('open');
+        });
+    })();
 
     /* ── draw-pad ── */
     (function () {
