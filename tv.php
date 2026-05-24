@@ -959,10 +959,9 @@ body {
     font-size: clamp(1rem, 1.5vw, 1.5rem);
     color: var(--muted);
     line-height: 1.5;
+    flex: 1;
+    min-height: 0;
     overflow: hidden;
-    display: -webkit-box;
-    -webkit-line-clamp: 5;
-    -webkit-box-orient: vertical;
 }
 .ticker-meta {
     font-size: clamp(.85rem, 1.2vw, 1.1rem);
