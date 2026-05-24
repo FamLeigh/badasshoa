@@ -36,6 +36,7 @@ function nav_icon(string $name): string
         case 'marketplace':    return "<svg $base><path d='M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2 5h12M10 18a1 1 0 1 1-2 0 1 1 0 0 1 2 0zm7 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0z'/></svg>";
         case 'legal':          return "<svg $base><line x1='12' y1='3' x2='12' y2='21'/><polyline points='3 6 12 3 21 6'/><path d='M6 6L3 12a3 3 0 0 0 6 0'/><path d='M18 6l-3 6a3 3 0 0 0 6 0'/><line x1='3' y1='20' x2='21' y2='20'/></svg>";
         case 'contacts':       return "<svg $base><path d='M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z'/></svg>";
+        case 'tv':             return "<svg $base><rect x='2' y='3' width='20' height='14' rx='2' ry='2'/><line x1='8' y1='21' x2='16' y2='21'/><line x1='12' y1='17' x2='12' y2='21'/></svg>";
         case 'parking':        return "<svg $base><rect x='3' y='3' width='18' height='18' rx='2' ry='2'/><path d='M9 17V7h4a3 3 0 0 1 0 6H9'/></svg>";
         case 'menu':           return "<svg $base><line x1='3' y1='12' x2='21' y2='12'/><line x1='3' y1='6' x2='21' y2='6'/><line x1='3' y1='18' x2='21' y2='18'/></svg>";
         case 'collapse':       return "<svg $base><rect x='3' y='3' width='18' height='18' rx='2' ry='2'/><line x1='9' y1='3' x2='9' y2='21'/></svg>";
@@ -541,6 +542,11 @@ if ($page_layout === 'app' && isset($association) && $association):
                 <?= nav_link('/dashboard/events.php',         'committees',     'Events',        'events',         $active) ?>
                 <?= nav_link('/dashboard/faq.php',         'rules',       'FAQ',         'faq',         $active) ?>
                 <?= nav_link('/dashboard/marketplace.php', 'marketplace', 'Marketplace', 'marketplace', $active) ?>
+                <?php if (role_can_manage(viewing_role()) && !empty($association['subdomain']) && !empty($association['tv_pin'])): ?>
+                    <a class="side-nav__link" href="<?= e('https://badasshoa.com/tv?slug=' . rawurlencode((string)$association['subdomain']) . '&pin=' . rawurlencode((string)$association['tv_pin'])) ?>" target="_blank" rel="noopener noreferrer">
+                        <?= nav_icon('tv') ?><span class="side-nav__label">Lobby TV ↗</span>
+                    </a>
+                <?php endif; ?>
             <?php $navGroup('community', 'Community', ob_get_clean()); ?>
 
             <?php ob_start(); ?>

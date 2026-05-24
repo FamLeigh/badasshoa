@@ -42,7 +42,7 @@ function recip_badge(string $s): string {
 
 function audience_count(string $aud, string $tier, int $assocId): int {
     if ($aud === 'custom') return 0;
-    $q = "SELECT COUNT(*) FROM users WHERE association_id=? AND email IS NOT NULL AND email != '' AND email NOT LIKE 'no-email-%' AND email_bounce_count < 3";
+    $q = "SELECT COUNT(*) FROM users WHERE association_id=? AND email IS NOT NULL AND email != '' AND email NOT LIKE '%noemail%' AND email_bounce_count < 3";
     $p = [$assocId];
     if ($aud === 'owners')  { $q .= " AND role IN ('owner','board_admin','board_member','property_manager')"; }
     if ($aud === 'renters') { $q .= " AND role = 'renter'"; }
@@ -142,10 +142,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'broadca
 
     if ($audience === 'custom' && $customIds) {
         $ph = implode(',', array_fill(0, count($customIds), '?'));
-        $rStmt = db()->prepare("SELECT id, first_name, last_name, email FROM users WHERE association_id=? AND id IN ($ph) AND email IS NOT NULL AND email != '' AND email NOT LIKE 'no-email-%' AND email_bounce_count < 3" . ($tier === 'optional' ? ' AND email_broadcast_opt_out = 0' : ''));
+        $rStmt = db()->prepare("SELECT id, first_name, last_name, email FROM users WHERE association_id=? AND id IN ($ph) AND email IS NOT NULL AND email != '' AND email NOT LIKE '%noemail%' AND email_bounce_count < 3" . ($tier === 'optional' ? ' AND email_broadcast_opt_out = 0' : ''));
         $rStmt->execute(array_merge([$assocId], $customIds));
     } else {
-        $q = "SELECT id, first_name, last_name, email FROM users WHERE association_id=? AND email IS NOT NULL AND email != '' AND email NOT LIKE 'no-email-%' AND email_bounce_count < 3";
+        $q = "SELECT id, first_name, last_name, email FROM users WHERE association_id=? AND email IS NOT NULL AND email != '' AND email NOT LIKE '%noemail%' AND email_bounce_count < 3";
         $p = [$assocId];
         if ($audience === 'owners')  { $q .= " AND role IN ('owner','board_admin','board_member','property_manager')"; }
         if ($audience === 'renters') { $q .= " AND role = 'renter'"; }
@@ -320,17 +320,21 @@ if ($action === 'compose') {
     foreach (['all','owners','renters','board'] as $aud) {
         $audienceCounts[$aud] = audience_count($aud, 'optional', $assocId);
     }
-    $mStmt = db()->prepare("SELECT id, first_name, last_name, email FROM users WHERE association_id=? AND email IS NOT NULL AND email != '' AND email NOT LIKE 'no-email-%' AND email_bounce_count < 3 AND status != 'inactive' ORDER BY first_name, last_name");
+    $mStmt = db()->prepare("SELECT id, first_name, last_name, email FROM users WHERE association_id=? AND email IS NOT NULL AND email != '' AND email NOT LIKE '%noemail%' AND email_bounce_count < 3 AND status != 'inactive' ORDER BY first_name, last_name");
     $mStmt->execute([$assocId]);
     $membersList = $mStmt->fetchAll();
 }
 
 // ── GET: list ──────────────────────────────────────────────────────────────────
-$broadcasts = [];
+$broadcasts      = [];
+$emailableCount  = 0;
 if ($action === 'list') {
     $lStmt = db()->prepare('SELECT b.*, CONCAT(u.first_name," ",u.last_name) AS sender_name FROM broadcasts b LEFT JOIN users u ON u.id=b.created_by_user_id WHERE b.association_id=? ORDER BY b.created_at DESC LIMIT 100');
     $lStmt->execute([$assocId]);
     $broadcasts = $lStmt->fetchAll();
+    $ecStmt = db()->prepare("SELECT COUNT(*) FROM users WHERE association_id=? AND email IS NOT NULL AND email != '' AND email NOT LIKE '%noemail%' AND email_bounce_count < 3");
+    $ecStmt->execute([$assocId]);
+    $emailableCount = (int)$ecStmt->fetchColumn();
 }
 
 $hasPostmark    = !empty(config()['mail']['postmark_token'] ?? '');
@@ -347,7 +351,10 @@ require __DIR__ . '/../includes/header.php';
     <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:var(--sp-3); margin-bottom:var(--sp-6);">
         <div>
             <h1 style="font-size:var(--fs-2xl); margin:0 0 var(--sp-1);">Email Broadcasts</h1>
-            <p class="muted" style="margin:0; font-size:var(--fs-sm);">Send emails to your members — newsletters, important notices, meeting reminders.</p>
+            <p class="muted" style="margin:0; font-size:var(--fs-sm);">
+                Send emails to your members — newsletters, important notices, meeting reminders.
+                &nbsp;<span style="color:var(--color-primary); font-weight:600;">✉ <?= $emailableCount ?> members can receive email</span>
+            </p>
         </div>
         <a href="/dashboard/broadcasts.php?action=compose" class="btn btn--primary">+ New broadcast</a>
     </div>

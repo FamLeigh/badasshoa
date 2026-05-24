@@ -109,8 +109,8 @@ if (viewing_role() === 'board_admin' || viewing_role() === 'super_admin') {
         "SELECT id, first_name, last_name, email, unit_number, role, last_login_at
            FROM users
           WHERE association_id = ? AND status = 'active'
-            AND last_login_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-          ORDER BY last_login_at DESC LIMIT 50"
+            AND last_login_at IS NOT NULL
+          ORDER BY last_login_at DESC LIMIT 200"
     );
     $recentStmt->execute([$assocId]);
     $recentlyActive = $recentStmt->fetchAll();
@@ -136,7 +136,7 @@ require __DIR__ . '/../includes/header.php';
             <h3 style="margin: 0; font-size: var(--fs-lg);">Member activity snapshot</h3>
             <div class="row" style="gap: var(--sp-4); font-size: var(--fs-sm); flex-wrap: wrap;">
                 <span class="muted"><?= (int)$activityStats['total_active'] ?> active members</span>
-                <span style="color: var(--color-success);"><?= (int)$activityStats['ever_logged_in'] ?> have logged in</span>
+                <button type="button" onclick="var d=document.getElementById('logged-in-details');d.open=true;d.scrollIntoView({behavior:'smooth'});" style="color:var(--color-success);background:none;border:none;cursor:pointer;font-size:inherit;padding:0;text-decoration:underline;text-underline-offset:2px;"><?= (int)$activityStats['ever_logged_in'] ?> have logged in</button>
                 <span style="color: var(--color-info);"><?= (int)$activityStats['reachable_by_email'] ?> will receive email</span>
                 <?php if ($activityStats['never_logged_in'] > 0): ?>
                     <span style="color: var(--color-warning);"><?= (int)$activityStats['never_logged_in'] ?> never logged in</span>
@@ -241,9 +241,9 @@ require __DIR__ . '/../includes/header.php';
         <?php endif; ?>
 
         <?php if ($recentlyActive): ?>
-        <details>
+        <details id="logged-in-details">
             <summary style="cursor: pointer; font-weight: 600; font-size: var(--fs-sm); color: var(--color-success); margin-bottom: var(--sp-2);">
-                ✓ <?= count($recentlyActive) ?> active in the last 30 days
+                ✓ <?= count($recentlyActive) ?> have logged in
             </summary>
             <div style="margin-top: var(--sp-2); overflow-x: auto;">
             <table class="table" style="font-size: var(--fs-sm);">
