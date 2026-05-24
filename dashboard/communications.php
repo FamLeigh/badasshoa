@@ -611,6 +611,10 @@ require __DIR__ . '/../includes/header.php';
             </div>
             <?php if (!empty($a['image_path'])): ?>
                 <img class="ann-thumb" src="/announcement-image.php?id=<?= (int)$a['id'] ?>" alt="" loading="lazy">
+            <?php else:
+                $pEmoji = ann_types()[(string)$a['type']]['emoji'] ?? '📢';
+            ?>
+                <div class="ann-thumb" style="<?= $typeBadgeStyle ?> display:flex;align-items:center;justify-content:center;font-size:1.8rem;object-fit:unset;"><?= $pEmoji ?></div>
             <?php endif; ?>
         </a>
         <?php endforeach; ?>

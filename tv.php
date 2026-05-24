@@ -728,6 +728,13 @@ header {
     margin-top: 10px;
     font-weight: 600;
 }
+.ann-placeholder {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    font-size: clamp(1.8rem, 3.5vw, 3.5rem);
+    object-fit: unset;
+}
 
 /* ── Event card ───────────────────────────────────────────── */
 .evt-item { display: flex; gap: 18px; align-items: flex-start; }
@@ -983,13 +990,6 @@ body {
     border-radius: 8px;
     margin-bottom: 12px;
     display: block;
-}
-.ann-placeholder {
-    display: flex !important;
-    align-items: center;
-    justify-content: center;
-    font-size: clamp(1.8rem, 3.5vw, 3.5rem);
-    object-fit: unset;
 }
 .ticker-evt-header {
     display: flex;

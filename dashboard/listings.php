@@ -1,7 +1,9 @@
 <?php
 declare(strict_types=1);
-require_once __DIR__ . '/../includes/auth.php';
-requireRole('board_member');
+require __DIR__ . '/_bootstrap.php';
+require_login();
+$canManage = role_can_manage(viewing_role());
+if (!$canManage) { http_response_code(403); die('Access denied'); }
 
 $assocId  = (int)$_SESSION['association_id'];
 $myUserId = (int)$_SESSION['user_id'];
