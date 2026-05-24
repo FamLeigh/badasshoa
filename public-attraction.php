@@ -13,7 +13,7 @@ $stmt->execute([$id, $aid]);
 $row = $stmt->fetch();
 if (!$row || empty($row['photo_path'])) { http_response_code(404); die('Not found'); }
 
-$rel = 'attractions/' . basename((string)$row['photo_path']);
+$rel = 'uploads/' . $aid . '/' . $row['photo_path'];
 $abs = storage_path($rel);
 if (!is_file($abs)) { http_response_code(404); die('File missing'); }
 

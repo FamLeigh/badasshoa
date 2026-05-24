@@ -93,7 +93,7 @@ if ($type === 'document') {
     $stmt->execute([$id, $assocId]);
     $row = $stmt->fetch();
     if (!$row || empty($row['photo_path'])) { http_response_code(404); die('Not found'); }
-    $relative = 'attractions/' . basename((string)$row['photo_path']);
+    $relative = 'uploads/' . $assocId . '/' . $row['photo_path'];
     $filename = 'attraction-' . $id . '.' . pathinfo($relative, PATHINFO_EXTENSION);
     $ext      = strtolower(pathinfo($relative, PATHINFO_EXTENSION));
     $type_h   = match ($ext) { 'png' => 'image/png', 'gif' => 'image/gif', 'webp' => 'image/webp', default => 'image/jpeg' };
@@ -102,7 +102,7 @@ if ($type === 'document') {
     $stmt->execute([$id, $assocId]);
     $row = $stmt->fetch();
     if (!$row || empty($row['photo_path'])) { http_response_code(404); die('Not found'); }
-    $relative = 'listings/' . basename((string)$row['photo_path']);
+    $relative = 'uploads/' . $assocId . '/' . $row['photo_path'];
     $filename = 'listing-' . $id . '.' . pathinfo($relative, PATHINFO_EXTENSION);
     $ext      = strtolower(pathinfo($relative, PATHINFO_EXTENSION));
     $type_h   = match ($ext) { 'png' => 'image/png', 'gif' => 'image/gif', 'webp' => 'image/webp', default => 'image/jpeg' };

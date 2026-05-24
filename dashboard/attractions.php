@@ -27,19 +27,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $canEdit) {
     $action = (string)($_POST['action'] ?? '');
 
     if ($action === 'save') {
-        $editId = (int)($_POST['id'] ?? 0);
-        $name   = mb_substr(trim((string)($_POST['name'] ?? '')), 0, 200);
-        $desc   = mb_substr(trim((string)($_POST['description'] ?? '')), 0, 2000) ?: null;
-        $url    = mb_substr(trim((string)($_POST['website_url'] ?? '')), 0, 500) ?: null;
-        $cat    = array_key_exists((string)($_POST['category'] ?? ''), $CATEGORIES)
-                    ? $_POST['category'] : 'other';
-        $sort   = max(0, min(9999, (int)($_POST['sort_order'] ?? 0)));
-        $active = isset($_POST['active']) ? 1 : 0;
+        $editId  = (int)($_POST['id'] ?? 0);
+        $name    = mb_substr(trim((string)($_POST['name'] ?? '')), 0, 200);
+        $desc    = mb_substr(trim((string)($_POST['description'] ?? '')), 0, 2000) ?: null;
+        $url     = mb_substr(trim((string)($_POST['website_url'] ?? '')), 0, 500) ?: null;
+        $address = mb_substr(trim((string)($_POST['address'] ?? '')), 0, 500) ?: null;
+        $cat     = array_key_exists((string)($_POST['category'] ?? ''), $CATEGORIES)
+                     ? $_POST['category'] : 'other';
+        $sort    = max(0, min(9999, (int)($_POST['sort_order'] ?? 0)));
+        $active  = isset($_POST['active']) ? 1 : 0;
 
         if ($url && !filter_var($url, FILTER_VALIDATE_URL)) {
             $errors[] = 'Website URL is not valid.';
         }
         if ($name === '') $errors[] = 'Name is required.';
+
+        // Geocode address if provided
+        $lat = null; $lon = null;
+        if ($address !== null && empty($errors)) {
+            $geo = geocode_address($address);
+            if ($geo) { $lat = $geo['lat']; $lon = $geo['lon']; }
+        }
 
         // Photo upload
         $photoPath = null;
@@ -69,8 +77,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $canEdit) {
                 $row = $row->fetch();
                 if ($row) {
                     $oldPhoto = (string)($row['photo_path'] ?? '');
-                    $sql = 'UPDATE association_attractions SET name=?,description=?,website_url=?,category=?,sort_order=?,active=?';
-                    $args = [$name,$desc,$url,$cat,$sort,$active];
+                    $sql  = 'UPDATE association_attractions SET name=?,description=?,website_url=?,address=?,latitude=?,longitude=?,category=?,sort_order=?,active=?';
+                    $args = [$name,$desc,$url,$address,$lat,$lon,$cat,$sort,$active];
                     if ($photoPath !== null) {
                         $sql .= ',photo_path=?';
                         $args[] = $photoPath;
@@ -87,9 +95,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $canEdit) {
                 }
             } else {
                 db()->prepare(
-                    'INSERT INTO association_attractions (association_id,name,description,website_url,category,sort_order,active,photo_path)
-                     VALUES (?,?,?,?,?,?,?,?)'
-                )->execute([$assocId,$name,$desc,$url,$cat,$sort,$active,$photoPath]);
+                    'INSERT INTO association_attractions
+                        (association_id,name,description,website_url,address,latitude,longitude,category,sort_order,active,photo_path)
+                     VALUES (?,?,?,?,?,?,?,?,?,?,?)'
+                )->execute([$assocId,$name,$desc,$url,$address,$lat,$lon,$cat,$sort,$active,$photoPath]);
                 flash('success', 'Attraction added.');
                 redirect('/dashboard/attractions.php');
             }
@@ -137,17 +146,22 @@ $stmt = db()->prepare(
 $stmt->execute([$assocId]);
 $attractions = $stmt->fetchAll();
 
-$active = 'settings';
+$assocLat = isset($association['latitude'])  && $association['latitude']  !== null ? (float)$association['latitude']  : null;
+$assocLon = isset($association['longitude']) && $association['longitude'] !== null ? (float)$association['longitude'] : null;
+
+$active      = 'attractions';
+$page_title  = 'Area Attractions';
 require_once __DIR__ . '/../includes/header.php';
 ?>
 
-<div class="page-header">
+<div class="container" style="padding: var(--sp-8) var(--sp-6) var(--sp-12); max-width: 1280px;">
+
+<div class="row row--between" style="margin-bottom: var(--sp-6); gap: var(--sp-4); flex-wrap: wrap; align-items: flex-end;">
     <div>
-        <h1 class="page-title">Area Attractions</h1>
-        <p class="muted">Local places worth knowing about — shown on your public community page.</p>
+        <h1 style="font-size: var(--fs-2xl); margin: 0 0 var(--sp-1);">Area Attractions</h1>
+        <p class="muted" style="margin: 0;">Local places worth knowing about — shown on your public community page.</p>
     </div>
     <div class="row" style="gap: var(--sp-3);">
-        <a class="btn btn--ghost" href="/dashboard/settings.php">← Settings</a>
         <?php if ($canEdit): ?>
             <a class="btn btn--primary" href="/dashboard/attractions.php?edit=new">+ Add attraction</a>
         <?php endif; ?>
@@ -209,15 +223,34 @@ require_once __DIR__ . '/../includes/header.php';
                        placeholder="https://...">
             </div>
             <div class="field">
-                <label class="field__label" for="a-photo">Photo</label>
-                <input class="input" type="file" id="a-photo" name="photo" accept="image/*">
-                <?php if (!empty($editRow['photo_path'])): ?>
-                    <div style="margin-top: var(--sp-2);">
-                        <img src="/file.php?type=attraction&id=<?= (int)$editRow['id'] ?>" alt=""
-                             style="max-height: 100px; border-radius: var(--r-sm); display: block;">
-                        <span class="muted" style="font-size: var(--fs-xs);">Upload a new photo to replace</span>
+                <label class="field__label" for="a-address">Address</label>
+                <input class="input" type="text" id="a-address" name="address" maxlength="500"
+                       value="<?= e((string)($editRow['address'] ?? $_POST['address'] ?? '')) ?>"
+                       placeholder="4931 S Peninsula Dr, Ponce Inlet, FL 32127">
+                <div class="field__hint">Used to calculate distance from your building and link to maps. Geocoded automatically on save.</div>
+                <?php if (!empty($editRow['latitude']) && !empty($editRow['longitude'])): ?>
+                    <div style="margin-top: var(--sp-2); font-size: var(--fs-xs); color: var(--color-green);">
+                        ✓ Geocoded — <?= round((float)$editRow['latitude'], 4) ?>, <?= round((float)$editRow['longitude'], 4) ?>
+                    </div>
+                <?php elseif (!empty($editRow['address'])): ?>
+                    <div style="margin-top: var(--sp-2); font-size: var(--fs-xs); color: var(--color-orange);">
+                        Address on file but not yet geocoded — save again to retry.
                     </div>
                 <?php endif; ?>
+            </div>
+            <div class="field">
+                <label class="field__label" for="a-photo">Photo</label>
+                <?php if (!empty($editRow['photo_path'])): ?>
+                    <div style="margin-bottom: var(--sp-3); padding: var(--sp-3); background: var(--color-surface-2); border-radius: var(--r-md); display: flex; align-items: center; gap: var(--sp-3);">
+                        <img src="/dashboard/file.php?type=attraction&id=<?= (int)$editRow['id'] ?>" alt=""
+                             style="width:80px; height:80px; object-fit:cover; border-radius: var(--r-sm); flex-shrink:0; display:block;">
+                        <div>
+                            <div style="font-size: var(--fs-sm); font-weight: 600; margin-bottom: 2px;">Current photo</div>
+                            <div class="muted" style="font-size: var(--fs-xs);">Choose a new file below to replace it.</div>
+                        </div>
+                    </div>
+                <?php endif; ?>
+                <input class="input" type="file" id="a-photo" name="photo" accept="image/*">
             </div>
             <div class="field" style="grid-column: 1 / -1;">
                 <label style="display: flex; align-items: center; gap: var(--sp-2); cursor: pointer;">
@@ -239,18 +272,43 @@ require_once __DIR__ . '/../includes/header.php';
     <table class="table">
         <thead>
             <tr>
+                <th style="width:64px;"></th>
                 <th>Name</th>
                 <th>Category</th>
+                <th>Distance</th>
                 <th>Status</th>
                 <th style="width:130px;"></th>
             </tr>
         </thead>
         <tbody>
         <?php foreach ($attractions as $a): ?>
+            <?php
+            $distLabel = '';
+            if ($assocLat !== null && $assocLon !== null && !empty($a['latitude']) && !empty($a['longitude'])) {
+                $mi = haversine_miles($assocLat, $assocLon, (float)$a['latitude'], (float)$a['longitude']);
+                $distLabel = $mi < 0.1 ? '< 0.1 mi' : round($mi, 1) . ' mi';
+            }
+            $mapUrl = '';
+            if (!empty($a['latitude']) && !empty($a['longitude'])) {
+                $mapUrl = 'https://www.google.com/maps/search/?api=1&query=' . $a['latitude'] . ',' . $a['longitude'];
+            } elseif (!empty($a['address'])) {
+                $mapUrl = 'https://maps.google.com/?q=' . rawurlencode((string)$a['address']);
+            }
+            ?>
             <tr>
+                <td style="padding: var(--sp-2);">
+                    <?php if (!empty($a['photo_path'])): ?>
+                        <img src="/dashboard/file.php?type=attraction&id=<?= (int)$a['id'] ?>" alt=""
+                             style="width:52px; height:52px; object-fit:cover; border-radius: var(--r-sm); display:block;">
+                    <?php else: ?>
+                        <div style="width:52px; height:52px; border-radius: var(--r-sm); background: var(--color-surface-2); display:flex; align-items:center; justify-content:center; font-size:1.4rem;">📍</div>
+                    <?php endif; ?>
+                </td>
                 <td>
                     <strong><?= e((string)$a['name']) ?></strong>
-                    <?php if (!empty($a['description'])): ?>
+                    <?php if (!empty($a['address'])): ?>
+                        <div class="muted" style="font-size: var(--fs-xs); margin-top: 2px;"><?= e((string)$a['address']) ?></div>
+                    <?php elseif (!empty($a['description'])): ?>
                         <div class="muted" style="font-size: var(--fs-xs); margin-top: 2px;"><?= e(mb_strimwidth((string)$a['description'], 0, 80, '…')) ?></div>
                     <?php endif; ?>
                     <?php if (!empty($a['website_url'])): ?>
@@ -258,6 +316,18 @@ require_once __DIR__ . '/../includes/header.php';
                     <?php endif; ?>
                 </td>
                 <td><?= e($CATEGORIES[$a['category']] ?? $a['category']) ?></td>
+                <td style="white-space: nowrap;">
+                    <?php if ($distLabel): ?>
+                        <span style="font-size: var(--fs-sm);"><?= e($distLabel) ?></span>
+                        <?php if ($mapUrl): ?>
+                            <br><a href="<?= e($mapUrl) ?>" target="_blank" rel="noopener" style="font-size: var(--fs-xs);">Map ↗</a>
+                        <?php endif; ?>
+                    <?php elseif ($mapUrl): ?>
+                        <a href="<?= e($mapUrl) ?>" target="_blank" rel="noopener" class="muted" style="font-size: var(--fs-xs);">Map ↗</a>
+                    <?php else: ?>
+                        <span class="muted" style="font-size: var(--fs-xs);">—</span>
+                    <?php endif; ?>
+                </td>
                 <td>
                     <?php if ($a['active']): ?>
                         <span class="badge badge--green">Public</span>
@@ -299,5 +369,7 @@ require_once __DIR__ . '/../includes/header.php';
     <?php endif; ?>
 </div>
 <?php endif; ?>
+
+</div><?php /* /container */ ?>
 
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>

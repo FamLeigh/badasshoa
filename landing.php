@@ -398,26 +398,55 @@ if ($hasContact)               $_navSections['contact']      = 'Contact';
         foreach ($attractions as $a) { $bycat[$a['category']][] = $a; }
         ?>
         <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--sp-4);">
-            <?php foreach ($attractions as $a): ?>
-            <div class="card card--padded">
+            <?php
+            $assocLat = isset($assoc['latitude'])  && $assoc['latitude']  !== null ? (float)$assoc['latitude']  : null;
+            $assocLon = isset($assoc['longitude']) && $assoc['longitude'] !== null ? (float)$assoc['longitude'] : null;
+            foreach ($attractions as $a):
+                $distLabel = '';
+                if ($assocLat !== null && $assocLon !== null && !empty($a['latitude']) && !empty($a['longitude'])) {
+                    $mi = haversine_miles($assocLat, $assocLon, (float)$a['latitude'], (float)$a['longitude']);
+                    $distLabel = $mi < 0.1 ? '< 0.1 mi' : round($mi, 1) . ' mi';
+                }
+                $mapUrl = '';
+                if (!empty($a['latitude']) && !empty($a['longitude'])) {
+                    $mapUrl = 'https://www.google.com/maps/search/?api=1&query=' . $a['latitude'] . ',' . $a['longitude'];
+                } elseif (!empty($a['address'])) {
+                    $mapUrl = 'https://maps.google.com/?q=' . rawurlencode((string)$a['address']);
+                }
+            ?>
+            <div class="card card--padded" style="display: flex; flex-direction: column;">
                 <?php if (!empty($a['photo_path'])): ?>
-                    <div style="height: 140px; overflow: hidden; border-radius: var(--r-sm); margin: calc(-1 * var(--sp-4)) calc(-1 * var(--sp-4)) var(--sp-3); flex-shrink: 0;">
-                        <img src="/public-attraction.php?id=<?= (int)$a['id'] ?>&aid=<?= (int)$assoc['id'] ?>" alt=""
+                    <div style="height: 160px; overflow: hidden; border-radius: var(--r-sm); margin: calc(-1 * var(--sp-4)) calc(-1 * var(--sp-4)) var(--sp-3); flex-shrink: 0;">
+                        <img src="/public-attraction.php?id=<?= (int)$a['id'] ?>&aid=<?= (int)$assoc['id'] ?>" alt="<?= e((string)$a['name']) ?>"
                              style="width:100%; height:100%; object-fit:cover; display:block;">
                     </div>
                 <?php endif; ?>
                 <div style="display: flex; align-items: flex-start; gap: var(--sp-2); margin-bottom: var(--sp-2);">
-                    <span style="font-size: 1.4rem; line-height: 1; flex-shrink: 0;"><?= $ATTR_CATS[$a['category']] ?? '📍' ?></span>
-                    <div>
+                    <span style="font-size: 1.4rem; line-height: 1; flex-shrink: 0; margin-top: 2px;"><?= $ATTR_CATS[$a['category']] ?? '📍' ?></span>
+                    <div style="flex: 1; min-width: 0;">
                         <strong style="font-size: var(--fs-md);"><?= e((string)$a['name']) ?></strong>
                         <?php if (!empty($a['description'])): ?>
-                            <div class="muted" style="font-size: var(--fs-sm); margin-top: 2px;"><?= e((string)$a['description']) ?></div>
+                            <div class="muted" style="font-size: var(--fs-sm); margin-top: 2px;"><?= e(mb_strimwidth((string)$a['description'], 0, 120, '…')) ?></div>
                         <?php endif; ?>
                     </div>
                 </div>
+                <?php if (!empty($a['address']) || $distLabel || $mapUrl): ?>
+                    <div style="font-size: var(--fs-xs); color: var(--color-text-muted); margin-bottom: var(--sp-3); display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap;">
+                        <?php if (!empty($a['address'])): ?>
+                            <span><?= e((string)$a['address']) ?></span>
+                        <?php endif; ?>
+                        <?php if ($distLabel): ?>
+                            <span style="background: var(--color-surface-2); border-radius: 99px; padding: 1px 8px; font-weight: 600; color: var(--color-navy);"><?= e($distLabel) ?> away</span>
+                        <?php endif; ?>
+                        <?php if ($mapUrl): ?>
+                            <a href="<?= e($mapUrl) ?>" target="_blank" rel="noopener"
+                               style="color: var(--color-orange); font-weight: 600; text-decoration: none;">Map &nearr;</a>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
                 <?php if (!empty($a['website_url'])): ?>
                     <a href="<?= e((string)$a['website_url']) ?>" target="_blank" rel="noopener"
-                       style="font-size: var(--fs-sm); color: var(--color-orange); font-weight: 600;">
+                       style="font-size: var(--fs-sm); color: var(--color-orange); font-weight: 600; margin-top: auto;">
                         Visit website &rarr;
                     </a>
                 <?php endif; ?>

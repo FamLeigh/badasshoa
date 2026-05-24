@@ -414,6 +414,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit') 
     }
 }
 
+// Resolve search/filter params up front so board and resident queries share them.
+$qSearch     = trim((string)($_GET['q'] ?? ''));
+$ownersOnly  = isset($_GET['owners_only']);
+$roleFilter  = $_GET['role'] ?? '';
+$validRoles  = ['owner','renter','staff','board_member','board_admin','property_manager'];
+if (!in_array($roleFilter, $validRoles, true)) $roleFilter = '';
+
 // Board members. Sort by office seniority first (President → ... → Director),
 // then anyone without an office (NULL bubbles to the end via FIELD()), then by
 // role tier as the previous secondary sort, then by name.
@@ -439,11 +446,6 @@ $boardStmt->execute($boardParams);
 $board = $boardStmt->fetchAll();
 
 // Residents
-$qSearch     = trim((string)($_GET['q'] ?? ''));
-$ownersOnly  = isset($_GET['owners_only']);
-$roleFilter  = $_GET['role'] ?? '';
-$validRoles  = ['owner','renter','staff','board_member','board_admin','property_manager'];
-if (!in_array($roleFilter, $validRoles, true)) $roleFilter = '';
 
 // Privacy: renters only see the Board section — not the full resident roster.
 // (Their landlord's contact info is the building's responsibility, not a

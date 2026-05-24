@@ -759,6 +759,17 @@ function broadcast_email_html(string $bodyHtml, string $assocName, string $assoc
          . '</table></td></tr></table></body></html>';
 }
 
+// --- Haversine distance (miles) between two lat/lon points -------------
+function haversine_miles(float $lat1, float $lon1, float $lat2, float $lon2): float
+{
+    $R    = 3958.8;
+    $dLat = deg2rad($lat2 - $lat1);
+    $dLon = deg2rad($lon2 - $lon1);
+    $a    = sin($dLat / 2) ** 2
+          + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($dLon / 2) ** 2;
+    return $R * 2 * atan2(sqrt($a), sqrt(1 - $a));
+}
+
 // --- Geocode an address via Photon (free, no API key) ------------------
 // Returns ['lat' => float, 'lon' => float] on success, null on failure.
 // Silent fail; never throws.

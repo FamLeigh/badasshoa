@@ -144,7 +144,8 @@ $stmt = db()->prepare("SELECT * FROM property_listings $where ORDER BY FIELD(sta
 $stmt->execute($params);
 $allListings = $stmt->fetchAll();
 
-$active = 'listings';
+$active      = 'listings';
+$page_title  = 'Property Listings';
 require_once __DIR__ . '/../includes/header.php';
 
 function listing_price_display(?int $cents, string $type): string {
@@ -160,10 +161,12 @@ $STATUS_BADGES = [
 ];
 ?>
 
-<div class="page-header">
+<div class="container" style="padding: var(--sp-8) var(--sp-6) var(--sp-12); max-width: 1280px;">
+
+<div class="row row--between" style="margin-bottom: var(--sp-6); gap: var(--sp-4); flex-wrap: wrap; align-items: flex-end;">
     <div>
-        <h1 class="page-title">Property Listings</h1>
-        <p class="muted">Homes for sale or rent in <?= e((string)$association['name']) ?>.</p>
+        <h1 style="font-size: var(--fs-2xl); margin: 0 0 var(--sp-1);">Property Listings</h1>
+        <p class="muted" style="margin: 0;">Homes for sale or rent in <?= e((string)$association['name']) ?>.</p>
     </div>
     <div class="row" style="gap: var(--sp-3);">
         <?php if ($canEdit && !$editRow && !isset($_GET['edit'])): ?>
@@ -275,14 +278,17 @@ $STATUS_BADGES = [
             <!-- Photo -->
             <div class="field">
                 <label class="field__label" for="l-photo">Photo</label>
-                <input class="input" type="file" id="l-photo" name="photo" accept="image/*">
                 <?php if (!empty($editRow['photo_path'])): ?>
-                    <div style="margin-top: var(--sp-2);">
-                        <img src="/file.php?type=listing&id=<?= (int)$editRow['id'] ?>" alt=""
-                             style="max-height: 100px; border-radius: var(--r-sm); display: block;">
-                        <span class="muted" style="font-size: var(--fs-xs);">Upload a new photo to replace</span>
+                    <div style="margin-bottom: var(--sp-3); padding: var(--sp-3); background: var(--color-surface-2); border-radius: var(--r-md); display: flex; align-items: center; gap: var(--sp-3);">
+                        <img src="/dashboard/file.php?type=listing&id=<?= (int)$editRow['id'] ?>" alt=""
+                             style="width:80px; height:80px; object-fit:cover; border-radius: var(--r-sm); flex-shrink:0; display:block;">
+                        <div>
+                            <div style="font-size: var(--fs-sm); font-weight: 600; margin-bottom: 2px;">Current photo</div>
+                            <div class="muted" style="font-size: var(--fs-xs);">Choose a new file below to replace it.</div>
+                        </div>
                     </div>
                 <?php endif; ?>
+                <input class="input" type="file" id="l-photo" name="photo" accept="image/*">
             </div>
         </div>
         <div class="row" style="margin-top: var(--sp-5); gap: var(--sp-3);">
@@ -320,7 +326,7 @@ $STATUS_BADGES = [
     <div class="card" style="display: flex; flex-direction: column;">
         <?php if (!empty($l['photo_path'])): ?>
             <div style="height: 180px; overflow: hidden; border-radius: var(--r-md) var(--r-md) 0 0; flex-shrink: 0;">
-                <img src="/file.php?type=listing&id=<?= (int)$l['id'] ?>" alt=""
+                <img src="/dashboard/file.php?type=listing&id=<?= (int)$l['id'] ?>" alt=""
                      style="width:100%; height:100%; object-fit:cover; display:block;">
             </div>
         <?php endif; ?>
@@ -387,5 +393,7 @@ $STATUS_BADGES = [
     <?php endif; ?>
 </div>
 <?php endif; ?>
+
+</div><?php /* /container */ ?>
 
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
