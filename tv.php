@@ -966,8 +966,6 @@ body {
     font-size: clamp(1rem, 1.5vw, 1.5rem);
     color: var(--muted);
     line-height: 1.5;
-    flex: 1;
-    min-height: 0;
     overflow: hidden;
 }
 .ticker-meta {
