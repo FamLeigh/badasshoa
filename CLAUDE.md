@@ -115,15 +115,16 @@ These get applied everywhere from day one because retrofitting is painful:
 ## Deferred / Phase 2+
 
 - Subdomain-per-tenant routing
-- Maintenance requests, violation tracking
-- Digital signatures, amenity booking
-- Board voting
+- Amenity booking
 - Stripe / payment processing
 - Mobile PWA
-- 2FA (hooks may be added now if cheap)
-- Real SMTP wiring (stubbed in Phase 1)
-- Hostinger deploy automation
-- Custom domain per tenant
+- 2FA
+- Custom domain per tenant (app-layer columns easy to add; needs VPS/Caddy for ops)
+- Broadcast SMS (Twilio, TCPA opt-in required)
+- Broadcast voice call (highest legal risk — get counsel sign-off first)
+- Physical mail via Lob.com (violation notices, meeting notices)
+
+**Done (no longer deferred):** ~~Violation tracking~~ ✓ | ~~Digital signatures~~ ✓ | ~~Board voting~~ ✓ | ~~Real SMTP~~ ✓ | ~~Hostinger deploy~~ ✓ | ~~Broadcast email~~ ✓
 
 ---
 
@@ -260,40 +261,48 @@ This file (CLAUDE.md) keeps an internal-only summary in the section below for cr
 
 ## Where we left off (resume here next session)
 
-**Last session ended:** 2026-05-23 (session 11) — **Board meeting agenda builder, platform messages, invite email overhaul, free tier, directory last-login column.**
+**Last session ended:** 2026-05-24 (sessions 12–14, CLAUDE.md not updated during those sessions — now caught up) — **Board meeting polish, PDF document signing, broadcast email.**
 
-**What got built this session:**
+**What got built since session 11:**
 
-- **Board meeting agenda builder** — `/dashboard/meetings.php` (list + create), `/dashboard/meeting-detail.php` (4-tab: Agenda / Resolutions / Notice / Minutes), `/dashboard/meeting-print.php` (print-only: Proof of Notice Affidavit per FL §718.112, Notice of Board Meeting with virtual platform info, numbered Agenda, Resolutions with per-member vote tallies). Migrations 076–078 (board_meetings, agenda_items, resolutions, resolution_votes).
+- **Board meeting polish** — Gifted status fix (migration 081, gifted is a `status` not a `plan`); "Approve Minutes from Last Meeting" as a standard agenda item (migration 082); resolution vote options expanded to include `not_present` and `na` (migration 083); board-only voters; BE IT RESOLVED clause fields; platform messages moved from banner to inline dashboard card.
 
-- **Member invite flow** — `invite.php` (token-based password-set page for new members), migration 075 (invite_token / invite_sent_at / invite_expires_at on users table). `dashboard/send-invite.php` is the POST-only handler called from activity.php and directory.php.
+- **PDF document signing** — `/dashboard/sign-pdf.php`: members place a saved signature image onto any uploaded PDF at a draggable/resizable position. Required signers: board admin sets required signers on a document with a tag/chip typeahead; "Notify" button emails all pending signers a direct sign link. Signed copies: file.php serves the signed copy to the signer; all members can view. Full audit certificate page at `/dashboard/document-audit.php`. Notifications on full completion. Signature badge on docs list. Migrations 084 (document_signatures) + 085 (document_signature_requests) + 086 (resolution category). Cascade delete wired.
 
-- **Invite email overhaul** — Full HTML/text multipart email with association logo, orange CTA button, portal bookmark link, 7-item feature list, sender sign-off (name/email/phone), and styled footer linking both the association portal and BadassHOA. `send_mail()` in functions.php now accepts optional `$html` parameter for multipart/alternative; existing callers unaffected.
+- **Broadcast email** — `/dashboard/broadcasts.php`: board admins compose and send email broadcasts to all members (or filtered subsets). Custom member picker. PDF attachment support. Real-email-only counts (skips placeholder emails). Delivery tracking per recipient. Activity log integration. Nav: Lobby TV link with slug+pin. Migrations 087 (broadcasts) + 088 (broadcast_attachments).
 
-- **Platform messages** — Super admins push banners to association dashboards from `/admin/associations.php` edit view. Messages rendered as navy "From BadassHOA" banner in `includes/header.php` for all dashboard pages. Audience = all members or board-only roles. Optional expiry date. Migration 079 + POST handlers (add / toggle / delete) + header query + render.
+- **TV / gifted fix** — `tv.php` now accepts `gifted` association status so Bellair's lobby TV works via slug+pin URL.
 
-- **Free plan tier** — 'free' added to `associations.plan` ENUM (migration 080), plan dropdowns, and validation allowlists. No feature gating — plan is a label only right now.
-
-- **Directory: last login column** — `last_login_at` shown per member row for canManage roles. "Never" in red + "invite sent" sub-note for real-email members who haven't logged in yet.
-
-- **Minutes enhancements** — Migrations 073 (attendee_user_ids) and 074 (signin_sheet_path / signin_sheet_type).
+**Previously done (sessions 6–11, also confirmed in codebase):**
+- Board voting: `/dashboard/voting.php` (migrations 047–048) — ballots, deadlines, results reveal
+- CSV resident import: directory.php (no-email rows handled)
+- Newsletter signup: public landing (migration 052)
+- Per-user timezone: settings (migration 050)
+- Lobby TV: 3-column layout, setInterval scroll, weather, recurring event expansion, pin auth
+- Board notes: per-unit and per-member (migrations 071–072)
+- Audit log viewer: in settings
+- In-app help system: `/dashboard/help.php`
+- Media thumbnails
+- Directory opt-out (migration 066)
 
 **Production state in DB:**
-- Migrations through **080** applied to `u535581001_badassHOA`
+- Migrations through **088** applied to `u535581001_badassHOA`
 - 232 FL statutes in the `statutes` table (chapters 718, 719, 720, 553)
 - 37 Bellair tenants imported (migration 070)
 - 8 rental agents + 14 unit links (migration 069)
-- Email driver: `msmtp` (live — flip back to `log` in server config.php if needed)
+- Email driver: check server config.php — was `msmtp` as of session 11; may have been toggled
 
 **Logins:**
 - **Prod** super admin: `me@kevinleigh.com / bhoaK0m3r2.6`
-- Local MAMP DB is well behind prod. If reviving local dev, run migrations 014–080 in order.
+- Local MAMP DB is well behind prod. If reviving local dev, run migrations 014–088 in order.
 
 **Quick visual check (prod):**
 - Dashboard: https://badasshoa.com/dashboard/
 - Meetings: https://badasshoa.com/dashboard/meetings.php
+- Broadcasts: https://badasshoa.com/dashboard/broadcasts.php
+- Documents (signing): https://badasshoa.com/dashboard/documents.php
+- Voting: https://badasshoa.com/dashboard/voting.php
 - Directory: https://badasshoa.com/dashboard/directory.php
-- Board notes: https://badasshoa.com/dashboard/board-note.php?unit_id=1
 - Admin associations: https://badasshoa.com/admin/associations.php
 - Lobby TV: https://badasshoa.com/tv.php?token=affaad783b77ff313ca3ca047c9f8a53ddd285e6c7787ad4
 
@@ -305,15 +314,18 @@ This file (CLAUDE.md) keeps an internal-only summary in the section below for cr
 - Pool FAQ (id 8) still has `[VERIFY]` markers in the answer text.
 - First Bellair user form (temp parking pass) never test-filed.
 - Bellair contact exceptions (8 email mismatches flagged in session 9) still unresolved — kept original DB data pending Kevin's review.
-- `send_mail()` signature changed to `(to, subject, body, html = '')` — the 4th param is optional, all existing callers pass only 3 args and are unaffected.
+- `send_mail()` signature: `(to, subject, body, html = '')` — 4th param optional.
+- E-signatures are E-SIGN/UETA-shaped but Kevin should have counsel review before relying on them for binding documents.
+- Settings page forms each need their own `form=` section value — adding a third form without one will overwrite all columns on save.
+- `gifted` is an association `status`, not a `plan` — don't conflate the two.
 
-**Candidates for next session** (queued + roughly prioritized):
-1. **Board voting module** — board creates ballot with options + deadline; members cast one vote; results reveal after deadline. Tables: `votes` (id, association_id, title, description, options JSON, deadline, status) + `vote_responses` (vote_id, user_id, choice, cast_at). Page: `/dashboard/voting.php`.
-2. **Per-association logo upload** — use in dashboard nav instead of text name.
-3. **CSV resident import** for directory.
-4. **Newsletter signup** on the public landing.
-5. **Per-user TZ preference** — timestamps all UTC right now; add TZ field to user settings.
-6. **Lobby TV enhancements** — fourth panel or ticker for community rules; per-association configurable refresh interval.
+**Candidates for next session** (genuinely not yet built):
+1. **Per-association logo upload** — use in dashboard nav instead of text association name. No migration exists for this yet.
+2. **Broadcast SMS** — needs Twilio + billing path + TCPA opt-in flow. See big-ticket notes below.
+3. **Physical mail (Lob.com)** — violation notices, meeting notices. See big-ticket notes below.
+4. **Image thumbnail generation** on media upload (currently serves full-res through gatekeeper).
+5. **HTML email templates** — branded headers/footers for all transactional emails (invite is done; others still plain text).
+6. **Custom domain per association** — app-layer columns ready to add; ops-layer needs VPS/Caddy. See big-ticket notes below.
 
 **Big-ticket comms / outreach features (queued — likely a Phase 3 batch):**
 
@@ -375,6 +387,13 @@ All four share a `broadcasts` table (kind / audience / subject / body / schedule
 ---
 
 ## Changelog
+
+- **2026-05-24 (sessions 12–14) — Board meeting polish, PDF signing, broadcast email.**
+    - Gifted status: renamed 'free' plan tier; `gifted` is now an association `status` not a `plan` (migration 081).
+    - Board meetings: "Approve Minutes from Last Meeting" standard agenda item (migration 082); `not_present`/`na` resolution vote options (migration 083); board-only voters; BE IT RESOLVED clause fields; platform messages moved inline (no more banner).
+    - PDF document signing: required signers with tag/chip typeahead, draggable/resizable signature placement, signed copy served to signer, all-members view, full audit certificate, completion notifications, signature badge on docs list. Cascade delete. Migrations 084–086.
+    - Broadcast email: compose/send/track, custom member picker, PDF attachment, real-email-only counts, delivery tracking, activity log integration. Migrations 087–088.
+    - TV: accepts `gifted` association status for Bellair lobby TV slug+pin URL; Lobby TV nav link added.
 
 - **2026-05-23 (session 11) — Board meetings, platform messages, invite email, free tier.**
     - Board meeting agenda builder: `/dashboard/meetings.php` + `meeting-detail.php` + `meeting-print.php`. Agenda items proposed/approved, resolutions with per-member yes/no/abstain votes, print-ready FL §718.112 documents. Migrations 073–078.
