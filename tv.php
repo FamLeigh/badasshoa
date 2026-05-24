@@ -43,7 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $loginError = 'Too many failed attempts. Try again in 15 minutes.';
     } elseif ($postSlug !== '' && $postPin !== '') {
         $chk = db()->prepare(
-            'SELECT id FROM associations WHERE subdomain = ? AND tv_pin = ? AND status IN ("active","trial") LIMIT 1'
+            'SELECT id FROM associations WHERE subdomain = ? AND tv_pin = ? AND status IN ("active","trial","gifted") LIMIT 1'
         );
         $chk->execute([$postSlug, $postPin]);
         if ($chk->fetch()) {
@@ -66,7 +66,7 @@ if ($slug !== '' && $pin !== '') {
         die('Too many failed attempts. Try again in 15 minutes.');
     }
     $stmt = db()->prepare(
-        'SELECT * FROM associations WHERE subdomain = ? AND tv_pin = ? AND status IN ("active","trial") LIMIT 1'
+        'SELECT * FROM associations WHERE subdomain = ? AND tv_pin = ? AND status IN ("active","trial","gifted") LIMIT 1'
     );
     $stmt->execute([$slug, $pin]);
     $assoc = $stmt->fetch() ?: null;
@@ -75,7 +75,7 @@ if ($slug !== '' && $pin !== '') {
     }
 } elseif ($token !== '') {
     $stmt = db()->prepare(
-        'SELECT * FROM associations WHERE tv_token = ? AND status IN ("active","trial") LIMIT 1'
+        'SELECT * FROM associations WHERE tv_token = ? AND status IN ("active","trial","gifted") LIMIT 1'
     );
     $stmt->execute([$token]);
     $assoc = $stmt->fetch() ?: null;

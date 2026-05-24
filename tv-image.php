@@ -9,7 +9,7 @@ $lid   = (int)($_GET['id'] ?? 0);
 if ($token === '' || $lid === 0) { http_response_code(404); exit; }
 
 // Validate token → association
-$stmt = db()->prepare('SELECT id FROM associations WHERE tv_token = ? AND status IN ("active","trial") LIMIT 1');
+$stmt = db()->prepare('SELECT id FROM associations WHERE tv_token = ? AND status IN ("active","trial","gifted") LIMIT 1');
 $stmt->execute([$token]);
 $assoc = $stmt->fetch();
 if (!$assoc) { http_response_code(404); exit; }
