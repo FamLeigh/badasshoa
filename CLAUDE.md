@@ -261,9 +261,15 @@ This file (CLAUDE.md) keeps an internal-only summary in the section below for cr
 
 ## Where we left off (resume here next session)
 
-**Last session ended:** 2026-05-24 (session 15) — **TV ticker mode + themes, landing page section nav + attractions + plan a visit + property listings.**
+**Last session ended:** 2026-05-24 (session 16) — **directory edit bug fix + admin-send password reset.**
 
-**What got built this session (15):**
+**What got built this session (16):**
+
+- **Directory edit form bug fix** — "Save changes" and "Change password" were silently broken. Root cause: the "Send invite" `<form>` was nested inside the main edit `<form>`. Browsers break the outer form at the inner form boundary, so the password fields and Save button were outside any form. Fixed by moving the invite section outside the main form (it now appears below the form as a standalone panel).
+
+- **Admin-send password reset** — New `dashboard/send-reset.php` handler. Board admins can now send a 1-hour password reset link to any member with a real email on file, directly from the member's edit page. Button appears below the invite section. Uses the same `password_resets` table and `reset.php` flow members use themselves.
+
+**What got built in session 15 (TV + landing):**
 
 - **TV ticker mode** — `tv_mode` column on associations (migration 089). Horizontal ticker: all content (announcements + events + marketplace) merges into scrolling cards, sorted by date, using the same Tizen-compatible setInterval approach. Settings.php TV section now has a layout picker (3-column vs ticker).
 
@@ -302,7 +308,7 @@ This file (CLAUDE.md) keeps an internal-only summary in the section below for cr
 - Directory opt-out (migration 066)
 
 **Production state in DB:**
-- Migrations through **088** applied to `u535581001_badassHOA` — **089–092 need to be run on prod**
+- Migrations through **088** applied to `u535581001_badassHOA` — **089–092 need to be run on prod** (no migration needed for session 16 changes)
 - 232 FL statutes in the `statutes` table (chapters 718, 719, 720, 553)
 - 37 Bellair tenants imported (migration 070)
 - 8 rental agents + 14 unit links (migration 069)
@@ -334,6 +340,9 @@ This file (CLAUDE.md) keeps an internal-only summary in the section below for cr
 - E-signatures are E-SIGN/UETA-shaped but Kevin should have counsel review before relying on them for binding documents.
 - Settings page forms each need their own `form=` section value — adding a third form without one will overwrite all columns on save.
 - `gifted` is an association `status`, not a `plan` — don't conflate the two.
+
+**Known gotchas added this session:**
+- Never nest a `<form>` inside another `<form>`. The "Send invite" panel was previously nested inside the main edit form — fixed in session 16. If adding more out-of-band action panels (reset, deactivate, etc.) to any edit page, keep them as sibling elements after the main `</form>`, not inside it.
 
 **Candidates for next session:**
 1. **Run migrations 089–092 on prod** — `push.sh` then the 4 SQL files via SSH.
@@ -403,6 +412,10 @@ All four share a `broadcasts` table (kind / audience / subject / body / schedule
 ---
 
 ## Changelog
+
+- **2026-05-24 (session 16) — directory edit fix + admin password reset sender.**
+    - Bug fix: "Send invite" form was nested inside main edit form (invalid HTML), breaking Save and Change password. Moved invite panel outside the `<form>`.
+    - New: board admins can send a password reset link to any member with a real email from the member's edit page (`dashboard/send-reset.php`). 1-hour token, same `reset.php` flow.
 
 - **2026-05-24 (session 15) — TV ticker + themes, landing page section nav + attractions + plan a visit + property listings.**
     - TV: horizontal ticker mode (all content scrolls as large cards). Light/white theme option. URL params `?style=&dark=` override saved settings and carry through login. Login page has layout+theme pickers. Migrations 089.

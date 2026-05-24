@@ -735,44 +735,6 @@ require __DIR__ . '/../includes/header.php';
                 </div>
             </div>
 
-            <?php
-            $canSendInvite = !is_placeholder_email((string)$editUser['email'])
-                             && empty($editUser['last_login_at']);
-            $inviteSent    = !empty($editUser['invite_sent_at']);
-            $inviteExpired = $inviteSent && !empty($editUser['invite_expires_at'])
-                             && strtotime((string)$editUser['invite_expires_at']) < time();
-            $invitePending = $inviteSent && !$inviteExpired;
-            ?>
-            <?php if ($canSendInvite): ?>
-            <div style="margin-top: var(--sp-4); padding: var(--sp-3) var(--sp-4); background: var(--color-surface-2); border: 1px solid var(--color-border); border-radius: var(--r-md);">
-                <div class="row row--between" style="flex-wrap: wrap; gap: var(--sp-2);">
-                    <div>
-                        <strong style="font-size: var(--fs-sm);">✉ Invite to join</strong>
-                        <?php if ($invitePending): ?>
-                            <p class="muted" style="font-size: var(--fs-xs); margin: var(--sp-1) 0 0;">
-                                Invite sent <?= e(udate('M j, Y', strtotime((string)$editUser['invite_sent_at']))) ?>
-                                · expires <?= e(udate('M j, Y', strtotime((string)$editUser['invite_expires_at']))) ?>
-                            </p>
-                        <?php elseif ($inviteExpired): ?>
-                            <p style="font-size: var(--fs-xs); color: var(--color-error); margin: var(--sp-1) 0 0;">
-                                Invite sent <?= e(udate('M j, Y', strtotime((string)$editUser['invite_sent_at']))) ?> — expired
-                            </p>
-                        <?php else: ?>
-                            <p class="muted" style="font-size: var(--fs-xs); margin: var(--sp-1) 0 0;">No invite sent yet.</p>
-                        <?php endif; ?>
-                    </div>
-                    <form method="post" action="/dashboard/send-invite.php">
-                        <?= csrf_field() ?>
-                        <input type="hidden" name="user_id" value="<?= (int)$editUser['id'] ?>">
-                        <input type="hidden" name="redirect" value="/dashboard/directory.php?action=edit&id=<?= (int)$editUser['id'] ?>">
-                        <button class="btn btn--ghost" type="submit" style="font-size: var(--fs-sm);">
-                            <?= $inviteSent ? 'Resend invite' : 'Send invite' ?>
-                        </button>
-                    </form>
-                </div>
-            </div>
-            <?php endif; ?>
-
             <div style="margin-top: var(--sp-4); padding: var(--sp-4); background: var(--color-warning-bg); border: 1px solid rgba(182,130,42,0.25); border-radius: var(--r-md);">
                 <div class="row row--between" style="margin-bottom: var(--sp-2); flex-wrap: wrap;">
                     <strong style="color: var(--color-warning);">🔑 Change password (optional)</strong>
@@ -821,6 +783,59 @@ require __DIR__ . '/../includes/header.php';
                 </div>
             </div>
         </form>
+        <?php
+        $canSendInvite = !is_placeholder_email((string)$editUser['email'])
+                         && empty($editUser['last_login_at']);
+        $inviteSent    = !empty($editUser['invite_sent_at']);
+        $inviteExpired = $inviteSent && !empty($editUser['invite_expires_at'])
+                         && strtotime((string)$editUser['invite_expires_at']) < time();
+        $invitePending = $inviteSent && !$inviteExpired;
+        ?>
+        <?php if ($canSendInvite): ?>
+        <div style="margin-top: var(--sp-4); padding: var(--sp-3) var(--sp-4); background: var(--color-surface-2); border: 1px solid var(--color-border); border-radius: var(--r-md);">
+            <div class="row row--between" style="flex-wrap: wrap; gap: var(--sp-2);">
+                <div>
+                    <strong style="font-size: var(--fs-sm);">✉ Invite to join</strong>
+                    <?php if ($invitePending): ?>
+                        <p class="muted" style="font-size: var(--fs-xs); margin: var(--sp-1) 0 0;">
+                            Invite sent <?= e(udate('M j, Y', strtotime((string)$editUser['invite_sent_at']))) ?>
+                            · expires <?= e(udate('M j, Y', strtotime((string)$editUser['invite_expires_at']))) ?>
+                        </p>
+                    <?php elseif ($inviteExpired): ?>
+                        <p style="font-size: var(--fs-xs); color: var(--color-error); margin: var(--sp-1) 0 0;">
+                            Invite sent <?= e(udate('M j, Y', strtotime((string)$editUser['invite_sent_at']))) ?> — expired
+                        </p>
+                    <?php else: ?>
+                        <p class="muted" style="font-size: var(--fs-xs); margin: var(--sp-1) 0 0;">No invite sent yet.</p>
+                    <?php endif; ?>
+                </div>
+                <form method="post" action="/dashboard/send-invite.php">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="user_id" value="<?= (int)$editUser['id'] ?>">
+                    <input type="hidden" name="redirect" value="/dashboard/directory.php?action=edit&id=<?= (int)$editUser['id'] ?>">
+                    <button class="btn btn--ghost" type="submit" style="font-size: var(--fs-sm);">
+                        <?= $inviteSent ? 'Resend invite' : 'Send invite' ?>
+                    </button>
+                </form>
+            </div>
+        </div>
+        <?php endif; ?>
+        <?php if (!is_placeholder_email((string)$editUser['email'])): ?>
+        <div style="margin-top: var(--sp-3); padding: var(--sp-3) var(--sp-4); background: var(--color-surface-2); border: 1px solid var(--color-border); border-radius: var(--r-md);">
+            <div class="row row--between" style="flex-wrap: wrap; gap: var(--sp-2);">
+                <div>
+                    <strong style="font-size: var(--fs-sm);">🔑 Send password reset</strong>
+                    <p class="muted" style="font-size: var(--fs-xs); margin: var(--sp-1) 0 0;">Emails a one-hour reset link to <?= e((string)$editUser['email']) ?>.</p>
+                </div>
+                <form method="post" action="/dashboard/send-reset.php">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="user_id" value="<?= (int)$editUser['id'] ?>">
+                    <input type="hidden" name="redirect" value="/dashboard/directory.php?action=edit&id=<?= (int)$editUser['id'] ?>">
+                    <button class="btn btn--ghost" type="submit" style="font-size: var(--fs-sm);">Send reset link</button>
+                </form>
+            </div>
+        </div>
+        <?php endif; ?>
     </div>
     <?php endif; ?>
 
