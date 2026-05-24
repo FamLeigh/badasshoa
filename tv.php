@@ -164,8 +164,6 @@ button:hover { opacity:.88; }
         <label for="f-pin">PIN</label>
         <input id="f-pin" name="pin" type="text" inputmode="numeric"
                placeholder="000000" autocomplete="off" maxlength="8">
-        <button type="submit">Sign in →</button>
-    </form>
     <div class="pickers">
         <div class="picker-group">
             <div class="picker-label">Layout</div>
@@ -209,6 +207,8 @@ button:hover { opacity:.88; }
             </div>
         </div>
     </div>
+        <button type="submit">Sign in →</button>
+    </form>
     <p class="hint">Ask your board administrator for the community ID and PIN.</p>
 </div>
 <style>
