@@ -261,9 +261,25 @@ This file (CLAUDE.md) keeps an internal-only summary in the section below for cr
 
 ## Where we left off (resume here next session)
 
-**Last session ended:** 2026-05-24 (sessions 12–14, CLAUDE.md not updated during those sessions — now caught up) — **Board meeting polish, PDF document signing, broadcast email.**
+**Last session ended:** 2026-05-24 (session 15) — **TV ticker mode + themes, landing page section nav + attractions + plan a visit + property listings.**
 
-**What got built since session 11:**
+**What got built this session (15):**
+
+- **TV ticker mode** — `tv_mode` column on associations (migration 089). Horizontal ticker: all content (announcements + events + marketplace) merges into scrolling cards, sorted by date, using the same Tizen-compatible setInterval approach. Settings.php TV section now has a layout picker (3-column vs ticker).
+
+- **TV light/dark themes** — white-background light theme via `:root` CSS variable swap. URL params `?style=columns|ticker&dark=0|1` override DB settings and survive the login redirect. Login page has layout + theme pickers before the user signs in.
+
+- **Bookmarkable TV URL format:** `https://badasshoa.com/tv?slug=bellair&pin=2727&style=ticker&dark=0`
+
+- **Landing page section nav** — sticky anchor link nav below the hero, only shows sections that have content. All sections have `id` anchors.
+
+- **Area Attractions** — `association_attractions` table (migration 090). `/dashboard/attractions.php` CRUD with photo upload, category, sort order, toggle active. Shows on public landing as a card grid. Nav entry added. Public images via `/public-attraction.php`.
+
+- **Plan a Visit** — `visit_directions`, `visit_parking`, `visit_hours`, `visit_notes` columns on associations (migration 091). Editable in settings.php under new "Plan a Visit" accordion. Old standalone map section folded into this section (both OSM iframe + Google Maps link shown).
+
+- **Property Listings** — `property_listings` table (migration 092). `/dashboard/listings.php` CRUD with type (sale/rent), price, beds/baths/sqft, contact info, photo, status. Card grid view with quick status dropdown. Shows on public landing under "Properties Available". Nav entry added. Public images via `/public-listing.php`. Photo gating in `/dashboard/file.php` for authenticated views.
+
+**What got built in sessions 12–14 (previously uncaptured):**
 
 - **Board meeting polish** — Gifted status fix (migration 081, gifted is a `status` not a `plan`); "Approve Minutes from Last Meeting" as a standard agenda item (migration 082); resolution vote options expanded to include `not_present` and `na` (migration 083); board-only voters; BE IT RESOLVED clause fields; platform messages moved from banner to inline dashboard card.
 
@@ -286,7 +302,7 @@ This file (CLAUDE.md) keeps an internal-only summary in the section below for cr
 - Directory opt-out (migration 066)
 
 **Production state in DB:**
-- Migrations through **088** applied to `u535581001_badassHOA`
+- Migrations through **088** applied to `u535581001_badassHOA` — **089–092 need to be run on prod**
 - 232 FL statutes in the `statutes` table (chapters 718, 719, 720, 553)
 - 37 Bellair tenants imported (migration 070)
 - 8 rental agents + 14 unit links (migration 069)
@@ -319,13 +335,13 @@ This file (CLAUDE.md) keeps an internal-only summary in the section below for cr
 - Settings page forms each need their own `form=` section value — adding a third form without one will overwrite all columns on save.
 - `gifted` is an association `status`, not a `plan` — don't conflate the two.
 
-**Candidates for next session** (genuinely not yet built):
-1. **Per-association logo upload** — use in dashboard nav instead of text association name. No migration exists for this yet.
-2. **Broadcast SMS** — needs Twilio + billing path + TCPA opt-in flow. See big-ticket notes below.
-3. **Physical mail (Lob.com)** — violation notices, meeting notices. See big-ticket notes below.
-4. **Image thumbnail generation** on media upload (currently serves full-res through gatekeeper).
-5. **HTML email templates** — branded headers/footers for all transactional emails (invite is done; others still plain text).
-6. **Custom domain per association** — app-layer columns ready to add; ops-layer needs VPS/Caddy. See big-ticket notes below.
+**Candidates for next session:**
+1. **Run migrations 089–092 on prod** — `push.sh` then the 4 SQL files via SSH.
+2. **Per-association logo upload** — use in dashboard nav instead of text association name. No migration exists yet.
+3. **Broadcast SMS** — needs Twilio + TCPA opt-in flow.
+4. **Physical mail (Lob.com)** — violation notices, meeting notices.
+5. **Image thumbnail generation** on media upload.
+6. **HTML email templates** — branded headers for transactional emails.
 
 **Big-ticket comms / outreach features (queued — likely a Phase 3 batch):**
 
@@ -387,6 +403,10 @@ All four share a `broadcasts` table (kind / audience / subject / body / schedule
 ---
 
 ## Changelog
+
+- **2026-05-24 (session 15) — TV ticker + themes, landing page section nav + attractions + plan a visit + property listings.**
+    - TV: horizontal ticker mode (all content scrolls as large cards). Light/white theme option. URL params `?style=&dark=` override saved settings and carry through login. Login page has layout+theme pickers. Migrations 089.
+    - Landing page: sticky section anchor nav (only shows populated sections). Area Attractions section (`association_attractions` table, `/dashboard/attractions.php`, migration 090). Plan a Visit section (directions/parking/hours/notes fields on associations, migration 091, editable in Settings). Property Listings section (`property_listings`, `/dashboard/listings.php`, migration 092). Map folded into Visit section. New nav items: Listings + Area Attractions.
 
 - **2026-05-24 (sessions 12–14) — Board meeting polish, PDF signing, broadcast email.**
     - Gifted status: renamed 'free' plan tier; `gifted` is now an association `status` not a `plan` (migration 081).

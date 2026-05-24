@@ -1,0 +1,22 @@
+CREATE TABLE property_listings (
+    id             INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    association_id INT UNSIGNED NOT NULL,
+    unit_id        INT UNSIGNED NULL,
+    listing_type   ENUM('sale','rent') NOT NULL,
+    price_cents    INT UNSIGNED NULL,
+    beds           TINYINT UNSIGNED NULL,
+    baths          DECIMAL(3,1) UNSIGNED NULL,
+    sq_ft          SMALLINT UNSIGNED NULL,
+    title          VARCHAR(200) NOT NULL,
+    description    TEXT NULL,
+    contact_name   VARCHAR(200) NULL,
+    contact_email  VARCHAR(255) NULL,
+    contact_phone  VARCHAR(40)  NULL,
+    photo_path     VARCHAR(500) NULL,
+    status         ENUM('active','pending','sold','rented') NOT NULL DEFAULT 'active',
+    created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_assoc_status (association_id, status),
+    KEY idx_assoc_type   (association_id, listing_type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -17,6 +17,20 @@ $token     = trim((string)($_GET['token'] ?? ''));
 $loginError = null;
 $postSlug  = '';
 
+// URL-overridable display params (carried through login → redirect → display).
+// style: 'columns' | 'ticker'   — overrides association's saved tv_mode
+// dark:  '1' | '0'              — 1=dark (default), 0=light/white theme
+$urlStyle = in_array((string)($_GET['style'] ?? ''), ['columns','ticker']) ? (string)$_GET['style'] : '';
+$urlDark  = isset($_GET['dark']) ? ((string)$_GET['dark'] === '0' ? '0' : '1') : '';
+
+// Build the extra query string to carry through redirects
+function tv_extra_qs(string $style, string $dark): string {
+    $parts = [];
+    if ($style !== '') $parts[] = 'style=' . urlencode($style);
+    if ($dark  !== '') $parts[] = 'dark='  . urlencode($dark);
+    return $parts ? '&' . implode('&', $parts) : '';
+}
+
 $clientIp = (string)($_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? '');
 $clientIp = trim(explode(',', $clientIp)[0]); // take first IP if comma-list
 
@@ -37,8 +51,12 @@ function tv_pin_record(string $ip, bool $ok): void {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $postSlug = trim((string)($_POST['slug'] ?? ''));
-    $postPin  = trim((string)($_POST['pin']  ?? ''));
+    $postSlug  = trim((string)($_POST['slug']  ?? ''));
+    $postPin   = trim((string)($_POST['pin']   ?? ''));
+    $postStyle = in_array((string)($_POST['style'] ?? ''), ['columns','ticker']) ? (string)$_POST['style'] : '';
+    $postDark  = isset($_POST['dark']) ? ((string)$_POST['dark'] === '0' ? '0' : '1') : '';
+    if ($postStyle !== '') $urlStyle = $postStyle;
+    if ($postDark  !== '') $urlDark  = $postDark;
     if (tv_pin_is_locked($clientIp)) {
         $loginError = 'Too many failed attempts. Try again in 15 minutes.';
     } elseif ($postSlug !== '' && $postPin !== '') {
@@ -48,7 +66,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $chk->execute([$postSlug, $postPin]);
         if ($chk->fetch()) {
             tv_pin_record($clientIp, true);
-            header('Location: /tv?slug=' . urlencode($postSlug) . '&pin=' . urlencode($postPin));
+            header('Location: /tv?slug=' . urlencode($postSlug) . '&pin=' . urlencode($postPin) . tv_extra_qs($urlStyle, $urlDark));
             exit;
         }
         tv_pin_record($clientIp, false);
@@ -148,8 +166,69 @@ button:hover { opacity:.88; }
                placeholder="000000" autocomplete="off" maxlength="8">
         <button type="submit">Sign in →</button>
     </form>
+    <div class="pickers">
+        <div class="picker-group">
+            <div class="picker-label">Layout</div>
+            <div class="picker-row">
+                <label class="pick-opt">
+                    <input type="radio" name="style" value="columns" checked>
+                    <span>
+                        <svg width="32" height="22" viewBox="0 0 32 22" fill="none">
+                            <rect x="1" y="1" width="9" height="20" rx="2" fill="currentColor" opacity=".3"/>
+                            <rect x="12" y="1" width="9" height="20" rx="2" fill="currentColor" opacity=".3"/>
+                            <rect x="23" y="1" width="8" height="20" rx="2" fill="currentColor" opacity=".3"/>
+                        </svg>
+                        3 Columns
+                    </span>
+                </label>
+                <label class="pick-opt">
+                    <input type="radio" name="style" value="ticker">
+                    <span>
+                        <svg width="32" height="22" viewBox="0 0 32 22" fill="none">
+                            <rect x="1" y="7" width="8" height="8" rx="2" fill="currentColor" opacity=".3"/>
+                            <rect x="11" y="7" width="8" height="8" rx="2" fill="currentColor" opacity=".3"/>
+                            <rect x="21" y="7" width="8" height="8" rx="2" fill="currentColor" opacity=".3"/>
+                            <polyline points="29,11 32,11" stroke="currentColor" stroke-width="2"/>
+                        </svg>
+                        Ticker
+                    </span>
+                </label>
+            </div>
+        </div>
+        <div class="picker-group">
+            <div class="picker-label">Theme</div>
+            <div class="picker-row">
+                <label class="pick-opt">
+                    <input type="radio" name="dark" value="1" checked>
+                    <span>🌙 Dark</span>
+                </label>
+                <label class="pick-opt">
+                    <input type="radio" name="dark" value="0">
+                    <span>☀️ Light</span>
+                </label>
+            </div>
+        </div>
+    </div>
     <p class="hint">Ask your board administrator for the community ID and PIN.</p>
 </div>
+<style>
+.pickers { margin: var(--sp,24px) 0 0; display: flex; flex-direction: column; gap: 16px; }
+.picker-group {}
+.picker-label { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: rgba(255,255,255,.4); margin-bottom: 8px; text-align: left; }
+.picker-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.pick-opt { flex: 1; min-width: 100px; cursor: pointer; }
+.pick-opt input { position: absolute; opacity: 0; width: 0; height: 0; }
+.pick-opt span {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    padding: 12px 10px; border-radius: 10px;
+    background: #182438; border: 2px solid rgba(255,255,255,.1);
+    font-size: .8rem; font-weight: 700; color: rgba(255,255,255,.6);
+    transition: border-color .15s, color .15s;
+}
+.pick-opt input:checked + span { border-color: #f05a28; color: #fff; }
+.pick-opt span svg { color: rgba(255,255,255,.5); }
+.pick-opt input:checked + span svg { color: #f05a28; }
+</style>
 <script>document.getElementById('f-slug').value ? document.getElementById('f-pin').focus() : document.getElementById('f-slug').focus();</script>
 </body>
 </html>
@@ -267,6 +346,50 @@ $tvAnnColors = ann_type_colors($assocId);
 $lat = $hasWeather ? (float)$assoc['latitude'] : null;
 $lon = $hasWeather ? (float)$assoc['longitude'] : null;
 $refreshSec = 600;
+// URL param overrides saved DB mode; DB mode is the default.
+$dbMode = in_array((string)($assoc['tv_mode'] ?? 'columns'), ['columns','ticker']) ? (string)$assoc['tv_mode'] : 'columns';
+$tvMode = $urlStyle !== '' ? $urlStyle : $dbMode;
+
+// Dark (default) vs light theme. URL param overrides. Dark = 1, Light = 0.
+$tvDark = $urlDark !== '' ? ($urlDark === '1') : true; // default dark
+
+// Build flat ticker items (announcements + events + marketplace) sorted newest first.
+if ($tvMode === 'ticker') {
+    $tickerItems = [];
+    foreach ($announcements as $a) {
+        $tickerItems[] = [
+            'kind'     => 'announcement',
+            'ann_type' => (string)$a['type'],
+            'title'    => (string)$a['title'],
+            'body'     => mb_strimwidth(trim(strip_tags((string)$a['body'])), 0, 160, '…'),
+            'date'     => $a['published_at'],
+            'sort_ts'  => strtotime((string)$a['published_at']),
+        ];
+    }
+    foreach ($events as $ev) {
+        $tickerItems[] = [
+            'kind'      => 'event',
+            'title'     => (string)$ev['title'],
+            'starts_at' => (string)$ev['starts_at'],
+            'location'  => (string)($ev['location'] ?? ''),
+            'sort_ts'   => strtotime((string)$ev['starts_at']),
+        ];
+    }
+    foreach ($listings as $l) {
+        $tickerItems[] = [
+            'kind'        => 'marketplace',
+            'title'       => (string)$l['title'],
+            'price_cents' => $l['price_cents'],
+            'category'    => (string)$l['category'],
+            'seller'      => (string)($l['first_name'] ?? ''),
+            'unit'        => (string)($l['unit_number'] ?? ''),
+            'photo_path'  => $l['photo_path'],
+            'sort_ts'     => 0,
+        ];
+    }
+    // Newest/soonest first; marketplace (no timestamp) floats to end.
+    usort($tickerItems, fn($a, $b) => $b['sort_ts'] - $a['sort_ts']);
+}
 
 // Fetch weather server-side — TV browser makes no external requests,
 // and the page auto-refreshes every 10 min so data stays current.
@@ -335,20 +458,41 @@ $CONDITION_LABELS = [
 <title><?= e((string)$assoc['name']) ?> — Community Board</title>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+<?php if ($tvDark): ?>
 :root {
-    --primary: <?= e($primary) ?>;
-    --bg:      #08111f;
-    --panel:   #111c2e;
-    --card:    #182438;
-    --border:  rgba(255,255,255,.09);
-    --text:    #fff;
-    --muted:   rgba(255,255,255,.5);
-    --orange:  #f05a28;
-    --green:   #22c55e;
-    --red:     #ef4444;
-    --amber:   #f59e0b;
-    --r:       14px;
+    --primary:     <?= e($primary) ?>;
+    --bg:          #08111f;
+    --panel:       #111c2e;
+    --card:        #182438;
+    --border:      rgba(255,255,255,.09);
+    --text:        #fff;
+    --muted:       rgba(255,255,255,.5);
+    --muted-dim:   rgba(255,255,255,.3);
+    --muted-faint: rgba(255,255,255,.2);
+    --orange:      #f05a28;
+    --green:       #22c55e;
+    --red:         #ef4444;
+    --amber:       #f59e0b;
+    --r:           14px;
 }
+<?php else: ?>
+:root {
+    --primary:     <?= e($primary) ?>;
+    --bg:          #f4f6fa;
+    --panel:       #ffffff;
+    --card:        #edf0f7;
+    --border:      rgba(15,31,61,.1);
+    --text:        #0f1f3d;
+    --muted:       rgba(15,31,61,.5);
+    --muted-dim:   rgba(15,31,61,.4);
+    --muted-faint: rgba(15,31,61,.25);
+    --orange:      #f05a28;
+    --green:       #16a34a;
+    --red:         #dc2626;
+    --amber:       #d97706;
+    --r:           14px;
+}
+<?php endif; ?>
 
 html, body {
     width: 100%; height: 100%;
@@ -424,7 +568,7 @@ header {
 .weather-refresh {
     font-size: .7rem;
     font-size: clamp(.6rem, .85vw, .75rem);
-    color: rgba(255,255,255,.25);
+    color: var(--muted-faint);
     font-weight: 600;
     letter-spacing: .04em;
     text-align: center;
@@ -556,7 +700,7 @@ header {
 .ann-date {
     font-size: .8rem;
     font-size: clamp(.7rem, 1vw, .9rem);
-    color: rgba(255,255,255,.3);
+    color: var(--muted-dim);
     margin-top: 10px;
     font-weight: 600;
 }
@@ -601,7 +745,7 @@ header {
     color: var(--muted);
     line-height: 1.4;
 }
-.evt-loc { margin-top: 3px; color: rgba(255,255,255,.35); }
+.evt-loc { margin-top: 3px; color: var(--muted-dim); }
 .ann-thumb { width: 100%; height: 72px; height: clamp(60px, 7vw, 90px); object-fit: cover; border-radius: 6px; margin-bottom: 10px; display: block; }
 .evt-thumb { width: 100%; height: 72px; height: clamp(60px, 7vw, 90px); object-fit: cover; border-radius: 6px; margin-bottom: 10px; display: block; }
 
@@ -671,7 +815,7 @@ footer {
 .footer-note {
     font-size: .7rem;
     font-size: clamp(.6rem, .9vw, .8rem);
-    color: rgba(255,255,255,.2);
+    color: var(--muted-faint);
     font-weight: 600;
     letter-spacing: .04em;
 }
@@ -699,6 +843,150 @@ if ($tvStoredCustom):
     $safeType = preg_replace('/[^a-z]/', '', strtolower($type)); ?>
 .ann-badge--<?= $safeType ?> { background: <?= $hex ?>; color: #fff; }
 <?php endforeach; ?>
+</style>
+<?php endif; ?>
+<?php if ($tvMode === 'ticker'): ?>
+<style>
+/* ── Ticker mode overrides ────────────────────────────────── */
+body {
+    grid-template-rows: auto 1fr auto !important;
+    grid-template-columns: 1fr !important;
+}
+.ticker-wrap {
+    grid-column: 1 / -1;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    min-height: 0;
+}
+/* Strip running across the bottom holding the scrolling band */
+.ticker-band {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+    min-height: 0;
+}
+.ticker-track {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    gap: 20px;
+    padding: 20px 24px;
+    position: absolute;
+    top: 0; left: 0;
+    height: 100%;
+    white-space: nowrap;
+}
+.ticker-card {
+    display: inline-flex;
+    flex-direction: column;
+    justify-content: center;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px 28px;
+    min-width: clamp(300px, 30vw, 500px);
+    max-width: clamp(300px, 32vw, 520px);
+    flex-shrink: 0;
+    white-space: normal;
+    height: 100%;
+    box-sizing: border-box;
+}
+.ticker-card--emergency { border-color: var(--red); background: rgba(239,68,68,.12); }
+.ticker-kind {
+    font-size: clamp(.65rem, .9vw, .85rem);
+    font-weight: 800;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+}
+.ticker-badge {
+    display: inline-block;
+    font-size: clamp(.65rem, .9vw, .85rem);
+    font-weight: 800;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    padding: 4px 12px;
+    border-radius: 6px;
+    margin-bottom: 12px;
+    background: var(--border);
+    color: var(--text);
+}
+.ticker-badge--emergency   { background: var(--red); }
+.ticker-badge--maintenance { background: var(--amber); color: #000; }
+.ticker-badge--info,
+.ticker-badge--general     { background: var(--primary); }
+.ticker-badge--event       { background: #7c3aed; }
+.ticker-badge--beautification { background: #2e7d32; }
+.ticker-badge--birth_notice   { background: #7c3aed; }
+.ticker-badge--death_notice   { background: #4b5563; }
+.ticker-title {
+    font-size: clamp(1.3rem, 2.2vw, 2.2rem);
+    font-weight: 900;
+    line-height: 1.2;
+    margin-bottom: 10px;
+    color: var(--text);
+}
+.ticker-body {
+    font-size: clamp(1rem, 1.5vw, 1.5rem);
+    color: var(--muted);
+    line-height: 1.5;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.ticker-meta {
+    font-size: clamp(.85rem, 1.2vw, 1.1rem);
+    color: var(--muted-dim);
+    margin-top: 10px;
+    font-weight: 600;
+}
+.ticker-price {
+    font-size: clamp(1.1rem, 1.8vw, 1.8rem);
+    font-weight: 900;
+    color: var(--green);
+    margin-top: 8px;
+}
+.ticker-price--free { color: var(--orange); }
+.ticker-photo {
+    width: 100%;
+    height: clamp(90px, 10vw, 140px);
+    object-fit: cover;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    display: block;
+}
+.ticker-evt-cal {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 10px;
+}
+.ticker-evt-block {
+    background: var(--primary);
+    border-radius: 10px;
+    padding: 8px 14px;
+    text-align: center;
+    flex-shrink: 0;
+}
+.ticker-evt-block .m {
+    font-size: clamp(.6rem, .9vw, .8rem);
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: rgba(255,255,255,.75);
+}
+.ticker-evt-block .d {
+    font-size: clamp(1.6rem, 2.8vw, 2.8rem);
+    font-weight: 900;
+    line-height: 1;
+}
+/* Hide column grid in ticker mode */
+.col { display: none !important; }
 </style>
 <?php endif; ?>
 </head>
@@ -743,6 +1031,69 @@ if ($tvStoredCustom):
         <div class="dateline" id="dateline"></div>
     </div>
 </header>
+
+<?php if ($tvMode === 'ticker'): ?>
+
+<!-- ══ TICKER MODE ══════════════════════════════════════════════════════════ -->
+<div class="ticker-wrap">
+    <div class="ticker-band">
+        <div class="ticker-track" id="ticker-track">
+        <?php if (!$tickerItems): ?>
+            <div class="ticker-card" style="min-width:clamp(400px,50vw,700px); align-items:center; justify-content:center;">
+                <div style="font-size:clamp(1.2rem,2vw,1.8rem); color:var(--muted); text-align:center;">No content to display yet.</div>
+            </div>
+        <?php else: foreach ($tickerItems as $item):
+            if ($item['kind'] === 'announcement'):
+                $isEmergency = $item['ann_type'] === 'emergency';
+        ?>
+            <div class="ticker-card <?= $isEmergency ? 'ticker-card--emergency' : '' ?>">
+                <span class="ticker-badge ticker-badge--<?= e($item['ann_type']) ?>"><?= e(ann_type_label($item['ann_type'])) ?></span>
+                <div class="ticker-title"><?= e($item['title']) ?></div>
+                <?php if ($item['body'] !== ''): ?>
+                    <div class="ticker-body"><?= e($item['body']) ?></div>
+                <?php endif; ?>
+                <div class="ticker-meta"><?= tv_time('M j, Y', strtotime((string)$item['date']), $assocTz) ?></div>
+            </div>
+        <?php elseif ($item['kind'] === 'event'):
+            $ts    = strtotime((string)$item['starts_at']);
+            $endTs = !empty($item['ends_at']) ? strtotime((string)$item['ends_at']) : null;
+        ?>
+            <div class="ticker-card">
+                <div class="ticker-kind">📅 Upcoming Event</div>
+                <div class="ticker-evt-cal">
+                    <div class="ticker-evt-block">
+                        <div class="m"><?= tv_time('M', $ts, $assocTz) ?></div>
+                        <div class="d"><?= tv_time('j', $ts, $assocTz) ?></div>
+                    </div>
+                    <div>
+                        <div class="ticker-title" style="margin-bottom:4px;"><?= e($item['title']) ?></div>
+                        <div class="ticker-meta" style="margin-top:0;"><?= tv_time('g:i A', $ts, $assocTz) ?><?= $item['location'] !== '' ? ' · ' . e($item['location']) : '' ?></div>
+                    </div>
+                </div>
+            </div>
+        <?php elseif ($item['kind'] === 'marketplace'):
+            $isFree = ($item['price_cents'] === null || (int)$item['price_cents'] === 0);
+            $price  = $isFree ? 'FREE' : '$' . number_format((int)$item['price_cents'] / 100, 2);
+        ?>
+            <div class="ticker-card">
+                <?php if (!empty($item['photo_path'])): ?>
+                    <img class="ticker-photo" src="/tv-image.php?token=<?= urlencode($token) ?>&id=<?= (int)$item['id'] ?>" alt="">
+                <?php endif; ?>
+                <div class="ticker-kind">🏷️ Marketplace</div>
+                <div class="ticker-title"><?= e($item['title']) ?></div>
+                <div class="ticker-price <?= $isFree ? 'ticker-price--free' : '' ?>"><?= $price ?></div>
+                <?php if ($item['seller'] !== ''): ?>
+                    <div class="ticker-meta"><?= e($item['seller']) ?><?= $item['unit'] !== '' ? ' · Unit ' . e($item['unit']) : '' ?></div>
+                <?php endif; ?>
+            </div>
+        <?php endif; endforeach; endif; ?>
+        </div>
+    </div>
+</div>
+
+<?php else: ?>
+
+<!-- ══ COLUMNS MODE ═════════════════════════════════════════════════════════ -->
 
 <!-- Announcements -->
 <div class="col">
@@ -865,6 +1216,8 @@ if ($tvStoredCustom):
     </div>
 </div>
 
+<?php endif; // end columns mode ?>
+
 <footer>
     <div class="footer-note">&copy; 2026 Savvy Brain LLC and Kevin B. Leigh &middot; Powered by BadassHOA.com &middot; 386-353-4444</div>
     <div class="footer-cta">Log in for additional details &mdash; badasshoa.com/<?= e((string)$assoc['subdomain']) ?></div>
@@ -927,9 +1280,34 @@ function setupScroll(vpId, trId, startDelay) {
 }
 
 window.addEventListener('load', function() {
+    <?php if ($tvMode === 'ticker'): ?>
+    // Horizontal ticker scroll — same setInterval approach for Tizen compat.
+    var tr = document.getElementById('ticker-track');
+    if (tr && tr.children.length) {
+        var origWidth = tr.scrollWidth;
+        Array.from(tr.children).forEach(function(c) { tr.appendChild(c.cloneNode(true)); });
+        tr.style.webkitBackfaceVisibility = 'hidden';
+        tr.style.backfaceVisibility       = 'hidden';
+        tr.style.webkitTransform          = 'translate3d(0,0,0)';
+        tr.style.transform                = 'translate3d(0,0,0)';
+        var HSPEED = 50; // px/s rightward scroll
+        var pos = 0;
+        var delta = HSPEED * INTERVAL / 1000;
+        setTimeout(function() {
+            setInterval(function() {
+                pos += delta;
+                if (pos >= origWidth) pos -= origWidth;
+                var x = -Math.round(pos);
+                tr.style.webkitTransform = 'translate3d(' + x + 'px,0,0)';
+                tr.style.transform       = 'translate3d(' + x + 'px,0,0)';
+            }, INTERVAL);
+        }, 1000);
+    }
+    <?php else: ?>
     setupScroll('vp-ann', 'tr-ann', 0);
     setupScroll('vp-evt', 'tr-evt', 800);
     setupScroll('vp-mkt', 'tr-mkt', 1600);
+    <?php endif; ?>
 });
 </script>
 </body>

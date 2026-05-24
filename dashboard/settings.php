@@ -117,6 +117,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'tv_pin'
     redirect('/dashboard/settings.php#tv');
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'tv_mode' && $canEdit) {
+    csrf_check();
+    $mode = in_array((string)($_POST['tv_mode'] ?? ''), ['columns','ticker']) ? $_POST['tv_mode'] : 'columns';
+    db()->prepare('UPDATE associations SET tv_mode=? WHERE id=?')->execute([$mode, $assocId]);
+    audit('association.tv_mode_changed', ['mode' => $mode]);
+    flash('success', 'TV display mode updated.');
+    redirect('/dashboard/settings.php#tv');
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'visit_info' && $canEdit) {
+    csrf_check();
+    db()->prepare(
+        'UPDATE associations SET visit_directions=?, visit_parking=?, visit_hours=?, visit_notes=? WHERE id=?'
+    )->execute([
+        mb_substr(trim((string)($_POST['visit_directions'] ?? '')), 0, 4000) ?: null,
+        mb_substr(trim((string)($_POST['visit_parking']    ?? '')), 0, 2000) ?: null,
+        mb_substr(trim((string)($_POST['visit_hours']      ?? '')), 0, 500)  ?: null,
+        mb_substr(trim((string)($_POST['visit_notes']      ?? '')), 0, 2000) ?: null,
+        $assocId,
+    ]);
+    flash('success', 'Visit info saved.');
+    redirect('/dashboard/settings.php?open=visit#visit');
+}
+
 // ──────────────────────────────────────────────────────────────────────────
 // POST: Save permissions
 // ──────────────────────────────────────────────────────────────────────────
@@ -946,6 +970,31 @@ require __DIR__ . '/../includes/header.php';
                 </form>
             </div>
             <?php endif; ?>
+            <!-- TV display mode -->
+            <form method="post" style="margin: var(--sp-4) 0;">
+                <?= csrf_field() ?>
+                <input type="hidden" name="form" value="tv_mode">
+                <div style="font-size: var(--fs-xs); font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--color-text-soft); margin-bottom: var(--sp-3);">Display Mode</div>
+                <div style="display: flex; gap: var(--sp-3); flex-wrap: wrap; margin-bottom: var(--sp-3);">
+                    <?php $tvModeVal = (string)($association['tv_mode'] ?? 'columns'); ?>
+                    <label style="display: flex; align-items: flex-start; gap: var(--sp-2); cursor: pointer; flex: 1; min-width: 200px; background: var(--color-surface); border: 2px solid <?= $tvModeVal === 'columns' ? 'var(--color-orange)' : 'var(--color-border)' ?>; border-radius: var(--r-md); padding: var(--sp-3) var(--sp-4);">
+                        <input type="radio" name="tv_mode" value="columns" <?= $tvModeVal === 'columns' ? 'checked' : '' ?> style="margin-top: 3px;">
+                        <div>
+                            <strong style="font-size: var(--fs-sm);">3-Column Board</strong>
+                            <div class="muted" style="font-size: var(--fs-xs); margin-top: 2px;">Announcements, Events, and Marketplace side by side. Each column scrolls independently.</div>
+                        </div>
+                    </label>
+                    <label style="display: flex; align-items: flex-start; gap: var(--sp-2); cursor: pointer; flex: 1; min-width: 200px; background: var(--color-surface); border: 2px solid <?= $tvModeVal === 'ticker' ? 'var(--color-orange)' : 'var(--color-border)' ?>; border-radius: var(--r-md); padding: var(--sp-3) var(--sp-4);">
+                        <input type="radio" name="tv_mode" value="ticker" <?= $tvModeVal === 'ticker' ? 'checked' : '' ?> style="margin-top: 3px;">
+                        <div>
+                            <strong style="font-size: var(--fs-sm);">Horizontal Ticker</strong>
+                            <div class="muted" style="font-size: var(--fs-xs); margin-top: 2px;">All content scrolls horizontally as large cards sorted by date. Good for portrait TVs or simple kiosks.</div>
+                        </div>
+                    </label>
+                </div>
+                <button class="btn btn--sm" type="submit">Save mode</button>
+            </form>
+
             <details style="margin-top: var(--sp-2);">
                 <summary style="font-size: var(--fs-sm); color: var(--color-text-soft); cursor: pointer;">Legacy token URL</summary>
                 <div style="margin-top: var(--sp-3);">
@@ -978,6 +1027,55 @@ require __DIR__ . '/../includes/header.php';
                 <?php endif; ?>
                 </div>
             </details>
+        </div>
+    </details>
+    <?php endif; ?>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         PLAN A VISIT
+    ════════════════════════════════════════════════════════════════════ -->
+    <?php if ($canEdit): ?>
+    <details id="section-visit" class="acc-panel" <?= ($openSection ?? '') === 'visit' ? 'open' : '' ?>>
+        <summary>
+            <span class="acc-icon">🗺️</span>
+            <div>
+                <span class="acc-title">Plan a Visit</span>
+                <span class="acc-hint">Directions, parking, and visitor info shown on your public landing</span>
+            </div>
+            <svg class="acc-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <div class="acc-body">
+            <form method="post">
+                <?= csrf_field() ?>
+                <input type="hidden" name="form" value="visit_info">
+                <div class="form-grid" style="gap: var(--sp-4);">
+                    <div class="field">
+                        <label class="field__label" for="v-hours">Visitor hours / gate hours</label>
+                        <input class="input" type="text" id="v-hours" name="visit_hours" maxlength="500"
+                               value="<?= e((string)($association['visit_hours'] ?? '')) ?>"
+                               placeholder="e.g. Gate open 7am–10pm daily">
+                        <div class="field__hint">Short one-liner shown prominently on the visit section.</div>
+                    </div>
+                    <div class="field">
+                        <label class="field__label" for="v-dir">Directions</label>
+                        <textarea class="textarea" id="v-dir" name="visit_directions" rows="4" maxlength="4000"
+                                  placeholder="Turn-by-turn or landmark directions to your community…"><?= e((string)($association['visit_directions'] ?? '')) ?></textarea>
+                    </div>
+                    <div class="field">
+                        <label class="field__label" for="v-park">Parking info</label>
+                        <textarea class="textarea" id="v-park" name="visit_parking" rows="3" maxlength="2000"
+                                  placeholder="Visitor parking location, permit requirements, overflow…"><?= e((string)($association['visit_parking'] ?? '')) ?></textarea>
+                    </div>
+                    <div class="field">
+                        <label class="field__label" for="v-notes">Additional visitor notes</label>
+                        <textarea class="textarea" id="v-notes" name="visit_notes" rows="3" maxlength="2000"
+                                  placeholder="ID requirements, check-in procedures, pet policy…"><?= e((string)($association['visit_notes'] ?? '')) ?></textarea>
+                    </div>
+                </div>
+                <div class="row" style="margin-top: var(--sp-4);">
+                    <button class="btn btn--primary" type="submit">Save visit info</button>
+                </div>
+            </form>
         </div>
     </details>
     <?php endif; ?>

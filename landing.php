@@ -139,6 +139,24 @@ $evStmt->execute([(int)$assoc['id']]);
 $publicEvents = expand_events($evStmt->fetchAll(), false, 90);
 if (count($publicEvents) > 6) $publicEvents = array_slice($publicEvents, 0, 6);
 
+// Area attractions
+$attrStmt = db()->prepare(
+    "SELECT * FROM association_attractions WHERE association_id=? AND active=1 ORDER BY sort_order, name"
+);
+$attrStmt->execute([(int)$assoc['id']]);
+$attractions = $attrStmt->fetchAll();
+
+// Property listings (active only)
+$propStmt = db()->prepare(
+    "SELECT * FROM property_listings WHERE association_id=? AND status='active' ORDER BY listing_type, created_at DESC"
+);
+$propStmt->execute([(int)$assoc['id']]);
+$propertyListings = $propStmt->fetchAll();
+
+// Visit info
+$hasVisit = !empty($assoc['visit_directions']) || !empty($assoc['visit_parking'])
+         || !empty($assoc['visit_hours'])      || !empty($assoc['visit_notes']);
+
 $hasAbout    = trim(strip_tags((string)($assoc['about_text'] ?? ''))) !== '';
 $hasContact  = !empty($assoc['contact_email']) || !empty($assoc['contact_phone']);
 $hasHeroImg  = !empty($assoc['hero_image_path']);
@@ -162,6 +180,34 @@ $page_layout = 'public_landing'; // Avoids the public marketing nav; landing has
     <link rel="stylesheet" href="/assets/css/app.css?v=<?= e((string)(@filemtime("$cssDir/app.css") ?: '')) ?>">
     <style>
         :root { --assoc-color: <?= e($primary) ?>; }
+
+        /* Section anchor nav */
+        .landing-section-nav {
+            position: sticky; top: 0; z-index: 100;
+            background: #fff;
+            border-bottom: 1px solid var(--color-border);
+            box-shadow: 0 1px 8px rgba(0,0,0,.06);
+        }
+        .landing-section-nav .container { padding-top: 0; padding-bottom: 0; }
+        .landing-section-nav__list {
+            display: flex; align-items: center; gap: 0;
+            list-style: none; margin: 0; padding: 0;
+            overflow-x: auto; -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+        }
+        .landing-section-nav__list::-webkit-scrollbar { display: none; }
+        .landing-section-nav__list a {
+            display: block; padding: 14px 18px;
+            font-size: var(--fs-sm); font-weight: 600;
+            color: var(--color-text-soft); white-space: nowrap;
+            text-decoration: none; border-bottom: 2px solid transparent;
+            transition: color .15s, border-color .15s;
+        }
+        .landing-section-nav__list a:hover {
+            color: <?= e($primary) ?>; border-bottom-color: <?= e($primary) ?>;
+        }
+        /* scroll-margin so anchors land below the sticky nav */
+        section[id] { scroll-margin-top: 56px; }
     </style>
 </head>
 <body class="page-public">
@@ -203,6 +249,32 @@ $page_layout = 'public_landing'; // Avoids the public marketing nav; landing has
     </div>
 </section>
 
+<?php
+// Build section nav links — only include sections that will render.
+$_navSections = [];
+if ($hasAbout || trim((string)($assoc['vision_statement'] ?? '')) !== '') $_navSections['about']       = 'About';
+if ($amenities)                $_navSections['amenities']    = 'Amenities';
+if ($publicMedia)              $_navSections['gallery']      = 'Photos';
+if ($boardMembers)             $_navSections['board']        = 'Board';
+if ($attractions)              $_navSections['attractions']  = 'Attractions';
+if ($propertyListings)         $_navSections['properties']   = 'Properties';
+if ($hasVisit || $hasMap)      $_navSections['visit']        = 'Visit';
+if ($publicEvents)             $_navSections['events']       = 'Events';
+if ($faqs)                     $_navSections['faq']          = 'FAQ';
+if ($hasContact)               $_navSections['contact']      = 'Contact';
+?>
+<?php if (count($_navSections) >= 3): ?>
+<nav class="landing-section-nav" aria-label="Page sections">
+    <div class="container">
+        <ul class="landing-section-nav__list">
+            <?php foreach ($_navSections as $anchor => $label): ?>
+                <li><a href="#<?= e($anchor) ?>"><?= e($label) ?></a></li>
+            <?php endforeach; ?>
+        </ul>
+    </div>
+</nav>
+<?php endif; ?>
+
 <?php $hasVision = trim((string)($assoc['vision_statement'] ?? '')) !== ''; ?>
 <?php if ($hasVision): ?>
 <section class="landing-vision">
@@ -216,7 +288,7 @@ $page_layout = 'public_landing'; // Avoids the public marketing nav; landing has
 <?php endif; ?>
 
 <?php if ($hasAbout): ?>
-<section class="landing-about">
+<section class="landing-about" id="about">
     <div class="container container--narrow">
         <h2 class="landing-section__heading">About <?= e($assoc['name']) ?></h2>
         <div class="landing-about__body">
@@ -227,7 +299,7 @@ $page_layout = 'public_landing'; // Avoids the public marketing nav; landing has
 <?php endif; ?>
 
 <?php if ($amenities): ?>
-<section class="landing-amenities">
+<section class="landing-amenities" id="amenities">
     <div class="container container--narrow">
         <h2 class="landing-section__heading">Amenities</h2>
         <ul class="landing-amenities__list">
@@ -240,7 +312,7 @@ $page_layout = 'public_landing'; // Avoids the public marketing nav; landing has
 <?php endif; ?>
 
 <?php if ($publicMedia): ?>
-<section class="landing-gallery">
+<section class="landing-gallery" id="gallery">
     <div class="container">
         <h2 class="landing-section__heading center">Community photos</h2>
         <div class="landing-gallery__grid">
@@ -258,7 +330,7 @@ $page_layout = 'public_landing'; // Avoids the public marketing nav; landing has
 <?php endif; ?>
 
 <?php if ($boardMembers): ?>
-<section class="landing-board">
+<section class="landing-board" id="board">
     <div class="container">
         <h2 class="landing-section__heading center">Meet your board</h2>
         <p class="muted center" style="margin-bottom: var(--sp-8);">The volunteers who run the day-to-day.</p>
@@ -306,6 +378,170 @@ $page_layout = 'public_landing'; // Avoids the public marketing nav; landing has
 </section>
 <?php endif; ?>
 
+<?php if ($attractions): ?>
+<section class="landing-attractions" id="attractions">
+    <div class="container">
+        <h2 class="landing-section__heading center">Area Attractions</h2>
+        <p class="muted center" style="margin-bottom: var(--sp-8);">Local spots worth exploring near <?= e((string)$assoc['name']) ?>.</p>
+        <?php
+        $ATTR_CATS = [
+            'dining'        => '🍽️',
+            'shopping'      => '🛍️',
+            'entertainment' => '🎭',
+            'outdoor'       => '🌿',
+            'culture'       => '🎨',
+            'services'      => '🔧',
+            'other'         => '📍',
+        ];
+        // Group by category
+        $bycat = [];
+        foreach ($attractions as $a) { $bycat[$a['category']][] = $a; }
+        ?>
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--sp-4);">
+            <?php foreach ($attractions as $a): ?>
+            <div class="card card--padded">
+                <?php if (!empty($a['photo_path'])): ?>
+                    <div style="height: 140px; overflow: hidden; border-radius: var(--r-sm); margin: calc(-1 * var(--sp-4)) calc(-1 * var(--sp-4)) var(--sp-3); flex-shrink: 0;">
+                        <img src="/public-attraction.php?id=<?= (int)$a['id'] ?>&aid=<?= (int)$assoc['id'] ?>" alt=""
+                             style="width:100%; height:100%; object-fit:cover; display:block;">
+                    </div>
+                <?php endif; ?>
+                <div style="display: flex; align-items: flex-start; gap: var(--sp-2); margin-bottom: var(--sp-2);">
+                    <span style="font-size: 1.4rem; line-height: 1; flex-shrink: 0;"><?= $ATTR_CATS[$a['category']] ?? '📍' ?></span>
+                    <div>
+                        <strong style="font-size: var(--fs-md);"><?= e((string)$a['name']) ?></strong>
+                        <?php if (!empty($a['description'])): ?>
+                            <div class="muted" style="font-size: var(--fs-sm); margin-top: 2px;"><?= e((string)$a['description']) ?></div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <?php if (!empty($a['website_url'])): ?>
+                    <a href="<?= e((string)$a['website_url']) ?>" target="_blank" rel="noopener"
+                       style="font-size: var(--fs-sm); color: var(--color-orange); font-weight: 600;">
+                        Visit website &rarr;
+                    </a>
+                <?php endif; ?>
+            </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</section>
+<?php endif; ?>
+
+<?php if ($propertyListings): ?>
+<section class="landing-properties" id="properties" style="background: var(--color-surface); padding: var(--sp-12) 0;">
+    <div class="container">
+        <h2 class="landing-section__heading center">Properties Available</h2>
+        <p class="muted center" style="margin-bottom: var(--sp-8);">Homes for sale and rent in <?= e((string)$assoc['name']) ?>.</p>
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--sp-5);">
+        <?php foreach ($propertyListings as $pl):
+            $priceCents = $pl['price_cents'] !== null ? (int)$pl['price_cents'] : null;
+            $priceLabel = $priceCents ? '$' . number_format($priceCents / 100, 0) . ($pl['listing_type'] === 'rent' ? '/mo' : '') : 'Price on request';
+            $typeLabel  = $pl['listing_type'] === 'rent' ? 'For Rent' : 'For Sale';
+            $specs = [];
+            if ($pl['beds']  !== null) $specs[] = $pl['beds']  . ' BD';
+            if ($pl['baths'] !== null) $specs[] = $pl['baths'] . ' BA';
+            if ($pl['sq_ft'] !== null) $specs[] = number_format((int)$pl['sq_ft']) . ' sq ft';
+        ?>
+            <div class="card" style="overflow: hidden;">
+                <?php if (!empty($pl['photo_path'])): ?>
+                    <div style="height: 200px; overflow: hidden; flex-shrink: 0;">
+                        <img src="/public-listing.php?id=<?= (int)$pl['id'] ?>&aid=<?= (int)$assoc['id'] ?>" alt=""
+                             style="width:100%; height:100%; object-fit:cover; display:block;">
+                    </div>
+                <?php endif; ?>
+                <div style="padding: var(--sp-4);">
+                    <div class="row" style="align-items: center; justify-content: space-between; margin-bottom: var(--sp-2);">
+                        <span class="badge <?= $pl['listing_type'] === 'rent' ? 'badge--info' : 'badge--orange' ?>"><?= e($typeLabel) ?></span>
+                        <strong style="font-size: var(--fs-xl); color: var(--color-navy);"><?= e($priceLabel) ?></strong>
+                    </div>
+                    <h3 style="font-size: var(--fs-lg); margin: 0 0 var(--sp-2); line-height: 1.3;"><?= e((string)$pl['title']) ?></h3>
+                    <?php if ($specs): ?>
+                        <div class="muted" style="font-size: var(--fs-sm); margin-bottom: var(--sp-3);"><?= implode(' &middot; ', array_map('e', $specs)) ?></div>
+                    <?php endif; ?>
+                    <?php if (!empty($pl['description'])): ?>
+                        <p style="font-size: var(--fs-sm); color: var(--color-text-soft); margin: 0 0 var(--sp-3);"><?= e(mb_strimwidth(strip_tags((string)$pl['description']), 0, 200, '…')) ?></p>
+                    <?php endif; ?>
+                    <?php if (!empty($pl['contact_name']) || !empty($pl['contact_phone']) || !empty($pl['contact_email'])): ?>
+                        <div style="border-top: 1px solid var(--color-border); padding-top: var(--sp-3); margin-top: var(--sp-3);">
+                            <?php if (!empty($pl['contact_name'])): ?>
+                                <div style="font-size: var(--fs-sm); font-weight: 600;"><?= e((string)$pl['contact_name']) ?></div>
+                            <?php endif; ?>
+                            <?php if (!empty($pl['contact_phone'])): ?>
+                                <div style="font-size: var(--fs-sm);"><a href="tel:<?= e((string)$pl['contact_phone']) ?>"><?= e((string)$pl['contact_phone']) ?></a></div>
+                            <?php endif; ?>
+                            <?php if (!empty($pl['contact_email'])): ?>
+                                <div style="font-size: var(--fs-sm);"><a href="mailto:<?= e((string)$pl['contact_email']) ?>"><?= e((string)$pl['contact_email']) ?></a></div>
+                            <?php endif; ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        <?php endforeach; ?>
+        </div>
+    </div>
+</section>
+<?php endif; ?>
+
+<?php if ($hasVisit || $hasMap): ?>
+<section class="landing-visit" id="visit">
+    <div class="container container--narrow">
+        <h2 class="landing-section__heading center">Plan Your Visit</h2>
+        <?php if (!empty($assoc['visit_hours'])): ?>
+            <p style="text-align:center; font-size: var(--fs-lg); font-weight: 700; color: var(--color-navy); margin-bottom: var(--sp-6);">
+                🕐 <?= e((string)$assoc['visit_hours']) ?>
+            </p>
+        <?php endif; ?>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--sp-5); margin-bottom: var(--sp-8);">
+            <?php if (!empty($assoc['visit_directions'])): ?>
+            <div class="card card--padded">
+                <h3 style="font-size: var(--fs-md); margin: 0 0 var(--sp-3); display: flex; align-items: center; gap: var(--sp-2);">
+                    <span>🗺️</span> Directions
+                </h3>
+                <p style="margin: 0; font-size: var(--fs-sm); color: var(--color-text-soft); white-space: pre-wrap;"><?= e((string)$assoc['visit_directions']) ?></p>
+            </div>
+            <?php endif; ?>
+            <?php if (!empty($assoc['visit_parking'])): ?>
+            <div class="card card--padded">
+                <h3 style="font-size: var(--fs-md); margin: 0 0 var(--sp-3); display: flex; align-items: center; gap: var(--sp-2);">
+                    <span>🅿️</span> Parking
+                </h3>
+                <p style="margin: 0; font-size: var(--fs-sm); color: var(--color-text-soft); white-space: pre-wrap;"><?= e((string)$assoc['visit_parking']) ?></p>
+            </div>
+            <?php endif; ?>
+            <?php if (!empty($assoc['visit_notes'])): ?>
+            <div class="card card--padded">
+                <h3 style="font-size: var(--fs-md); margin: 0 0 var(--sp-3); display: flex; align-items: center; gap: var(--sp-2);">
+                    <span>📋</span> Visitor Notes
+                </h3>
+                <p style="margin: 0; font-size: var(--fs-sm); color: var(--color-text-soft); white-space: pre-wrap;"><?= e((string)$assoc['visit_notes']) ?></p>
+            </div>
+            <?php endif; ?>
+        </div>
+        <?php if ($hasMap): ?>
+        <?php
+        $lat = (float)$assoc['latitude'];
+        $lon = (float)$assoc['longitude'];
+        $bbox = sprintf('%.6f,%.6f,%.6f,%.6f', $lon - 0.005, $lat - 0.005, $lon + 0.005, $lat + 0.005);
+        $marker = sprintf('%.6f,%.6f', $lat, $lon);
+        ?>
+        <div class="landing-map__frame">
+            <iframe
+                src="https://www.openstreetmap.org/export/embed.html?bbox=<?= e($bbox) ?>&amp;layer=mapnik&amp;marker=<?= e($marker) ?>"
+                title="Map of <?= e($assoc['name']) ?>"
+                loading="lazy"
+                referrerpolicy="no-referrer-when-downgrade"></iframe>
+        </div>
+        <p class="muted center" style="margin-top: var(--sp-3); font-size: var(--fs-xs);">
+            <a href="https://www.google.com/maps/search/?api=1&query=<?= rawurlencode($mapAddress) ?>" target="_blank" rel="noopener">Open in Google Maps &rarr;</a>
+            &nbsp;&middot;&nbsp;
+            <a href="https://www.openstreetmap.org/?mlat=<?= e((string)$lat) ?>&amp;mlon=<?= e((string)$lon) ?>#map=17/<?= e((string)$lat) ?>/<?= e((string)$lon) ?>" target="_blank" rel="noopener">OpenStreetMap &rarr;</a>
+        </p>
+        <?php endif; ?>
+    </div>
+</section>
+<?php endif; ?>
+
 <?php if ($publicDocs): ?>
 <section class="landing-docs">
     <div class="container container--narrow">
@@ -349,7 +585,7 @@ $page_layout = 'public_landing'; // Avoids the public marketing nav; landing has
 <?php endif; ?>
 
 <?php if ($publicEvents): ?>
-<section class="landing-events">
+<section class="landing-events" id="events">
     <div class="container container--narrow">
         <h2 class="landing-section__heading center">Upcoming events</h2>
         <p class="muted center" style="margin-bottom: var(--sp-8);">Mark your calendar.</p>
@@ -387,39 +623,10 @@ $page_layout = 'public_landing'; // Avoids the public marketing nav; landing has
 </section>
 <?php endif; ?>
 
-<?php if ($hasMap): ?>
-<section class="landing-map">
-    <div class="container">
-        <h2 class="landing-section__heading center">Find us</h2>
-        <p class="muted center" style="margin-bottom: var(--sp-6);">
-            <?= $assoc['address'] ? e((string)$assoc['address']) . ' &middot; ' : '' ?>
-            <?= $cityLine !== '' ? e($cityLine) : '' ?>
-        </p>
-        <?php
-        $lat = (float)$assoc['latitude'];
-        $lon = (float)$assoc['longitude'];
-        // ~0.005° in each direction = roughly a half-mile zoom
-        $bbox = sprintf('%.6f,%.6f,%.6f,%.6f', $lon - 0.005, $lat - 0.005, $lon + 0.005, $lat + 0.005);
-        $marker = sprintf('%.6f,%.6f', $lat, $lon);
-        ?>
-        <div class="landing-map__frame">
-            <iframe
-                src="https://www.openstreetmap.org/export/embed.html?bbox=<?= e($bbox) ?>&amp;layer=mapnik&amp;marker=<?= e($marker) ?>"
-                title="Map of <?= e($assoc['name']) ?>"
-                loading="lazy"
-                referrerpolicy="no-referrer-when-downgrade"></iframe>
-        </div>
-        <p class="muted center" style="margin-top: var(--sp-3); font-size: var(--fs-xs);">
-            <a href="https://www.openstreetmap.org/?mlat=<?= e((string)$lat) ?>&amp;mlon=<?= e((string)$lon) ?>#map=17/<?= e((string)$lat) ?>/<?= e((string)$lon) ?>" target="_blank" rel="noopener">
-                Open larger map &rarr;
-            </a>
-        </p>
-    </div>
-</section>
-<?php endif; ?>
+<?php // Map is now embedded in the Plan Your Visit section above. ?>
 
 <?php if ($faqs): ?>
-<section class="landing-faq">
+<section class="landing-faq" id="faq">
     <div class="container container--narrow">
         <h2 class="landing-section__heading center">Frequently asked questions</h2>
         <div class="landing-faq__list">
@@ -468,7 +675,7 @@ $page_layout = 'public_landing'; // Avoids the public marketing nav; landing has
 <?php endif; ?>
 
 <?php if ($hasContact): ?>
-<section class="landing-contact" id="contact">
+<section class="landing-contact" id="contact" style="scroll-margin-top: 60px;">
     <div class="container container--narrow">
         <h2 class="landing-section__heading center">Get in touch</h2>
         <p class="muted center" style="margin-bottom: var(--sp-6);">

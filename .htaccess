@@ -17,7 +17,7 @@ ErrorDocument 404 /404.php
     RewriteRule ^tv/?$ /tv.php [QSA,L]
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
-    RewriteCond %{REQUEST_URI}      !^/(landing|branding|public-media|public-document|contact|user-avatar|newsletter-signup|newsletter-unsubscribe|unsubscribe|tv)\.php
+    RewriteCond %{REQUEST_URI}      !^/(landing|branding|public-media|public-document|contact|user-avatar|newsletter-signup|newsletter-unsubscribe|unsubscribe|tv|public-attraction|public-listing)\.php
     RewriteRule ^([a-z0-9][a-z0-9-]*)/?$  /landing.php?slug=$1  [QSA,L]
 </IfModule>
 
