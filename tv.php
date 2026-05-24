@@ -362,7 +362,7 @@ if ($tvMode === 'ticker') {
             'kind'     => 'announcement',
             'ann_type' => (string)$a['type'],
             'title'    => (string)$a['title'],
-            'body'     => mb_strimwidth(trim(strip_tags((string)$a['body'])), 0, 160, '…'),
+            'body'     => trim(strip_tags((string)$a['body'])),
             'date'     => $a['published_at'],
             'sort_ts'  => strtotime((string)$a['published_at']),
         ];
