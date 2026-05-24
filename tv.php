@@ -351,7 +351,8 @@ $dbMode = in_array((string)($assoc['tv_mode'] ?? 'columns'), ['columns','ticker'
 $tvMode = $urlStyle !== '' ? $urlStyle : $dbMode;
 
 // Dark (default) vs light theme. URL param overrides. Dark = 1, Light = 0.
-$tvDark = $urlDark !== '' ? ($urlDark === '1') : true; // default dark
+$dbDark = isset($assoc['tv_dark']) ? (bool)(int)$assoc['tv_dark'] : true;
+$tvDark = $urlDark !== '' ? ($urlDark === '1') : $dbDark;
 
 // Build flat ticker items (announcements + events + marketplace) sorted newest first.
 if ($tvMode === 'ticker') {
@@ -554,7 +555,7 @@ header {
     font-weight: 900;
     font-variant-numeric: tabular-nums;
     letter-spacing: -0.03em;
-    color: #fff;
+    color: var(--text);
     line-height: 1;
 }
 .weather-cond {
@@ -722,14 +723,14 @@ header {
     font-weight: 800;
     text-transform: uppercase;
     letter-spacing: .1em;
-    color: rgba(255,255,255,.75);
+    color: var(--muted);
 }
 .evt-cal .d {
     font-size: 2rem;
     font-size: clamp(1.7rem, 3vw, 2.6rem);
     font-weight: 900;
     line-height: 1;
-    color: #fff;
+    color: var(--text);
 }
 .evt-info { flex: 1; min-width: 0; }
 .evt-title {
@@ -815,7 +816,7 @@ footer {
 .footer-note {
     font-size: .7rem;
     font-size: clamp(.6rem, .9vw, .8rem);
-    color: var(--muted-faint);
+    color: var(--muted);
     font-weight: 600;
     letter-spacing: .04em;
 }

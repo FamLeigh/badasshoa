@@ -120,9 +120,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'tv_pin'
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'tv_mode' && $canEdit) {
     csrf_check();
     $mode = in_array((string)($_POST['tv_mode'] ?? ''), ['columns','ticker']) ? $_POST['tv_mode'] : 'columns';
-    db()->prepare('UPDATE associations SET tv_mode=? WHERE id=?')->execute([$mode, $assocId]);
-    audit('association.tv_mode_changed', ['mode' => $mode]);
-    flash('success', 'TV display mode updated.');
+    $dark = (int)(($_POST['tv_dark'] ?? '1') !== '0');
+    db()->prepare('UPDATE associations SET tv_mode=?, tv_dark=? WHERE id=?')->execute([$mode, $dark, $assocId]);
+    audit('association.tv_settings_changed', ['mode' => $mode, 'dark' => (bool)$dark]);
+    flash('success', 'TV display settings updated.');
     redirect('/dashboard/settings.php#tv');
 }
 
@@ -975,7 +976,7 @@ require __DIR__ . '/../includes/header.php';
                 <?= csrf_field() ?>
                 <input type="hidden" name="form" value="tv_mode">
                 <div style="font-size: var(--fs-xs); font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--color-text-soft); margin-bottom: var(--sp-3);">Display Mode</div>
-                <div style="display: flex; gap: var(--sp-3); flex-wrap: wrap; margin-bottom: var(--sp-3);">
+                <div style="display: flex; gap: var(--sp-3); flex-wrap: wrap; margin-bottom: var(--sp-4);">
                     <?php $tvModeVal = (string)($association['tv_mode'] ?? 'columns'); ?>
                     <label style="display: flex; align-items: flex-start; gap: var(--sp-2); cursor: pointer; flex: 1; min-width: 200px; background: var(--color-surface); border: 2px solid <?= $tvModeVal === 'columns' ? 'var(--color-orange)' : 'var(--color-border)' ?>; border-radius: var(--r-md); padding: var(--sp-3) var(--sp-4);">
                         <input type="radio" name="tv_mode" value="columns" <?= $tvModeVal === 'columns' ? 'checked' : '' ?> style="margin-top: 3px;">
@@ -992,7 +993,19 @@ require __DIR__ . '/../includes/header.php';
                         </div>
                     </label>
                 </div>
-                <button class="btn btn--sm" type="submit">Save mode</button>
+                <div style="font-size: var(--fs-xs); font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--color-text-soft); margin-bottom: var(--sp-3);">Theme</div>
+                <div style="display: flex; gap: var(--sp-3); flex-wrap: wrap; margin-bottom: var(--sp-4);">
+                    <?php $tvDarkVal = (int)($association['tv_dark'] ?? 1); ?>
+                    <label style="display: flex; align-items: center; gap: var(--sp-2); cursor: pointer; flex: 1; min-width: 140px; background: var(--color-surface); border: 2px solid <?= $tvDarkVal ? 'var(--color-orange)' : 'var(--color-border)' ?>; border-radius: var(--r-md); padding: var(--sp-3) var(--sp-4);">
+                        <input type="radio" name="tv_dark" value="1" <?= $tvDarkVal ? 'checked' : '' ?>>
+                        <strong style="font-size: var(--fs-sm);">🌙 Dark</strong>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: var(--sp-2); cursor: pointer; flex: 1; min-width: 140px; background: var(--color-surface); border: 2px solid <?= !$tvDarkVal ? 'var(--color-orange)' : 'var(--color-border)' ?>; border-radius: var(--r-md); padding: var(--sp-3) var(--sp-4);">
+                        <input type="radio" name="tv_dark" value="0" <?= !$tvDarkVal ? 'checked' : '' ?>>
+                        <strong style="font-size: var(--fs-sm);">☀️ Light</strong>
+                    </label>
+                </div>
+                <button class="btn btn--sm" type="submit">Save display settings</button>
             </form>
 
             <details style="margin-top: var(--sp-2);">
