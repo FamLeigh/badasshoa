@@ -308,7 +308,7 @@ This file (CLAUDE.md) keeps an internal-only summary in the section below for cr
 - Directory opt-out (migration 066)
 
 **Production state in DB:**
-- Migrations through **088** applied to `u535581001_badassHOA` — **089–092 need to be run on prod** (no migration needed for session 16 changes)
+- Migrations through **092** applied to `u535581001_badassHOA` (089–092 run 2026-05-24)
 - 232 FL statutes in the `statutes` table (chapters 718, 719, 720, 553)
 - 37 Bellair tenants imported (migration 070)
 - 8 rental agents + 14 unit links (migration 069)
