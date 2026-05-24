@@ -345,6 +345,21 @@ $hasLogo    = !empty($assoc['logo_path']);
 $primary    = preg_match('/^#[0-9a-f]{6}$/i', (string)$assoc['primary_color']) ? $assoc['primary_color'] : '#0f1f3d';
 $hasWeather = !empty($assoc['latitude']) && !empty($assoc['longitude']);
 $tvAnnColors = ann_type_colors($assocId);
+$tvAnnTypes  = ann_types();
+
+// Converts #rrggbb to "rgba(r,g,b,a)" for Tizen-compatible gradients.
+function tv_hex_rgba(string $hex, float $alpha): string {
+    $hex = ltrim($hex, '#');
+    return 'rgba(' . hexdec(substr($hex,0,2)) . ',' . hexdec(substr($hex,2,2)) . ',' . hexdec(substr($hex,4,2)) . ',' . $alpha . ')';
+}
+// Returns inline style string for an announcement placeholder block.
+function ann_placeholder_style(string $type, array $colors): string {
+    $hex = $colors[$type] ?? $colors['general'] ?? '#d44617';
+    $from = tv_hex_rgba($hex, 0.18);
+    $to   = tv_hex_rgba($hex, 0.38);
+    $border = tv_hex_rgba($hex, 0.45);
+    return "background:linear-gradient(135deg,{$from},{$to});border:2px solid {$border};";
+}
 $lat = $hasWeather ? (float)$assoc['latitude'] : null;
 $lon = $hasWeather ? (float)$assoc['longitude'] : null;
 $refreshSec = 600;
@@ -969,6 +984,13 @@ body {
     margin-bottom: 12px;
     display: block;
 }
+.ann-placeholder {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    font-size: clamp(1.8rem, 3.5vw, 3.5rem);
+    object-fit: unset;
+}
 .ticker-evt-header {
     display: flex;
     align-items: center;
@@ -1060,6 +1082,10 @@ body {
                 <span class="ticker-badge ticker-badge--<?= e($item['ann_type']) ?>"><?= e(ann_type_label($item['ann_type'])) ?></span>
                 <?php if (!empty($item['image_path'])): ?>
                     <img class="ticker-photo" src="/announcement-image.php?id=<?= (int)$item['id'] ?>" alt="">
+                <?php else:
+                    $pEmoji = $tvAnnTypes[$item['ann_type']]['emoji'] ?? '📢';
+                ?>
+                    <div class="ticker-photo ann-placeholder" style="<?= ann_placeholder_style($item['ann_type'], $tvAnnColors) ?>"><?= $pEmoji ?></div>
                 <?php endif; ?>
                 <div class="ticker-title"><?= e($item['title']) ?></div>
                 <?php if ($item['body'] !== ''): ?>
@@ -1131,6 +1157,10 @@ body {
             <div class="card <?= $isEmergency ? 'card--emergency' : '' ?>">
                 <?php if (!empty($a['image_path'])): ?>
                     <img class="ann-thumb" src="/announcement-image.php?id=<?= (int)$a['id'] ?>" alt="">
+                <?php else:
+                    $pEmoji = $tvAnnTypes[(string)$a['type']]['emoji'] ?? '📢';
+                ?>
+                    <div class="ann-thumb ann-placeholder" style="<?= ann_placeholder_style((string)$a['type'], $tvAnnColors) ?>"><?= $pEmoji ?></div>
                 <?php endif; ?>
                 <span class="ann-badge ann-badge--<?= e((string)$a['type']) ?>"><?= e(ann_type_label((string)$a['type'])) ?></span>
                 <div class="ann-title"><?= e((string)$a['title']) ?></div>
