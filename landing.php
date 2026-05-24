@@ -379,32 +379,28 @@ if ($hasContact)               $_navSections['contact']      = 'Contact';
 <?php endif; ?>
 
 <?php if ($attractions): ?>
+<?php
+$_attrPreview = array_slice($attractions, 0, 4);
+$_attrMore    = count($attractions) - count($_attrPreview);
+$_attrUrl     = '/' . $slug . '/attractions';
+$ATTR_CATS_EM = ['dining'=>'🍽️','shopping'=>'🛍️','entertainment'=>'🎭','outdoor'=>'🌿','culture'=>'🎨','services'=>'🔧','other'=>'📍'];
+$_aLat = isset($assoc['latitude'])  && $assoc['latitude']  !== null ? (float)$assoc['latitude']  : null;
+$_aLon = isset($assoc['longitude']) && $assoc['longitude'] !== null ? (float)$assoc['longitude'] : null;
+?>
 <section class="landing-attractions" id="attractions">
     <div class="container">
-        <h2 class="landing-section__heading center">Area Attractions</h2>
-        <p class="muted center" style="margin-bottom: var(--sp-8);">Local spots worth exploring near <?= e((string)$assoc['name']) ?>.</p>
-        <?php
-        $ATTR_CATS = [
-            'dining'        => '🍽️',
-            'shopping'      => '🛍️',
-            'entertainment' => '🎭',
-            'outdoor'       => '🌿',
-            'culture'       => '🎨',
-            'services'      => '🔧',
-            'other'         => '📍',
-        ];
-        // Group by category
-        $bycat = [];
-        foreach ($attractions as $a) { $bycat[$a['category']][] = $a; }
-        ?>
+        <div style="display:flex; align-items:baseline; justify-content:space-between; gap:var(--sp-4); flex-wrap:wrap; margin-bottom:var(--sp-2);">
+            <h2 class="landing-section__heading" style="margin:0;">Area Attractions</h2>
+            <a href="<?= e($_attrUrl) ?>" style="font-size:var(--fs-sm); font-weight:700; color:var(--color-orange); text-decoration:none; white-space:nowrap;">
+                See all <?= count($attractions) ?> &rarr;
+            </a>
+        </div>
+        <p class="muted" style="margin-bottom: var(--sp-8);">Local spots worth exploring near <?= e((string)$assoc['name']) ?>.</p>
         <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--sp-4);">
-            <?php
-            $assocLat = isset($assoc['latitude'])  && $assoc['latitude']  !== null ? (float)$assoc['latitude']  : null;
-            $assocLon = isset($assoc['longitude']) && $assoc['longitude'] !== null ? (float)$assoc['longitude'] : null;
-            foreach ($attractions as $a):
+            <?php foreach ($_attrPreview as $a):
                 $distLabel = '';
-                if ($assocLat !== null && $assocLon !== null && !empty($a['latitude']) && !empty($a['longitude'])) {
-                    $mi = haversine_miles($assocLat, $assocLon, (float)$a['latitude'], (float)$a['longitude']);
+                if ($_aLat !== null && $_aLon !== null && !empty($a['latitude']) && !empty($a['longitude'])) {
+                    $mi = haversine_miles($_aLat, $_aLon, (float)$a['latitude'], (float)$a['longitude']);
                     $distLabel = $mi < 0.1 ? '< 0.1 mi' : round($mi, 1) . ' mi';
                 }
                 $mapUrl = '';
@@ -418,11 +414,11 @@ if ($hasContact)               $_navSections['contact']      = 'Contact';
                 <?php if (!empty($a['photo_path'])): ?>
                     <div style="height: 160px; overflow: hidden; border-radius: var(--r-sm); margin: calc(-1 * var(--sp-4)) calc(-1 * var(--sp-4)) var(--sp-3); flex-shrink: 0;">
                         <img src="/public-attraction.php?id=<?= (int)$a['id'] ?>&aid=<?= (int)$assoc['id'] ?>" alt="<?= e((string)$a['name']) ?>"
-                             style="width:100%; height:100%; object-fit:cover; display:block;">
+                             style="width:100%; height:100%; object-fit:cover; display:block;" loading="lazy">
                     </div>
                 <?php endif; ?>
                 <div style="display: flex; align-items: flex-start; gap: var(--sp-2); margin-bottom: var(--sp-2);">
-                    <span style="font-size: 1.4rem; line-height: 1; flex-shrink: 0; margin-top: 2px;"><?= $ATTR_CATS[$a['category']] ?? '📍' ?></span>
+                    <span style="font-size: 1.4rem; line-height: 1; flex-shrink: 0; margin-top: 2px;"><?= $ATTR_CATS_EM[$a['category']] ?? '📍' ?></span>
                     <div style="flex: 1; min-width: 0;">
                         <strong style="font-size: var(--fs-md);"><?= e((string)$a['name']) ?></strong>
                         <?php if (!empty($a['description'])): ?>
@@ -432,27 +428,25 @@ if ($hasContact)               $_navSections['contact']      = 'Contact';
                 </div>
                 <?php if (!empty($a['address']) || $distLabel || $mapUrl): ?>
                     <div style="font-size: var(--fs-xs); color: var(--color-text-muted); margin-bottom: var(--sp-3); display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap;">
-                        <?php if (!empty($a['address'])): ?>
-                            <span><?= e((string)$a['address']) ?></span>
-                        <?php endif; ?>
-                        <?php if ($distLabel): ?>
-                            <span style="background: var(--color-surface-2); border-radius: 99px; padding: 1px 8px; font-weight: 600; color: var(--color-navy);"><?= e($distLabel) ?> away</span>
-                        <?php endif; ?>
-                        <?php if ($mapUrl): ?>
-                            <a href="<?= e($mapUrl) ?>" target="_blank" rel="noopener"
-                               style="color: var(--color-orange); font-weight: 600; text-decoration: none;">Map &nearr;</a>
-                        <?php endif; ?>
+                        <?php if (!empty($a['address'])): ?><span><?= e((string)$a['address']) ?></span><?php endif; ?>
+                        <?php if ($distLabel): ?><span style="background:var(--color-surface-2);border-radius:99px;padding:1px 8px;font-weight:600;color:var(--color-navy);"><?= e($distLabel) ?> away</span><?php endif; ?>
+                        <?php if ($mapUrl): ?><a href="<?= e($mapUrl) ?>" target="_blank" rel="noopener" style="color:var(--color-orange);font-weight:600;text-decoration:none;">Map &nearr;</a><?php endif; ?>
                     </div>
                 <?php endif; ?>
                 <?php if (!empty($a['website_url'])): ?>
                     <a href="<?= e((string)$a['website_url']) ?>" target="_blank" rel="noopener"
-                       style="font-size: var(--fs-sm); color: var(--color-orange); font-weight: 600; margin-top: auto;">
-                        Visit website &rarr;
-                    </a>
+                       style="font-size:var(--fs-sm);color:var(--color-orange);font-weight:600;margin-top:auto;">Visit website &rarr;</a>
                 <?php endif; ?>
             </div>
             <?php endforeach; ?>
         </div>
+        <?php if ($_attrMore > 0): ?>
+        <div style="text-align:center; margin-top:var(--sp-8);">
+            <a href="<?= e($_attrUrl) ?>" class="btn btn--ghost btn--lg">
+                See all <?= count($attractions) ?> attractions &rarr;
+            </a>
+        </div>
+        <?php endif; ?>
     </div>
 </section>
 <?php endif; ?>
