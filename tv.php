@@ -1104,13 +1104,15 @@ body {
                         <div class="m"><?= tv_time('M', $ts, $assocTz) ?></div>
                         <div class="d"><?= tv_time('j', $ts, $assocTz) ?></div>
                     </div>
-                    <div class="ticker-kind" style="margin-bottom:0;">📅 Upcoming Event</div>
+                    <div>
+                        <div class="ticker-kind" style="margin-bottom:2px;">📅 Upcoming Event</div>
+                        <div class="ticker-meta" style="margin-top:0;"><?= tv_time('g:i A', $ts, $assocTz) ?><?= $item['location'] !== '' ? ' · ' . e($item['location']) : '' ?></div>
+                    </div>
                 </div>
                 <?php if (!empty($item['image_path'])): ?>
                     <img class="ticker-photo" src="/event-image.php?id=<?= (int)$item['id'] ?>" alt="">
                 <?php endif; ?>
                 <div class="ticker-title"><?= e($item['title']) ?></div>
-                <div class="ticker-meta"><?= tv_time('g:i A', $ts, $assocTz) ?><?= $item['location'] !== '' ? ' · ' . e($item['location']) : '' ?></div>
                 <?php if ($item['description'] !== ''): ?>
                     <div class="ticker-body" style="margin-top:8px;"><?= e($item['description']) ?></div>
                 <?php endif; ?>
