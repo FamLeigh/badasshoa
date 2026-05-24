@@ -254,7 +254,7 @@ $announcements = $anns->fetchAll();
 
 // Upcoming events (next 30 days, all-audience) — expand recurrences in PHP.
 $evts = db()->prepare(
-    "SELECT id, title, starts_at, ends_at, location, image_path, recurrence_type, recurrence_until
+    "SELECT id, title, description, starts_at, ends_at, location, image_path, recurrence_type, recurrence_until
        FROM events
       WHERE association_id = ? AND audience = 'all'
         AND (
@@ -282,12 +282,13 @@ foreach ($rawEvents as $ev) {
     if ($rtype === 'none') {
         if ($start >= $now && $start <= $horizon) {
             $events[] = [
-                'id'        => $ev['id'],
-                'title'     => $ev['title'],
-                'location'  => $ev['location'],
-                'image_path'=> $ev['image_path'],
-                'starts_at' => $start->format('Y-m-d H:i:s'),
-                'ends_at'   => $end ? $end->format('Y-m-d H:i:s') : null,
+                'id'          => $ev['id'],
+                'title'       => $ev['title'],
+                'description' => $ev['description'],
+                'location'    => $ev['location'],
+                'image_path'  => $ev['image_path'],
+                'starts_at'   => $start->format('Y-m-d H:i:s'),
+                'ends_at'     => $end ? $end->format('Y-m-d H:i:s') : null,
             ];
         }
         continue;
@@ -310,12 +311,13 @@ foreach ($rawEvents as $ev) {
         if ($cur >= $now) {
             $duration = $end ? ($end->getTimestamp() - $start->getTimestamp()) : 0;
             $events[] = [
-                'id'        => $ev['id'],
-                'title'     => $ev['title'],
-                'location'  => $ev['location'],
-                'image_path'=> $ev['image_path'],
-                'starts_at' => $cur->format('Y-m-d H:i:s'),
-                'ends_at'   => $duration > 0 ? $cur->modify("+{$duration} seconds")->format('Y-m-d H:i:s') : null,
+                'id'          => $ev['id'],
+                'title'       => $ev['title'],
+                'description' => $ev['description'],
+                'location'    => $ev['location'],
+                'image_path'  => $ev['image_path'],
+                'starts_at'   => $cur->format('Y-m-d H:i:s'),
+                'ends_at'     => $duration > 0 ? $cur->modify("+{$duration} seconds")->format('Y-m-d H:i:s') : null,
             ];
         }
         $cur = $cur->add(new DateInterval($step));
@@ -359,21 +361,26 @@ if ($tvMode === 'ticker') {
     $tickerItems = [];
     foreach ($announcements as $a) {
         $tickerItems[] = [
-            'kind'     => 'announcement',
-            'ann_type' => (string)$a['type'],
-            'title'    => (string)$a['title'],
-            'body'     => trim(strip_tags((string)$a['body'])),
-            'date'     => $a['published_at'],
-            'sort_ts'  => strtotime((string)$a['published_at']),
+            'kind'       => 'announcement',
+            'id'         => (int)$a['id'],
+            'ann_type'   => (string)$a['type'],
+            'title'      => (string)$a['title'],
+            'body'       => trim(strip_tags((string)$a['body'])),
+            'image_path' => $a['image_path'],
+            'date'       => $a['published_at'],
+            'sort_ts'    => strtotime((string)$a['published_at']),
         ];
     }
     foreach ($events as $ev) {
         $tickerItems[] = [
-            'kind'      => 'event',
-            'title'     => (string)$ev['title'],
-            'starts_at' => (string)$ev['starts_at'],
-            'location'  => (string)($ev['location'] ?? ''),
-            'sort_ts'   => strtotime((string)$ev['starts_at']),
+            'kind'        => 'event',
+            'id'          => (int)$ev['id'],
+            'title'       => (string)$ev['title'],
+            'description' => trim(strip_tags((string)($ev['description'] ?? ''))),
+            'starts_at'   => (string)$ev['starts_at'],
+            'location'    => (string)($ev['location'] ?? ''),
+            'image_path'  => $ev['image_path'],
+            'sort_ts'     => strtotime((string)$ev['starts_at']),
         ];
     }
     foreach ($listings as $l) {
@@ -723,14 +730,14 @@ header {
     font-weight: 800;
     text-transform: uppercase;
     letter-spacing: .1em;
-    color: var(--muted);
+    color: rgba(255,255,255,.75);
 }
 .evt-cal .d {
     font-size: 2rem;
     font-size: clamp(1.7rem, 3vw, 2.6rem);
     font-weight: 900;
     line-height: 1;
-    color: var(--text);
+    color: #fff;
 }
 .evt-info { flex: 1; min-width: 0; }
 .evt-title {
@@ -985,6 +992,7 @@ body {
     font-size: clamp(1.6rem, 2.8vw, 2.8rem);
     font-weight: 900;
     line-height: 1;
+    color: #fff;
 }
 /* Hide column grid in ticker mode */
 .col { display: none !important; }
@@ -1048,6 +1056,9 @@ body {
                 $isEmergency = $item['ann_type'] === 'emergency';
         ?>
             <div class="ticker-card <?= $isEmergency ? 'ticker-card--emergency' : '' ?>">
+                <?php if (!empty($item['image_path'])): ?>
+                    <img class="ticker-photo" src="/announcement-image.php?id=<?= (int)$item['id'] ?>" alt="">
+                <?php endif; ?>
                 <span class="ticker-badge ticker-badge--<?= e($item['ann_type']) ?>"><?= e(ann_type_label($item['ann_type'])) ?></span>
                 <div class="ticker-title"><?= e($item['title']) ?></div>
                 <?php if ($item['body'] !== ''): ?>
@@ -1060,6 +1071,9 @@ body {
             $endTs = !empty($item['ends_at']) ? strtotime((string)$item['ends_at']) : null;
         ?>
             <div class="ticker-card">
+                <?php if (!empty($item['image_path'])): ?>
+                    <img class="ticker-photo" src="/event-image.php?id=<?= (int)$item['id'] ?>" alt="">
+                <?php endif; ?>
                 <div class="ticker-kind">📅 Upcoming Event</div>
                 <div class="ticker-evt-cal">
                     <div class="ticker-evt-block">
@@ -1069,6 +1083,9 @@ body {
                     <div>
                         <div class="ticker-title" style="margin-bottom:4px;"><?= e($item['title']) ?></div>
                         <div class="ticker-meta" style="margin-top:0;"><?= tv_time('g:i A', $ts, $assocTz) ?><?= $item['location'] !== '' ? ' · ' . e($item['location']) : '' ?></div>
+                        <?php if ($item['description'] !== ''): ?>
+                            <div class="ticker-body" style="margin-top:8px;"><?= e($item['description']) ?></div>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
