@@ -943,9 +943,10 @@ body {
     font-size: clamp(1rem, 1.5vw, 1.5rem);
     color: var(--muted);
     line-height: 1.5;
-    flex: 1;
-    min-height: 0;
     overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 5;
+    -webkit-box-orient: vertical;
 }
 .ticker-meta {
     font-size: clamp(.85rem, 1.2vw, 1.1rem);
@@ -968,11 +969,11 @@ body {
     margin-bottom: 12px;
     display: block;
 }
-.ticker-evt-cal {
+.ticker-evt-header {
     display: flex;
     align-items: center;
-    gap: 16px;
-    margin-bottom: 10px;
+    gap: 12px;
+    margin-bottom: 12px;
 }
 .ticker-evt-block {
     background: var(--primary);
@@ -1056,10 +1057,10 @@ body {
                 $isEmergency = $item['ann_type'] === 'emergency';
         ?>
             <div class="ticker-card <?= $isEmergency ? 'ticker-card--emergency' : '' ?>">
+                <span class="ticker-badge ticker-badge--<?= e($item['ann_type']) ?>"><?= e(ann_type_label($item['ann_type'])) ?></span>
                 <?php if (!empty($item['image_path'])): ?>
                     <img class="ticker-photo" src="/announcement-image.php?id=<?= (int)$item['id'] ?>" alt="">
                 <?php endif; ?>
-                <span class="ticker-badge ticker-badge--<?= e($item['ann_type']) ?>"><?= e(ann_type_label($item['ann_type'])) ?></span>
                 <div class="ticker-title"><?= e($item['title']) ?></div>
                 <?php if ($item['body'] !== ''): ?>
                     <div class="ticker-body"><?= e($item['body']) ?></div>
@@ -1071,23 +1072,21 @@ body {
             $endTs = !empty($item['ends_at']) ? strtotime((string)$item['ends_at']) : null;
         ?>
             <div class="ticker-card">
-                <?php if (!empty($item['image_path'])): ?>
-                    <img class="ticker-photo" src="/event-image.php?id=<?= (int)$item['id'] ?>" alt="">
-                <?php endif; ?>
-                <div class="ticker-kind">📅 Upcoming Event</div>
-                <div class="ticker-evt-cal">
+                <div class="ticker-evt-header">
                     <div class="ticker-evt-block">
                         <div class="m"><?= tv_time('M', $ts, $assocTz) ?></div>
                         <div class="d"><?= tv_time('j', $ts, $assocTz) ?></div>
                     </div>
-                    <div>
-                        <div class="ticker-title" style="margin-bottom:4px;"><?= e($item['title']) ?></div>
-                        <div class="ticker-meta" style="margin-top:0;"><?= tv_time('g:i A', $ts, $assocTz) ?><?= $item['location'] !== '' ? ' · ' . e($item['location']) : '' ?></div>
-                        <?php if ($item['description'] !== ''): ?>
-                            <div class="ticker-body" style="margin-top:8px;"><?= e($item['description']) ?></div>
-                        <?php endif; ?>
-                    </div>
+                    <div class="ticker-kind" style="margin-bottom:0;">📅 Upcoming Event</div>
                 </div>
+                <?php if (!empty($item['image_path'])): ?>
+                    <img class="ticker-photo" src="/event-image.php?id=<?= (int)$item['id'] ?>" alt="">
+                <?php endif; ?>
+                <div class="ticker-title"><?= e($item['title']) ?></div>
+                <div class="ticker-meta"><?= tv_time('g:i A', $ts, $assocTz) ?><?= $item['location'] !== '' ? ' · ' . e($item['location']) : '' ?></div>
+                <?php if ($item['description'] !== ''): ?>
+                    <div class="ticker-body" style="margin-top:8px;"><?= e($item['description']) ?></div>
+                <?php endif; ?>
             </div>
         <?php elseif ($item['kind'] === 'marketplace'):
             $isFree = ($item['price_cents'] === null || (int)$item['price_cents'] === 0);
