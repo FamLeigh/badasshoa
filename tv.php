@@ -407,11 +407,12 @@ if ($tvMode === 'ticker') {
             'seller'      => (string)($l['first_name'] ?? ''),
             'unit'        => (string)($l['unit_number'] ?? ''),
             'photo_path'  => $l['photo_path'],
-            'sort_ts'     => 0,
+            'sort_ts'     => PHP_INT_MAX,
         ];
     }
-    // Newest/soonest first; marketplace (no timestamp) floats to end.
-    usort($tickerItems, fn($a, $b) => $b['sort_ts'] - $a['sort_ts']);
+    // Chronological ascending: soonest events first (May before June),
+    // recent announcements before older ones, marketplace floats to end.
+    usort($tickerItems, fn($a, $b) => $a['sort_ts'] - $b['sort_ts']);
 }
 
 // Fetch weather server-side — TV browser makes no external requests,
