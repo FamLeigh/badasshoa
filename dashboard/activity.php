@@ -66,7 +66,10 @@ if (viewing_role() === 'board_admin' || viewing_role() === 'super_admin') {
              SUM(CASE WHEN last_login_at IS NOT NULL THEN 1 ELSE 0 END) AS ever_logged_in,
              SUM(CASE WHEN last_login_at IS NULL THEN 1 ELSE 0 END) AS never_logged_in,
              SUM(CASE WHEN email LIKE '%@placeholder.local' OR email LIKE '%@noemail.%' THEN 1 ELSE 0 END) AS no_email,
-             SUM(CASE WHEN email NOT LIKE '%@placeholder.local' AND email NOT LIKE '%@noemail.%' THEN 1 ELSE 0 END) AS reachable_by_email
+             SUM(CASE WHEN email NOT LIKE '%@placeholder.local' AND email NOT LIKE '%@noemail.%' THEN 1 ELSE 0 END) AS reachable_by_email,
+             SUM(CASE WHEN invite_sent_at IS NOT NULL AND last_login_at IS NULL
+                           AND email NOT LIKE '%@placeholder.local' AND email NOT LIKE '%@noemail.%'
+                      THEN 1 ELSE 0 END) AS invited_pending
            FROM users
           WHERE association_id = ? AND status = 'active' AND role NOT IN ('super_admin')"
     );
@@ -93,17 +96,32 @@ if (viewing_role() === 'board_admin' || viewing_role() === 'super_admin') {
     $reachableStmt->execute([$assocId]);
     $reachableMembers = $reachableStmt->fetchAll();
 
-    $neverStmt = db()->prepare(
-        "SELECT id, first_name, last_name, email, unit_number, role, created_at,
+    // Invited but haven't logged in yet (invite_sent_at set, no login)
+    $invitedStmt = db()->prepare(
+        "SELECT id, first_name, last_name, email, unit_number, role,
                 invite_sent_at, invite_expires_at
            FROM users
           WHERE association_id = ? AND status = 'active'
             AND last_login_at IS NULL
+            AND invite_sent_at IS NOT NULL
+            AND email NOT LIKE '%@placeholder.local' AND email NOT LIKE '%@noemail.%'
+          ORDER BY invite_sent_at DESC LIMIT 200"
+    );
+    $invitedStmt->execute([$assocId]);
+    $invitedNotJoined = $invitedStmt->fetchAll();
+
+    // Has a real email but no invite sent and never logged in
+    $notInvitedStmt = db()->prepare(
+        "SELECT id, first_name, last_name, email, unit_number, role, created_at
+           FROM users
+          WHERE association_id = ? AND status = 'active'
+            AND last_login_at IS NULL
+            AND invite_sent_at IS NULL
             AND email NOT LIKE '%@placeholder.local' AND email NOT LIKE '%@noemail.%'
           ORDER BY created_at DESC LIMIT 200"
     );
-    $neverStmt->execute([$assocId]);
-    $neverLoggedIn = $neverStmt->fetchAll();
+    $notInvitedStmt->execute([$assocId]);
+    $neverLoggedIn = $notInvitedStmt->fetchAll();
 
     $recentStmt = db()->prepare(
         "SELECT id, first_name, last_name, email, unit_number, role, last_login_at
@@ -138,7 +156,9 @@ require __DIR__ . '/../includes/header.php';
                 <span class="muted"><?= (int)$activityStats['total_active'] ?> active members</span>
                 <button type="button" onclick="var d=document.getElementById('logged-in-details');d.open=true;d.scrollIntoView({behavior:'smooth'});" style="color:var(--color-success);background:none;border:none;cursor:pointer;font-size:inherit;padding:0;text-decoration:underline;text-underline-offset:2px;"><?= (int)$activityStats['ever_logged_in'] ?> have logged in</button>
                 <span style="color: var(--color-info);"><?= (int)$activityStats['reachable_by_email'] ?> will receive email</span>
-                <?php if ($activityStats['never_logged_in'] > 0): ?>
+                <?php if ($activityStats['invited_pending'] > 0): ?>
+                    <button type="button" onclick="var d=document.getElementById('invited-pending-details');d.open=true;d.scrollIntoView({behavior:'smooth'});" style="color:var(--color-warning);background:none;border:none;cursor:pointer;font-size:inherit;padding:0;text-decoration:underline;text-underline-offset:2px;"><?= (int)$activityStats['invited_pending'] ?> invited — not joined yet</button>
+                <?php elseif ($activityStats['never_logged_in'] > 0): ?>
                     <span style="color: var(--color-warning);"><?= (int)$activityStats['never_logged_in'] ?> never logged in</span>
                 <?php endif; ?>
                 <?php if ($activityStats['no_email'] > 0): ?>
@@ -193,32 +213,30 @@ require __DIR__ . '/../includes/header.php';
         </details>
         <?php endif; ?>
 
-        <?php if ($neverLoggedIn): ?>
-        <details style="margin-bottom: var(--sp-3);">
+        <?php if ($invitedNotJoined): ?>
+        <details id="invited-pending-details" style="margin-bottom: var(--sp-3);">
             <summary style="cursor: pointer; font-weight: 600; font-size: var(--fs-sm); color: var(--color-warning); margin-bottom: var(--sp-2);">
-                👋 <?= count($neverLoggedIn) ?> member<?= count($neverLoggedIn) === 1 ? '' : 's' ?> have never logged in
+                ✉ <?= count($invitedNotJoined) ?> invited — haven't joined yet
             </summary>
             <div style="margin-top: var(--sp-2); overflow-x: auto;">
             <table class="table" style="font-size: var(--fs-sm);">
-                <thead><tr><th>Name</th><th>Unit</th><th>Email</th><th>Added</th><th>Invite</th><th></th></tr></thead>
+                <thead><tr><th>Name</th><th>Unit</th><th>Email</th><th>Invite sent</th><th>Status</th><th></th></tr></thead>
                 <tbody>
-                <?php foreach ($neverLoggedIn as $m): ?>
+                <?php foreach ($invitedNotJoined as $m): ?>
                 <?php
-                    $inviteSent    = !empty($m['invite_sent_at']);
-                    $inviteExpired = $inviteSent && !empty($m['invite_expires_at'])
+                    $inviteExpired = !empty($m['invite_expires_at'])
                                      && strtotime((string)$m['invite_expires_at']) < time();
                 ?>
                     <tr>
                         <td><?= e(trim($m['first_name'] . ' ' . $m['last_name']) ?: '—') ?></td>
                         <td><?= e($m['unit_number'] ?: '—') ?></td>
                         <td><?= e((string)$m['email']) ?></td>
-                        <td class="muted"><?= e(udate('M j, Y', strtotime((string)$m['created_at']))) ?></td>
-                        <td class="muted">
-                            <?php if ($inviteSent): ?>
-                                <?= $inviteExpired ? '<span style="color:var(--color-error);">Expired</span>' : '<span style="color:var(--color-success);">Sent</span>' ?>
-                                <span style="display:block; font-size: var(--fs-xs);"><?= e(udate('M j', strtotime((string)$m['invite_sent_at']))) ?></span>
+                        <td class="muted"><?= e(udate('M j, Y', strtotime((string)$m['invite_sent_at']))) ?></td>
+                        <td>
+                            <?php if ($inviteExpired): ?>
+                                <span style="color:var(--color-error); font-size:var(--fs-xs);">Expired</span>
                             <?php else: ?>
-                                —
+                                <span style="color:var(--color-success); font-size:var(--fs-xs);">Pending</span>
                             <?php endif; ?>
                         </td>
                         <td style="text-align:right; white-space:nowrap;">
@@ -226,9 +244,39 @@ require __DIR__ . '/../includes/header.php';
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="user_id" value="<?= (int)$m['id'] ?>">
                                 <input type="hidden" name="redirect" value="/dashboard/activity.php">
-                                <button class="btn btn--ghost" type="submit" style="padding: 0.3rem 0.6rem; font-size: var(--fs-xs);">
-                                    <?= $inviteSent ? 'Resend' : 'Send invite' ?>
-                                </button>
+                                <button class="btn btn--ghost" type="submit" style="padding: 0.3rem 0.6rem; font-size: var(--fs-xs);">Resend invite</button>
+                            </form>
+                            <a class="btn btn--ghost" style="padding: 0.3rem 0.6rem; font-size: var(--fs-xs);" href="/dashboard/directory.php?action=edit&id=<?= (int)$m['id'] ?>">Edit</a>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+            </div>
+        </details>
+        <?php endif; ?>
+
+        <?php if ($neverLoggedIn): ?>
+        <details style="margin-bottom: var(--sp-3);">
+            <summary style="cursor: pointer; font-weight: 600; font-size: var(--fs-sm); color: var(--color-text-soft); margin-bottom: var(--sp-2);">
+                👋 <?= count($neverLoggedIn) ?> member<?= count($neverLoggedIn) === 1 ? '' : 's' ?> with email — no invite sent yet
+            </summary>
+            <div style="margin-top: var(--sp-2); overflow-x: auto;">
+            <table class="table" style="font-size: var(--fs-sm);">
+                <thead><tr><th>Name</th><th>Unit</th><th>Email</th><th>Added</th><th></th></tr></thead>
+                <tbody>
+                <?php foreach ($neverLoggedIn as $m): ?>
+                    <tr>
+                        <td><?= e(trim($m['first_name'] . ' ' . $m['last_name']) ?: '—') ?></td>
+                        <td><?= e($m['unit_number'] ?: '—') ?></td>
+                        <td><?= e((string)$m['email']) ?></td>
+                        <td class="muted"><?= e(udate('M j, Y', strtotime((string)$m['created_at']))) ?></td>
+                        <td style="text-align:right; white-space:nowrap;">
+                            <form method="post" action="/dashboard/send-invite.php" style="display:inline;">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="user_id" value="<?= (int)$m['id'] ?>">
+                                <input type="hidden" name="redirect" value="/dashboard/activity.php">
+                                <button class="btn btn--ghost" type="submit" style="padding: 0.3rem 0.6rem; font-size: var(--fs-xs);">Send invite</button>
                             </form>
                             <a class="btn btn--ghost" style="padding: 0.3rem 0.6rem; font-size: var(--fs-xs);" href="/dashboard/directory.php?action=edit&id=<?= (int)$m['id'] ?>">Edit</a>
                         </td>
