@@ -882,7 +882,7 @@ body {
 .ticker-card {
     display: inline-flex;
     flex-direction: column;
-    justify-content: center;
+    justify-content: flex-start;
     background: var(--card);
     border: 1px solid var(--border);
     border-radius: 14px;
@@ -893,6 +893,7 @@ body {
     white-space: normal;
     height: 100%;
     box-sizing: border-box;
+    overflow: hidden;
 }
 .ticker-card--emergency { border-color: var(--red); background: rgba(239,68,68,.12); }
 .ticker-kind {
@@ -934,9 +935,8 @@ body {
     font-size: clamp(1rem, 1.5vw, 1.5rem);
     color: var(--muted);
     line-height: 1.5;
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
+    flex: 1;
+    min-height: 0;
     overflow: hidden;
 }
 .ticker-meta {
