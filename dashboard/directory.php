@@ -234,9 +234,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'deactiv
     if ($id !== (int)$user['id']) { // can't deactivate self
         db()->prepare('UPDATE users SET status = "inactive" WHERE id = ? AND association_id = ?')->execute([$id, $assocId]);
         audit('user.deactivated', [], $id, 'user');
-        flash('success', 'User deactivated.');
+        flash('success', 'Member deactivated.');
     }
     redirect('/dashboard/directory.php');
+}
+
+// --- Reactivate handler ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'reactivate') {
+    csrf_check();
+    if (!$canManage) { http_response_code(403); die('Forbidden'); }
+    $id = (int)($_POST['id'] ?? 0);
+    if ($id) {
+        db()->prepare('UPDATE users SET status = "active" WHERE id = ? AND association_id = ?')->execute([$id, $assocId]);
+        audit('user.reactivated', [], $id, 'user');
+        flash('success', 'Member reactivated.');
+    }
+    redirect('/dashboard/directory.php?action=inactive');
 }
 
 // --- Edit handler ---
@@ -478,8 +491,22 @@ $raStmt->execute([$assocId]);
 $rentalAgents = $raStmt->fetchAll();
 $rentalAgentMap = array_column($rentalAgents, 'label', 'id'); // id => label
 
-$showInvite = ($_GET['action'] ?? '') === 'invite' && $canManage;
-$showImport = ($_GET['action'] ?? '') === 'import' && $canManage;
+$showInvite   = ($_GET['action'] ?? '') === 'invite'   && $canManage;
+$showImport   = ($_GET['action'] ?? '') === 'import'   && $canManage;
+$showInactive = ($_GET['action'] ?? '') === 'inactive' && $canManage;
+
+$inactiveMembers = [];
+$inactiveCount   = 0;
+if ($canManage) {
+    $iStmt = db()->prepare(
+        'SELECT id, first_name, last_name, email, unit_number, role, board_office, created_at
+           FROM users WHERE association_id = ? AND status = "inactive"
+          ORDER BY last_name, first_name LIMIT 500'
+    );
+    $iStmt->execute([$assocId]);
+    $inactiveMembers = $iStmt->fetchAll();
+    $inactiveCount   = count($inactiveMembers);
+}
 
 // Edit view loads the target user + their unit's details
 $editUser   = null;
@@ -510,6 +537,11 @@ require __DIR__ . '/../includes/header.php';
         </div>
         <?php if ($canManage): ?>
             <div class="row" style="gap: var(--sp-2);">
+                <?php if ($inactiveCount > 0): ?>
+                    <a class="btn btn--ghost" href="?action=inactive" style="color: var(--color-error);">
+                        Deactivated (<?= $inactiveCount ?>)
+                    </a>
+                <?php endif; ?>
                 <a class="btn btn--ghost" href="?action=import">⬆ Import CSV</a>
                 <a class="btn btn--primary" href="?action=invite">+ Add member</a>
             </div>
@@ -770,17 +802,7 @@ require __DIR__ . '/../includes/header.php';
 
             <div class="row" style="justify-content: space-between; gap: var(--sp-2); flex-wrap: wrap;">
                 <a class="btn btn--ghost" href="/dashboard/directory.php">Cancel</a>
-                <div class="row" style="gap: var(--sp-2);">
-                    <?php if ((int)$editUser['id'] !== (int)$user['id']): /* never let admin deactivate self */ ?>
-                        <button class="btn btn--ghost" type="submit" name="form" value="deactivate"
-                                onclick="return confirm('Deactivate <?= e(trim((string)$editUser['first_name'] . ' ' . (string)$editUser['last_name']) ?: (string)$editUser['email']) ?>? They\'ll be hidden from the directory and unable to sign in until you reactivate them.');"
-                                style="color: var(--color-error);"
-                                title="Mark this member inactive">
-                            Deactivate
-                        </button>
-                    <?php endif; ?>
-                    <button class="btn btn--primary" type="submit">Save changes</button>
-                </div>
+                <button class="btn btn--primary" type="submit">Save changes</button>
             </div>
         </form>
         <?php
@@ -832,6 +854,29 @@ require __DIR__ . '/../includes/header.php';
                     <input type="hidden" name="user_id" value="<?= (int)$editUser['id'] ?>">
                     <input type="hidden" name="redirect" value="/dashboard/directory.php?action=edit&id=<?= (int)$editUser['id'] ?>">
                     <button class="btn btn--ghost" type="submit" style="font-size: var(--fs-sm);">Send reset link</button>
+                </form>
+            </div>
+        </div>
+        <?php endif; ?>
+
+        <?php if ((int)$editUser['id'] !== (int)$user['id']): ?>
+        <div style="margin-top: var(--sp-5); padding: var(--sp-4); border: 2px solid var(--color-error); border-radius: var(--r-md); background: rgba(220,38,38,.04);">
+            <div class="row row--between" style="flex-wrap: wrap; gap: var(--sp-3); align-items: center;">
+                <div>
+                    <strong style="color: var(--color-error); font-size: var(--fs-sm);">⚠ Danger zone</strong>
+                    <p class="muted" style="font-size: var(--fs-xs); margin: var(--sp-1) 0 0;">
+                        Deactivating hides this member from the directory and blocks sign-in until you reactivate them.
+                    </p>
+                </div>
+                <form method="post">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="form" value="deactivate">
+                    <input type="hidden" name="id" value="<?= (int)$editUser['id'] ?>">
+                    <button class="btn" type="submit"
+                            style="background: var(--color-error); color: #fff; font-weight: 700;"
+                            onclick="return confirm('Deactivate <?= e(addslashes(trim((string)$editUser['first_name'] . ' ' . (string)$editUser['last_name']) ?: (string)$editUser['email'])) ?>?\n\nThey will be hidden from the directory and unable to sign in.\n\nYou can reactivate them any time from Directory → Deactivated.')">
+                        Deactivate member
+                    </button>
                 </form>
             </div>
         </div>
@@ -992,7 +1037,58 @@ B2,Sam,Garcia,sam@example.com,,,,0</pre>
     </div>
     <?php endif; ?>
 
-    <?php if (!$editUser && !$showInvite && !$showImport): /* hide the full directory while editing a single member */ ?>
+    <?php if ($showInactive): ?>
+    <div class="card card--padded" style="margin-bottom: var(--sp-6);">
+        <div class="row row--between" style="align-items: center; margin-bottom: var(--sp-4);">
+            <div>
+                <h3 class="card__title" style="margin:0;">Deactivated members</h3>
+                <p class="muted" style="font-size: var(--fs-sm); margin: var(--sp-1) 0 0;">These accounts are hidden from the directory and cannot sign in. Reactivate to restore access.</p>
+            </div>
+            <a class="btn btn--ghost" href="/dashboard/directory.php">← Back to directory</a>
+        </div>
+        <?php if (!$inactiveMembers): ?>
+            <p class="muted">No deactivated members.</p>
+        <?php else: ?>
+        <div style="overflow-x: auto;">
+        <table class="table">
+            <thead>
+                <tr><th>Name</th><th>Unit</th><th>Email</th><th>Role</th><th></th></tr>
+            </thead>
+            <tbody>
+            <?php foreach ($inactiveMembers as $m): ?>
+                <tr>
+                    <td><?= e(trim($m['first_name'] . ' ' . $m['last_name']) ?: '—') ?></td>
+                    <td><?= e($m['unit_number'] ?: '—') ?></td>
+                    <td><?= e(is_placeholder_email((string)$m['email']) ? '—' : (string)$m['email']) ?></td>
+                    <td class="muted">
+                        <?= e(role_label((string)$m['role'])) ?>
+                        <?php if (!empty($m['board_office'])): ?>
+                            <span class="badge" style="font-size: var(--fs-xs);"><?= e(board_office_label((string)$m['board_office'])) ?></span>
+                        <?php endif; ?>
+                    </td>
+                    <td style="text-align:right; white-space:nowrap;">
+                        <form method="post" style="display:inline;">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="form" value="reactivate">
+                            <input type="hidden" name="id" value="<?= (int)$m['id'] ?>">
+                            <button class="btn btn--ghost" type="submit"
+                                    style="color: var(--color-success); font-size: var(--fs-xs); padding: 0.3rem 0.6rem;"
+                                    onclick="return confirm('Reactivate <?= e(addslashes(trim($m['first_name'] . ' ' . $m['last_name']) ?: $m['email'])) ?>? They will be visible in the directory and able to sign in again.')">
+                                Reactivate
+                            </button>
+                        </form>
+                        <a class="btn btn--ghost" style="font-size: var(--fs-xs); padding: 0.3rem 0.6rem;" href="/dashboard/directory.php?action=edit&id=<?= (int)$m['id'] ?>">Edit</a>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+        </div>
+        <?php endif; ?>
+    </div>
+    <?php endif; ?>
+
+    <?php if (!$editUser && !$showInvite && !$showImport && !$showInactive): /* hide the full directory while showing another view */ ?>
 
 
     <?php if ($rentersOnly): ?>
