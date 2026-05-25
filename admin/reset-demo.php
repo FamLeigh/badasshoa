@@ -344,16 +344,21 @@ function has_assoc_col(string $t): bool
  */
 function resolve_clone_order(array $known): array
 {
+    // Keep every KNOWN_ORDER table that exists, regardless of whether it
+    // has association_id. Non-assoc tables (vote_questions, vote_options,
+    // committee_members, etc.) need to appear here in dependency order so
+    // step 4 (child-table clone) processes them parents-first. Phases that
+    // operate only on assoc-scoped tables (wipe 2b, clone 3) already filter
+    // with has_assoc_col().
     $present = [];
     foreach ($known as $t) {
-        if (has_assoc_col($t) && !in_array($t, $present, true)) {
+        if (table_exists($t) && !in_array($t, $present, true)) {
             $present[] = $t;
         }
     }
     // Append any auto-discovered tables with association_id that aren't in
-    // the known list. We don't know their dependency order, so we tack them
-    // on at the end — clones will still succeed because FK columns get
-    // remapped via $FK_RULES (or NULLed if their parent wasn't cloned).
+    // the known list — at the end, since we don't know their dependency
+    // order. Step 4's multi-pass + per-table readiness check protects us.
     $auto = db()->query(
         "SELECT TABLE_NAME FROM information_schema.COLUMNS
           WHERE TABLE_SCHEMA = DATABASE() AND COLUMN_NAME = 'association_id'"
@@ -584,42 +589,88 @@ function do_reset(int $sourceId, int $targetId, array $cloneOrder, array $wipeOn
 
         // 4. Clone child tables WITHOUT association_id. Target rows for
         //    these were already wiped in phase 2a via parent.association_id.
-        //    Multi-pass: a child table may itself be a parent for another
-        //    child (e.g. votes → vote_questions → vote_options), so we keep
-        //    iterating until a full pass clones nothing new. We also
-        //    populate $idMap so descendants can FK-remap through these
-        //    cloned rows. Tables without an `id` column (composite-key
-        //    junction tables like vote_participants) clone fine, they just
-        //    don't contribute to $idMap.
+        //
+        //    Two safety rails to prevent NOT NULL violations:
+        //    (a) Iteration order: KNOWN_ORDER first (so manually-specified
+        //        deps like votes → vote_questions → vote_options →
+        //        vote_responses are respected), then alphabetical for the
+        //        rest. information_schema's natural ordering isn't reliable.
+        //    (b) Per-table readiness check: a child table is only cloned
+        //        in this pass if EVERY one of its FK-rule columns has its
+        //        parent populated in $idMap. Picking a single "parent" to
+        //        scope on isn't enough — vote_responses references both
+        //        votes (vote_id) AND vote_questions (question_id NOT NULL),
+        //        and both must be ready before we attempt the INSERT.
+        //
+        //    Multi-pass: a child can itself be the parent for another
+        //    child, so we keep iterating until no new tables get cloned.
+        //    Composite-key tables (vote_participants) clone fine, they
+        //    just don't contribute to $idMap.
+        $step4Order = [];
+        foreach ($cloneOrder as $kt) {
+            if (!in_array($kt, $step4Order, true)) $step4Order[] = $kt;
+        }
+        foreach ($allTables as $t) {
+            if (!in_array($t, $step4Order, true)) $step4Order[] = $t;
+        }
+
         $done = [];
         for ($pass = 0; $pass < 8; $pass++) {
             $progressed = false;
-            foreach ($allTables as $t) {
+            foreach ($step4Order as $t) {
                 if (isset($done[$t])) continue;
                 if (has_assoc_col($t)) continue;
                 if (in_array($t, $wipeOnly, true)) continue;
                 if (in_array($t, $systemTables, true)) continue;
                 $cols = table_columns($t);
 
-                // Find a parent fk that's already been cloned.
-                $parentCol = null; $parent = null;
+                // Collect every FK-rule column this table has. Readiness:
+                // every FK parent must be tracked in $idMap (so descendants
+                // can rely on it). Scoping: we need at least one FK parent
+                // with actual cloned rows to SELECT-by, but it doesn't have
+                // to be every parent — a nullable FK column whose source
+                // value is NULL doesn't need remapping anyway.
+                $fkCols  = [];
+                $missing = [];
+                $scopingCol = null; $scopingParent = null;
                 foreach ($cols as $c) {
-                    if (isset($fkRules[$c]) && isset($idMap[$fkRules[$c]])) {
-                        $parentCol = $c; $parent = $fkRules[$c]; break;
+                    if (!isset($fkRules[$c])) continue;
+                    $p = $fkRules[$c];
+                    $fkCols[$c] = $p;
+                    if (!isset($idMap[$p])) {
+                        $missing[$c] = $p;
+                        continue;
+                    }
+                    if ($scopingCol === null && !empty($idMap[$p])) {
+                        $scopingCol = $c; $scopingParent = $p;
                     }
                 }
-                if (!$parentCol) continue;
 
-                $parentOldIds = array_keys($idMap[$parent]);
+                if (!$fkCols) continue;        // table has no fkRule columns
+                if ($missing) continue;        // wait for next pass
+
+                // All FK parents are tracked. Mark this table as "seen" so
+                // its own descendants don't block on us.
+                if (!isset($idMap[$t])) $idMap[$t] = [];
+
+                if (!$scopingCol) {
+                    // Every FK parent is empty → no source rows possible.
+                    $done[$t] = true;
+                    $progressed = true;
+                    continue;
+                }
+
+                $parentOldIds = array_keys($idMap[$scopingParent]);
                 if (!$parentOldIds) {
                     $done[$t] = true;
+                    $progressed = true;
                     continue;
                 }
 
                 $hasIdCol = in_array('id', $cols, true);
 
                 $in = implode(',', array_map('intval', $parentOldIds));
-                $rows = db()->query("SELECT * FROM `$t` WHERE `$parentCol` IN ($in)")->fetchAll();
+                $rows = db()->query("SELECT * FROM `$t` WHERE `$scopingCol` IN ($in)")->fetchAll();
 
                 $cloned = 0;
                 foreach ($rows as $row) {
