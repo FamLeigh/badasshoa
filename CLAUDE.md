@@ -261,7 +261,23 @@ This file (CLAUDE.md) keeps an internal-only summary in the section below for cr
 
 ## Where we left off (resume here next session)
 
-**Last session ended:** 2026-05-25 (session 17) — **help system overhaul: DB-backed topics + admin WYSIWYG manager.**
+**Last session ended:** 2026-05-25 (session 18) — **amenity booking finished: open/private + auto-event creation.**
+
+**What got built this session (18):**
+
+- **Amenity booking → calendar integration.** Existing amenity booking (committed d819f25) only put requests in front of the board; it didn't tell the rest of the community the space was reserved. Finished it:
+    - **`event_kind` ENUM('open','private') on `amenity_bookings`** (migration 099, also adds `event_id INT UNSIGNED NULL` + index). Defaults to `private` (safer fallback for the 0 existing rows).
+    - **Booking form** gets a two-card radio picker: "Open to members" (party with the building) vs "Private event / party" (reserve the space, hide the occasion).
+    - **On approval (or auto-approve at submission time)**, `create_booking_event()` in `dashboard/amenities.php` inserts a row into the existing `events` table, audience `members`. Open events title: `"{Amenity} — {purpose}"`, body lists host last name + purpose. Private events title: `"{Amenity} — private event (reserved by {LastName})"`, body is generic.
+    - **On deny / cancel** (board side) or **member-cancel-own-pending**, the linked event row is deleted and `event_id` cleared. **On amenity delete**, any orphan events are scrubbed before the cascade wipes the bookings.
+    - **Surfaced** as an "Open" / "Private" badge on both the board's Bookings table and the member's My Bookings table.
+- **Decisions (locked):** open and private both use audience='members' (so booked space shows on `/dashboard/events.php` and the dashboard upcoming-events strip, but **not** on the public landing `/{slug}/`). Cancellation always deletes the event — no zombie calendar rows. See the 2026-05-25 changelog entry.
+
+**Still TODO before this can ship to prod:**
+- Run migration 099 on prod (`scp` + ssh-mysql per CLAUDE.md). Pure additive `ALTER TABLE` so safe.
+- `bash push.sh` to deploy the updated `amenities.php` + new migration file + changelog entry.
+
+**Uncommitted working-tree noise (NOT this feature):** `assets/css/app.css`, `dashboard/index.php`, `dashboard/help.php`, `dashboard/file.php`, `dashboard/partials/resident_dashboard.php`, and the older changelog entry — those belong to the in-progress resident-dashboard redesign. Don't bundle them into the amenity commit.
 
 **What got built this session (17):**
 
@@ -426,6 +442,12 @@ All four share a `broadcasts` table (kind / audience / subject / body / schedule
 ---
 
 ## Changelog
+
+- **2026-05-25 (session 18) — amenity booking → community-calendar integration.**
+    - Migration 099: `event_kind` ENUM('open','private') + `event_id` (nullable, indexed) on `amenity_bookings`. Additive only.
+    - `dashboard/amenities.php`: open/private radio picker on the booking form; `create_booking_event()` helper inserts an `events` row on approve/auto-approve and persists `event_id` back on the booking. Deny/cancel/amenity-delete paths scrub the event so the calendar stays honest.
+    - Both audience='members' (events page + dashboard upcoming-events strip; not on public landing). Title format differs by kind — open events name the purpose, private events only show "reserved by {LastName}".
+    - Open/Private badge added to both the board's Bookings table and the member's My Bookings list.
 
 - **2026-05-25 (session 17) — help system overhaul.**
     - `help_topics` DB table (migration 097). 37 topics covering every feature, role-gated.

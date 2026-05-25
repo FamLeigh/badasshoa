@@ -12,6 +12,62 @@ $canManage  = role_can_manage(viewing_role());
 $myUserId   = (int)$_SESSION['user_id'];
 $errors     = [];
 
+/**
+ * Insert a community-events row reflecting an approved booking and return the
+ * new event id. Open bookings are titled with the purpose so neighbors know
+ * what they're invited to; private bookings only reveal the reserver's
+ * last name so the calendar shows the space is in use without leaking the
+ * occasion. Both use audience='members' (logged-in members only — never the
+ * public landing page) per the design call locked in 2026-05-25.
+ */
+function create_booking_event(
+    int $assocId,
+    string $amenityName,
+    string $amenityLocation,
+    string $bookingDate,
+    string $startTime,
+    string $endTime,
+    string $eventKind,
+    ?string $purpose,
+    string $bookerFullName,
+    int $createdBy
+): int {
+    $startsAt = $bookingDate . ' ' . substr($startTime, 0, 8);
+    $endsAt   = $bookingDate . ' ' . substr($endTime,   0, 8);
+    $purpose  = $purpose !== null ? trim($purpose) : '';
+
+    // "Last Name" from the full name; fall back to the whole string if it's a
+    // single token (initials-only members, etc.).
+    $parts    = preg_split('/\s+/', trim($bookerFullName)) ?: [];
+    $lastName = count($parts) > 1 ? end($parts) : ($bookerFullName !== '' ? $bookerFullName : 'A member');
+
+    if ($eventKind === 'open') {
+        $title = $amenityName . ' — ' . ($purpose !== '' ? $purpose : 'open gathering');
+        $desc  = "Open to all members. Hosted by {$lastName}."
+               . ($purpose !== '' ? "\n\nAbout: {$purpose}" : '');
+    } else {
+        $title = $amenityName . ' — private event (reserved by ' . $lastName . ')';
+        $desc  = 'Space reserved for a private event. Not open to other members.';
+    }
+
+    $stmt = db()->prepare(
+        'INSERT INTO events
+            (association_id, title, description, location, starts_at, ends_at, audience, created_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    );
+    $stmt->execute([
+        $assocId,
+        mb_substr($title, 0, 255),
+        $desc,
+        $amenityLocation !== '' ? mb_substr($amenityLocation, 0, 255) : null,
+        $startsAt,
+        $endsAt,
+        'members',
+        $createdBy,
+    ]);
+    return (int)db()->lastInsertId();
+}
+
 $tab           = $_GET['tab']  ?? 'amenities';
 $editId        = (int)($_GET['edit']  ?? 0);   // 0=list, -1=new, >0=edit
 $bookAmenityId = (int)($_GET['book']  ?? 0);
@@ -149,6 +205,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $row->execute([$delId, $assocId]);
         $delRow = $row->fetch();
         if ($delRow) {
+            // Clear any community events this amenity's bookings created — bookings
+            // get wiped by ON DELETE CASCADE on the amenity, but events would be left
+            // behind on the calendar otherwise.
+            $evStmt = db()->prepare(
+                'SELECT event_id FROM amenity_bookings
+                  WHERE amenity_id = ? AND association_id = ? AND event_id IS NOT NULL'
+            );
+            $evStmt->execute([$delId, $assocId]);
+            $eventIds = array_filter(array_map(fn ($r) => (int)$r['event_id'], $evStmt->fetchAll()));
+            if ($eventIds) {
+                $ph = implode(',', array_fill(0, count($eventIds), '?'));
+                $delEv = db()->prepare("DELETE FROM events WHERE association_id = ? AND id IN ($ph)");
+                $delEv->execute(array_merge([$assocId], $eventIds));
+            }
+
             if (!empty($delRow['photo_path'])) {
                 $f = storage_path('uploads/' . $assocId . '/' . $delRow['photo_path']);
                 if (is_file($f)) @unlink($f);
@@ -170,6 +241,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $purpose      = mb_substr(trim((string)($_POST['purpose'] ?? '')), 0, 500) ?: null;
         $attendeeRaw  = (string)($_POST['attendee_count'] ?? '');
         $attendeeCount = $attendeeRaw !== '' ? max(1, (int)$attendeeRaw) : null;
+        $eventKind    = ($_POST['event_kind'] ?? 'private') === 'open' ? 'open' : 'private';
 
         $amenityStmt = db()->prepare(
             'SELECT * FROM amenities WHERE id = ? AND association_id = ? AND is_active = 1'
@@ -231,16 +303,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $ins = db()->prepare(
                 'INSERT INTO amenity_bookings
                     (association_id, amenity_id, user_id, booking_date, start_time, end_time,
-                     purpose, attendee_count, status)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                     purpose, attendee_count, event_kind, status)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
             );
             $ins->execute([
                 $assocId, $amenityId, $myUserId,
                 $bookingDate, $startTime, $endTime,
-                $purpose, $attendeeCount, $status,
+                $purpose, $attendeeCount, $eventKind, $status,
             ]);
             $newBookingId = (int)db()->lastInsertId();
-            audit('booking.submitted', ['amenity_id' => $amenityId, 'date' => $bookingDate, 'status' => $status], $newBookingId, 'amenity_booking');
+            audit('booking.submitted', ['amenity_id' => $amenityId, 'date' => $bookingDate, 'status' => $status, 'kind' => $eventKind], $newBookingId, 'amenity_booking');
+
+            // Auto-approved bookings get their event created immediately so the
+            // calendar reflects the reservation without waiting on board review.
+            if ($status === 'approved') {
+                $eventId = create_booking_event(
+                    $assocId,
+                    (string)$amenityRow['name'],
+                    (string)($amenityRow['location'] ?? ''),
+                    $bookingDate, $startTime, $endTime,
+                    $eventKind, $purpose,
+                    (string)($_SESSION['name'] ?? ''),
+                    $myUserId
+                );
+                if ($eventId > 0) {
+                    db()->prepare('UPDATE amenity_bookings SET event_id = ? WHERE id = ?')
+                        ->execute([$eventId, $newBookingId]);
+                }
+            }
 
             if ($status === 'pending') {
                 $boardStmt = db()->prepare(
@@ -289,7 +379,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $bkStmt = db()->prepare(
-            'SELECT ab.*, u.email, u.first_name, u.last_name, a.name AS amenity_name
+            'SELECT ab.*, u.email, u.first_name, u.last_name, a.name AS amenity_name, a.location AS amenity_location
                FROM amenity_bookings ab
                JOIN users u      ON u.id = ab.user_id
                JOIN amenities a  ON a.id = ab.amenity_id
@@ -304,6 +394,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     SET status = ?, board_notes = ?, updated_at = NOW()
                   WHERE id = ? AND association_id = ?'
             )->execute([$newStatus, $boardNotes, $bookingId, $assocId]);
+
+            // Going to approved → create the community event if one doesn't
+            // already exist. Anything else (denied, cancelled) → kill the event
+            // so it stops cluttering the calendar.
+            if ($newStatus === 'approved' && empty($bk['event_id'])) {
+                $bookerName = trim((string)$bk['first_name'] . ' ' . (string)$bk['last_name']);
+                $eventId = create_booking_event(
+                    $assocId,
+                    (string)$bk['amenity_name'],
+                    (string)($bk['amenity_location'] ?? ''),
+                    (string)$bk['booking_date'],
+                    (string)$bk['start_time'],
+                    (string)$bk['end_time'],
+                    (string)($bk['event_kind'] ?? 'private'),
+                    (string)($bk['purpose'] ?? ''),
+                    $bookerName,
+                    (int)$bk['user_id']
+                );
+                if ($eventId > 0) {
+                    db()->prepare('UPDATE amenity_bookings SET event_id = ? WHERE id = ?')
+                        ->execute([$eventId, $bookingId]);
+                }
+            } elseif ($newStatus !== 'approved' && !empty($bk['event_id'])) {
+                db()->prepare('DELETE FROM events WHERE id = ? AND association_id = ?')
+                    ->execute([(int)$bk['event_id'], $assocId]);
+                db()->prepare('UPDATE amenity_bookings SET event_id = NULL WHERE id = ?')
+                    ->execute([$bookingId]);
+            }
 
             audit('booking.reviewed', ['status' => $newStatus, 'booking_id' => $bookingId], $bookingId, 'amenity_booking');
 
@@ -338,12 +456,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // ── cancel_booking (member cancels own pending booking) ─────────────
     if ($action === 'cancel_booking') {
         $cancelId = (int)($_POST['booking_id'] ?? 0);
-        db()->prepare(
-            "UPDATE amenity_bookings
-                SET status = 'cancelled', updated_at = NOW()
+        $exStmt = db()->prepare(
+            "SELECT event_id FROM amenity_bookings
               WHERE id = ? AND association_id = ? AND user_id = ? AND status = 'pending'"
-        )->execute([$cancelId, $assocId, $myUserId]);
-        audit('booking.cancelled_by_member', [], $cancelId, 'amenity_booking');
+        );
+        $exStmt->execute([$cancelId, $assocId, $myUserId]);
+        $exRow = $exStmt->fetch();
+        if ($exRow) {
+            db()->prepare(
+                "UPDATE amenity_bookings
+                    SET status = 'cancelled', event_id = NULL, updated_at = NOW()
+                  WHERE id = ? AND association_id = ? AND user_id = ?"
+            )->execute([$cancelId, $assocId, $myUserId]);
+            if (!empty($exRow['event_id'])) {
+                db()->prepare('DELETE FROM events WHERE id = ? AND association_id = ?')
+                    ->execute([(int)$exRow['event_id'], $assocId]);
+            }
+            audit('booking.cancelled_by_member', [], $cancelId, 'amenity_booking');
+        }
         flash('success', 'Booking cancelled.');
         redirect('/dashboard/amenities.php');
     }
@@ -695,6 +825,7 @@ $visibleBookings = $bFilter === 'all'
         $memberDisplay = trim((string)$bk['first_name'] . ' ' . (string)$bk['last_name']);
         if (!empty($bk['unit_number'])) $memberDisplay .= ' (' . $bk['unit_number'] . ')';
         ?>
+        <?php $kindIsOpen = ($bk['event_kind'] ?? 'private') === 'open'; ?>
         <tr>
             <td style="white-space: nowrap;"><?= e(date('M j, Y', strtotime((string)$bk['booking_date']))) ?></td>
             <td style="white-space: nowrap; font-size: var(--fs-sm);">
@@ -703,13 +834,16 @@ $visibleBookings = $bFilter === 'all'
             <td><?= e((string)$bk['amenity_name']) ?></td>
             <td><?= e($memberDisplay) ?></td>
             <td style="max-width: 160px;">
-                <?php if (!empty($bk['purpose'])): ?>
-                    <span style="font-size: var(--fs-sm);" title="<?= e((string)$bk['purpose']) ?>">
-                        <?= e(mb_strimwidth((string)$bk['purpose'], 0, 50, '…')) ?>
+                <div style="display:flex; flex-direction:column; gap:2px;">
+                    <span class="badge <?= $kindIsOpen ? 'badge--info' : 'badge--muted' ?>" style="font-size:11px; align-self:flex-start;">
+                        <?= $kindIsOpen ? 'Open' : 'Private' ?>
                     </span>
-                <?php else: ?>
-                    <span class="muted" style="font-size: var(--fs-sm);">—</span>
-                <?php endif; ?>
+                    <?php if (!empty($bk['purpose'])): ?>
+                        <span style="font-size: var(--fs-sm);" title="<?= e((string)$bk['purpose']) ?>">
+                            <?= e(mb_strimwidth((string)$bk['purpose'], 0, 50, '…')) ?>
+                        </span>
+                    <?php endif; ?>
+                </div>
             </td>
             <td style="text-align: center;">
                 <?= $bk['attendee_count'] !== null ? (int)$bk['attendee_count'] : '—' ?>
@@ -896,6 +1030,27 @@ if ($bookAmenity !== null): ?>
                        value="<?= e((string)($_POST['attendee_count'] ?? '')) ?>"
                        placeholder="How many people?">
             </div>
+
+            <div class="field" style="grid-column: 1 / -1;">
+                <?php $postedKind = (string)($_POST['event_kind'] ?? 'private'); ?>
+                <label class="field__label">Event type <span style="color:var(--color-orange)">*</span></label>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3);">
+                    <label style="display:flex; gap:var(--sp-3); padding:var(--sp-3) var(--sp-4); border:2px solid <?= $postedKind === 'open' ? 'var(--color-orange)' : 'var(--color-border)' ?>; border-radius:var(--r-md); cursor:pointer; align-items:flex-start;">
+                        <input type="radio" name="event_kind" value="open" <?= $postedKind === 'open' ? 'checked' : '' ?> style="margin-top:3px;">
+                        <span>
+                            <strong style="display:block; margin-bottom:2px;">Open to members</strong>
+                            <span class="muted" style="font-size:var(--fs-sm);">Posted on the community calendar so neighbors can join. Use for community gatherings, watch parties, classes.</span>
+                        </span>
+                    </label>
+                    <label style="display:flex; gap:var(--sp-3); padding:var(--sp-3) var(--sp-4); border:2px solid <?= $postedKind === 'private' ? 'var(--color-orange)' : 'var(--color-border)' ?>; border-radius:var(--r-md); cursor:pointer; align-items:flex-start;">
+                        <input type="radio" name="event_kind" value="private" <?= $postedKind !== 'open' ? 'checked' : '' ?> style="margin-top:3px;">
+                        <span>
+                            <strong style="display:block; margin-bottom:2px;">Private event / party</strong>
+                            <span class="muted" style="font-size:var(--fs-sm);">Shown on the calendar as "reserved" so the space isn't double-booked, but the occasion stays between you and your guests.</span>
+                        </span>
+                    </label>
+                </div>
+            </div>
         </div>
 
         <div style="display: flex; gap: var(--sp-3); margin-top: var(--sp-5); align-items: center; flex-wrap: wrap;">
@@ -945,12 +1100,18 @@ if ($bookAmenity !== null): ?>
                 default     => 'badge--muted',
             };
             ?>
+            <?php $myKindIsOpen = ($mbk['event_kind'] ?? 'private') === 'open'; ?>
             <tr>
                 <td style="white-space: nowrap;"><?= e(date('M j, Y', strtotime((string)$mbk['booking_date']))) ?></td>
                 <td style="white-space: nowrap; font-size: var(--fs-sm);">
                     <?= e(substr((string)$mbk['start_time'], 0, 5)) ?> – <?= e(substr((string)$mbk['end_time'], 0, 5)) ?>
                 </td>
-                <td><?= e((string)$mbk['amenity_name']) ?></td>
+                <td>
+                    <?= e((string)$mbk['amenity_name']) ?>
+                    <span class="badge <?= $myKindIsOpen ? 'badge--info' : 'badge--muted' ?>" style="font-size:11px; margin-left:6px;">
+                        <?= $myKindIsOpen ? 'Open' : 'Private' ?>
+                    </span>
+                </td>
                 <td style="font-size: var(--fs-sm);">
                     <?= !empty($mbk['purpose']) ? e((string)$mbk['purpose']) : '<span class="muted">—</span>' ?>
                 </td>
