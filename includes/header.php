@@ -832,10 +832,13 @@ if ($page_layout === 'app' && isset($association) && $association):
         <?php endif; ?>
         </div>
 
-        <!-- Help link — always visible at the bottom of the nav -->
+        <!-- Help link — always visible at the bottom of the nav. position: relative
+             + z-index keeps it above the absolutely-positioned scroll-hint
+             button that sits at bottom:0 of .side-nav__inner. -->
         <?php if ($page_layout === 'app'): ?>
         <a class="side-nav__link side-nav__help-link<?= ($active === 'help') ? ' active' : '' ?>"
-           href="/dashboard/help.php" style="margin-top: auto; border-top: 1px solid var(--color-border); padding-top: var(--sp-3); margin-top: var(--sp-2);">
+           href="/dashboard/help.php"
+           style="margin-top: auto; border-top: 1px solid var(--color-border); padding-top: var(--sp-3); position: relative; z-index: 2;">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
             <span class="side-nav__label">Help</span>
         </a>
@@ -887,12 +890,15 @@ if ($page_layout === 'app' && isset($association) && $association):
     });
 
     // Scroll-fade hint: show/hide based on overflow; click scrolls the links panel down.
+    // Also toggles pointer-events so the invisible hint doesn't swallow clicks
+    // meant for the bottom Help link / Sign-out underneath it.
     var links = nav.querySelector('.side-nav__links');
     var hint  = document.getElementById('side-nav-scroll-hint');
     if (links && hint) {
         var update = function () {
             var atBottom = links.scrollTop + links.clientHeight >= links.scrollHeight - 8;
-            hint.style.opacity = atBottom ? '0' : '1';
+            hint.style.opacity       = atBottom ? '0' : '1';
+            hint.style.pointerEvents = atBottom ? 'none' : 'auto';
         };
         links.addEventListener('scroll', update, { passive: true });
         nav.addEventListener('click', function () { setTimeout(update, 250); });

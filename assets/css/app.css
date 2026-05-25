@@ -1073,6 +1073,10 @@ html[data-nav-collapsed="1"] .side-nav__edge-toggle svg { transform: rotate(180d
     border: 0;
     cursor: pointer;
     opacity: 0;
+    /* Default to non-clickable so the invisible hint never swallows clicks
+       meant for the bottom Help / Sign-out links underneath. JS toggles
+       pointer-events back to 'auto' once content actually overflows. */
+    pointer-events: none;
     transition: opacity 300ms ease;
     animation: sideNavBounce 1.4s ease-in-out infinite;
 }
