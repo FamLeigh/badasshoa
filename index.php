@@ -232,6 +232,10 @@ require __DIR__ . '/includes/header.php';
         <div class="center" style="margin-top: var(--sp-10);">
             <a class="btn btn--dark" href="/pricing.php">Use the unit calculator →</a>
         </div>
+
+        <p class="muted center" style="margin-top: var(--sp-6); font-size: var(--fs-sm);">
+            Want your own domain? Add <strong>yourassociation.com</strong> to any plan for <strong>$99/year</strong>. <a href="/pricing.php#add-ons">Details →</a>
+        </p>
     </div>
 </section>
 
