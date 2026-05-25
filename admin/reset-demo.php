@@ -110,8 +110,15 @@ $FK_RULES = [
     'minutes_id'               => 'meeting_minutes',
     'minute_id'                => 'meeting_minutes',
 
+    // → votes
+    'vote_id'                  => 'votes',
+
     // → vote_questions
     'question_id'              => 'vote_questions',
+
+    // → vote_options
+    'answer_option_id'         => 'vote_options',
+    'option_id'                => 'vote_options',
 
     // → concerns
     'concern_id'               => 'concerns',
@@ -174,8 +181,11 @@ $KNOWN_ORDER = [
     'agenda_items',
     'meeting_minutes',
     'resolutions',
+    'votes',
     'vote_questions',
+    'vote_options',
     'vote_responses',
+    'vote_participants',
     'resolution_votes',
     'document_signatures',
     'document_signature_requests',
@@ -574,55 +584,75 @@ function do_reset(int $sourceId, int $targetId, array $cloneOrder, array $wipeOn
 
         // 4. Clone child tables WITHOUT association_id. Target rows for
         //    these were already wiped in phase 2a via parent.association_id.
-        //    Here we select source rows via the source's parent IDs and
-        //    re-insert with FK columns rewritten through $idMap.
-        foreach ($allTables as $t) {
-            if (has_assoc_col($t)) continue;
-            if (in_array($t, $wipeOnly, true)) continue;
-            if (in_array($t, $systemTables, true)) continue;
-            $cols = table_columns($t);
-            if (!in_array('id', $cols, true)) continue;
+        //    Multi-pass: a child table may itself be a parent for another
+        //    child (e.g. votes → vote_questions → vote_options), so we keep
+        //    iterating until a full pass clones nothing new. We also
+        //    populate $idMap so descendants can FK-remap through these
+        //    cloned rows. Tables without an `id` column (composite-key
+        //    junction tables like vote_participants) clone fine, they just
+        //    don't contribute to $idMap.
+        $done = [];
+        for ($pass = 0; $pass < 8; $pass++) {
+            $progressed = false;
+            foreach ($allTables as $t) {
+                if (isset($done[$t])) continue;
+                if (has_assoc_col($t)) continue;
+                if (in_array($t, $wipeOnly, true)) continue;
+                if (in_array($t, $systemTables, true)) continue;
+                $cols = table_columns($t);
 
-            // Find a parent fk that's been cloned.
-            $parentCol = null; $parent = null;
-            foreach ($cols as $c) {
-                if (isset($fkRules[$c]) && isset($idMap[$fkRules[$c]])) {
-                    $parentCol = $c; $parent = $fkRules[$c]; break;
+                // Find a parent fk that's already been cloned.
+                $parentCol = null; $parent = null;
+                foreach ($cols as $c) {
+                    if (isset($fkRules[$c]) && isset($idMap[$fkRules[$c]])) {
+                        $parentCol = $c; $parent = $fkRules[$c]; break;
+                    }
                 }
+                if (!$parentCol) continue;
+
+                $parentOldIds = array_keys($idMap[$parent]);
+                if (!$parentOldIds) {
+                    $done[$t] = true;
+                    continue;
+                }
+
+                $hasIdCol = in_array('id', $cols, true);
+
+                $in = implode(',', array_map('intval', $parentOldIds));
+                $rows = db()->query("SELECT * FROM `$t` WHERE `$parentCol` IN ($in)")->fetchAll();
+
+                $cloned = 0;
+                foreach ($rows as $row) {
+                    $oldId = $hasIdCol ? (int)$row['id'] : null;
+                    if ($hasIdCol) unset($row['id']);
+                    foreach ($row as $col => $val) {
+                        if ($val === null || $val === '') continue;
+                        if (!isset($fkRules[$col])) continue;
+                        $p = $fkRules[$col];
+                        $row[$col] = $idMap[$p][(int)$val] ?? null;
+                    }
+                    foreach (($pathRewrites[$t] ?? []) as $col) {
+                        if (!array_key_exists($col, $row)) continue;
+                        if (!is_string($row[$col]) || $row[$col] === '') continue;
+                        $row[$col] = str_replace("uploads/$sourceId/", "uploads/$targetId/", $row[$col]);
+                    }
+                    if (isset($piiScrub[$t])) $row = $piiScrub[$t]($row);
+
+                    $insertCols   = array_keys($row);
+                    $placeholders = implode(',', array_fill(0, count($insertCols), '?'));
+                    $colList      = '`' . implode('`,`', $insertCols) . '`';
+                    db()->prepare("INSERT INTO `$t` ($colList) VALUES ($placeholders)")
+                        ->execute(array_values($row));
+                    if ($hasIdCol && $oldId !== null) {
+                        $idMap[$t][$oldId] = (int)db()->lastInsertId();
+                    }
+                    $cloned++;
+                }
+                if ($cloned > 0) $counts['cloned'][$t] = $cloned;
+                $done[$t] = true;
+                $progressed = true;
             }
-            if (!$parentCol) continue;
-
-            $parentOldIds = array_keys($idMap[$parent]);
-            if (!$parentOldIds) continue;
-
-            // Pull source rows.
-            $in = implode(',', array_map('intval', $parentOldIds));
-            $rows = db()->query("SELECT * FROM `$t` WHERE `$parentCol` IN ($in)")->fetchAll();
-
-            $cloned = 0;
-            foreach ($rows as $row) {
-                unset($row['id']);
-                foreach ($row as $col => $val) {
-                    if ($val === null || $val === '') continue;
-                    if (!isset($fkRules[$col])) continue;
-                    $p = $fkRules[$col];
-                    $row[$col] = $idMap[$p][(int)$val] ?? null;
-                }
-                foreach (($pathRewrites[$t] ?? []) as $col) {
-                    if (!array_key_exists($col, $row)) continue;
-                    if (!is_string($row[$col]) || $row[$col] === '') continue;
-                    $row[$col] = str_replace("uploads/$sourceId/", "uploads/$targetId/", $row[$col]);
-                }
-                if (isset($piiScrub[$t])) $row = $piiScrub[$t]($row);
-
-                $insertCols   = array_keys($row);
-                $placeholders = implode(',', array_fill(0, count($insertCols), '?'));
-                $colList      = '`' . implode('`,`', $insertCols) . '`';
-                db()->prepare("INSERT INTO `$t` ($colList) VALUES ($placeholders)")
-                    ->execute(array_values($row));
-                $cloned++;
-            }
-            if ($cloned > 0) $counts['cloned'][$t] = $cloned;
+            if (!$progressed) break;
         }
 
         // 5. Guarantee a known demo login.
