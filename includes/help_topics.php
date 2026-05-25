@@ -35,13 +35,13 @@ function help_topics(): array
                 <h3>The sidebar</h3>
                 <p>Everything is organized into groups on the left sidebar:</p>
                 <ul>
-                    <li><strong>Community</strong> — announcements, events, FAQ, marketplace</li>
+                    <li><strong>Community</strong> — announcements, email broadcasts, events, FAQ, marketplace, property listings, area attractions</li>
                     <li><strong>Resources</strong> — documents, forms, rules &amp; bylaws, legal reference, meeting minutes, media, directory, contacts</li>
-                    <li><strong>Governance</strong> — committees, feedback, architectural review, violations, work orders, voting</li>
+                    <li><strong>Governance</strong> — committees, feedback, architectural review, violations, work orders, voting, board meetings</li>
                     <li><strong>Operations</strong> — units, parking, employees, insurance (board/management only)</li>
                     <li><strong>Configuration</strong> — activity log, settings (board/management only)</li>
                 </ul>
-                <p>Click any group header to collapse or expand it. The sidebar collapses to icons using the toggle button on the left edge.</p>
+                <p>Items you don't have permission to access are hidden automatically — your sidebar only shows what you can use. Click any group header to collapse or expand it. The sidebar collapses to icons using the toggle button on the left edge.</p>
 
                 <h3>Your profile</h3>
                 <p>Click your name in the top-right corner to edit your profile — upload a headshot, write a bio, and manage your saved e-signatures.</p>
@@ -163,6 +163,53 @@ function help_topics(): array
             HTML,
         ],
 
+        [
+            'slug'     => 'property-listings',
+            'title'    => 'Property listings — for sale &amp; for rent',
+            'category' => 'Community',
+            'min_role' => 'owner',
+            'body'     => <<<HTML
+                <p>The Listings page lets owners advertise units that are for sale or available for rent — all within your community portal.</p>
+
+                <h3>Posting a listing</h3>
+                <p>Go to <strong>Listings</strong> in the sidebar and click <strong>+ New listing.</strong> Fill in the listing type (For Sale or For Rent), asking price, beds/baths/sqft, a description, contact information, and optionally a photo.</p>
+
+                <h3>Managing your listing</h3>
+                <p>You can update the status at any time — Active, Pending, Sold, or Rented — directly from the listings table without opening the full edit form. Edit or delete your listing from the same page.</p>
+
+                <h3>Public visibility</h3>
+                <p>Active listings automatically appear in the <em>Properties Available</em> section on your community's public landing page, visible to anyone without a login. This is intentional — prospective buyers and renters often check community pages before contacting an agent.</p>
+
+                <h3>Who can post</h3>
+                <p>Owners and above can post listings by default. The board can adjust this in <strong>Settings → Permissions → Post property listings.</strong></p>
+            HTML,
+        ],
+
+        [
+            'slug'     => 'area-attractions',
+            'title'    => 'Area attractions',
+            'category' => 'Community',
+            'min_role' => 'board_member',
+            'body'     => <<<HTML
+                <p>The Area Attractions page lets the board curate a directory of nearby places worth visiting — restaurants, shops, parks, gyms, and more. It appears on your public community landing page so guests and prospective residents can explore the neighborhood.</p>
+
+                <h3>Adding an attraction</h3>
+                <p>Go to <strong>Area Attractions</strong> in the sidebar and click <strong>+ Add attraction.</strong> Fill in the name, category, a short description, address, website URL, and optionally a photo. Save it and it goes live immediately.</p>
+
+                <h3>Categories</h3>
+                <p>Dining, Shopping, Entertainment, Outdoor, Culture, Services, Other. The public page shows a tab for each category that has at least one entry.</p>
+
+                <h3>Distance display</h3>
+                <p>If your association's address is geocoded (set under <strong>Settings → Association profile</strong>), a distance badge automatically appears on each attraction card — for example "0.3 mi away." This uses the attraction's address or coordinates and your association's latitude/longitude.</p>
+
+                <h3>Sort order &amp; visibility</h3>
+                <p>Each attraction has a sort order field. Lower numbers appear first. Use the Active toggle to temporarily hide an entry without deleting it.</p>
+
+                <h3>Dedicated page</h3>
+                <p>The public landing page shows a preview of up to four attractions with a "See all →" link. That link goes to a dedicated <em>/{slug}/attractions</em> page with the full directory, category filters, and distance info.</p>
+            HTML,
+        ],
+
         // ── GOVERNANCE ──────────────────────────────────────────────────
 
         [
@@ -274,6 +321,103 @@ function help_topics(): array
         // ── BOARD / MANAGEMENT ONLY ─────────────────────────────────────
 
         [
+            'slug'     => 'board-meetings',
+            'title'    => 'Board meetings — agenda, minutes &amp; resolutions',
+            'category' => 'Board &amp; management',
+            'min_role' => 'board_member',
+            'body'     => <<<HTML
+                <p>The Board Meetings page manages the full lifecycle of a meeting — agenda building, attendance, resolutions with recorded votes, and print-ready minutes.</p>
+
+                <h3>Creating a meeting</h3>
+                <p>Click <strong>+ New meeting</strong> and fill in the date, time, location, and type (Regular, Special, Annual, Emergency). The system adds an "Approve minutes from the last meeting" item automatically. Add your own agenda items on the meeting detail page.</p>
+
+                <h3>Agenda items</h3>
+                <p>Each agenda item has a type (Discussion, Resolution, Vote, Report, etc.), a description, and an optional BE IT RESOLVED clause for motions. Items can be reordered by sort number. During or after the meeting, mark each item Approved, Denied, Tabled, or No Action.</p>
+
+                <h3>Resolutions and votes</h3>
+                <p>Resolution items have a per-member vote grid — Yes, No, Abstain, Not Present, N/A. The grid shows only board members and managers. Vote counts tally automatically. Add the full resolution language in the BE IT RESOLVED field for the minutes.</p>
+
+                <h3>Print-ready minutes</h3>
+                <p>Click <strong>Print minutes</strong> on any meeting to get a clean, formatted document suitable for signing. The printout includes the meeting header, all agenda items in order, resolution votes with counts, and a signature block — formatted to Florida §718.112 board meeting standards.</p>
+
+                <h3>Minutes archive</h3>
+                <p>Completed meetings stay on record. The <strong>Minutes</strong> page (Resources section) gives members read-only access to past meeting minutes according to the permission you've configured in Settings.</p>
+            HTML,
+        ],
+
+        [
+            'slug'     => 'voting',
+            'title'    => 'Board voting — ballots &amp; results',
+            'category' => 'Board &amp; management',
+            'min_role' => 'board_member',
+            'body'     => <<<HTML
+                <p>The Voting page handles formal ballot-style votes — budget approvals, bylaw amendments, board elections, or any issue that needs a recorded community vote separate from a board meeting.</p>
+
+                <h3>Creating a ballot</h3>
+                <p>Click <strong>+ New ballot</strong> and fill in the title, description, voting deadline, and eligible voters (all members, owners only, or board only). Add the question and the choices voters will pick from.</p>
+
+                <h3>Casting votes</h3>
+                <p>Members see open ballots on the Voting page and click to cast their vote before the deadline. Each member can vote once. Votes are anonymous by default — only the totals are recorded, not who voted what.</p>
+
+                <h3>Viewing results</h3>
+                <p>Board admins control when results are revealed. Before the reveal, only the participation count is visible (X of Y eligible members have voted). After the board reveals results, vote totals and percentages appear for everyone.</p>
+
+                <h3>Closed ballots</h3>
+                <p>After the deadline passes (or the board manually closes it), no new votes are accepted. Closed ballots stay on record with final counts.</p>
+            HTML,
+        ],
+
+        [
+            'slug'     => 'broadcasts',
+            'title'    => 'Email broadcasts',
+            'category' => 'Board &amp; management',
+            'min_role' => 'board_member',
+            'body'     => <<<HTML
+                <p>Email Broadcasts let the board send a formatted email to the whole community or a custom selection of members — meeting notices, maintenance alerts, newsletters, or anything that needs to reach inboxes directly.</p>
+
+                <h3>Composing a broadcast</h3>
+                <p>Go to <strong>Email Broadcasts</strong> in the sidebar and click <strong>+ New broadcast.</strong> Write a subject and body, choose your audience (all members or a custom selection), optionally attach a PDF, and click Send.</p>
+
+                <h3>Audience selection</h3>
+                <p>By default the broadcast goes to all active members with a real email address on file. Use the member picker to select specific individuals when you need to reach a targeted group — a committee, a floor, or specific unit owners.</p>
+
+                <h3>PDF attachments</h3>
+                <p>You can attach one PDF per broadcast — useful for meeting agendas, budget summaries, or formal notices. The file is attached to every email in the send.</p>
+
+                <h3>Delivery tracking</h3>
+                <p>After sending, the broadcast detail shows per-recipient delivery status — sent, delivered, failed. Members without a real email address (placeholder addresses) are automatically excluded from the send count and recipient list.</p>
+
+                <h3>Who can send</h3>
+                <p>Board members and above by default. The board admin controls this in Settings → Permissions.</p>
+            HTML,
+        ],
+
+        [
+            'slug'     => 'document-signing',
+            'title'    => 'Document signing &amp; e-signatures',
+            'category' => 'Board &amp; management',
+            'min_role' => 'board_member',
+            'body'     => <<<HTML
+                <p>BadassHOA includes a built-in e-signature workflow for PDFs — useful for lease addenda, estoppel certificates, policy acknowledgments, and similar documents that require a resident's signature.</p>
+
+                <h3>Requiring signatures</h3>
+                <p>On the Documents page, open a PDF and use the <strong>Required signers</strong> field to tag which members must sign. Start typing a name and select from the list. Click <strong>Notify</strong> to email each pending signer a direct link to sign.</p>
+
+                <h3>Signing a document</h3>
+                <p>When you receive the signing link (or open the document yourself), you'll see a preview of the PDF. Drag and resize the signature placement box to position your signature, then click <strong>Sign &amp; save.</strong> Your saved signature is used automatically — no re-drawing required. You can manage your saved signatures in your profile.</p>
+
+                <h3>Signed copies</h3>
+                <p>After signing, a signed copy of the PDF is stored against your record. You can download it from the document page. Board admins can see all signed copies.</p>
+
+                <h3>Audit certificate</h3>
+                <p>Every signed document has an audit certificate page listing who signed, when, from what IP address, the document hash before and after, and the legal disclosure text each signer accepted. This meets the core requirements of the federal E-SIGN Act and Florida's UETA.</p>
+
+                <h3>Legal note</h3>
+                <p>E-signatures are legally binding for most HOA documents under E-SIGN/UETA. However, some specific notice types (foreclosure, fine hearings) may still require physical paper under Florida statute. Confirm with your HOA attorney for anything consequential before relying on e-signatures exclusively.</p>
+            HTML,
+        ],
+
+        [
             'slug'     => 'lobby-tv',
             'title'    => 'Lobby TV — setup and PIN management',
             'category' => 'Board &amp; management',
@@ -295,16 +439,29 @@ function help_topics(): array
                 <h3>Rate limiting</h3>
                 <p>After 10 wrong PIN attempts from the same IP address, that IP is locked out for 15 minutes. This prevents someone from guessing the PIN by brute force.</p>
 
+                <h3>Layouts</h3>
+                <p>Two layouts are available under <strong>Settings → Lobby TV:</strong></p>
+                <ul>
+                    <li><strong>3-column</strong> — Announcements, Events, and Marketplace side by side. Each column scrolls independently.</li>
+                    <li><strong>Ticker</strong> — All content (announcements, events, marketplace) merges into a single horizontal scrolling feed of large cards, sorted by date. Best for narrow displays or when you want everything in one stream.</li>
+                </ul>
+
+                <h3>Themes</h3>
+                <p>Choose between a <strong>Dark</strong> (navy background) or <strong>Light</strong> (white background) theme in Settings → Lobby TV. The light theme works well in brightly-lit lobbies where dark screens wash out.</p>
+
+                <h3>URL overrides</h3>
+                <p>You can override layout and theme directly in the bookmarkable TV URL without changing Settings. Add <code>?style=ticker</code> or <code>?style=columns</code> and <code>&dark=0</code> or <code>&dark=1</code> to the URL. Useful if you have multiple screens with different preferences.</p>
+
                 <h3>What the TV shows</h3>
                 <ul>
                     <li><strong>Announcements</strong> — active, non-expired posts with audience set to All or Members</li>
-                    <li><strong>Upcoming events</strong> — next 30 days of events, recurring series expanded</li>
+                    <li><strong>Upcoming events</strong> — next 30 days, recurring series expanded to individual occurrences</li>
                     <li><strong>Marketplace</strong> — active listings with photos when available</li>
                 </ul>
-                <p>Each column scrolls independently and loops seamlessly. The page auto-refreshes every 10 minutes to pick up new content.</p>
+                <p>The page auto-refreshes every 10 minutes to pick up new content without manual intervention.</p>
 
                 <h3>Weather</h3>
-                <p>The header shows current conditions (temperature, wind, precipitation) using Open-Meteo — free, no API key required. It pulls your association's latitude/longitude from Settings. If those aren't set, weather won't appear.</p>
+                <p>The header shows current conditions (temperature and condition description) using Open-Meteo — free, no API key required. It pulls your association's latitude/longitude from Settings. If those aren't set, weather won't appear.</p>
             HTML,
         ],
 
@@ -339,6 +496,8 @@ function help_topics(): array
                     <li>Insurance records</li>
                     <li>Submitting concerns</li>
                     <li>Submitting ARC requests</li>
+                    <li>Managing area attractions</li>
+                    <li>Posting property listings</li>
                 </ul>
 
                 <h3>What's not configurable</h3>
