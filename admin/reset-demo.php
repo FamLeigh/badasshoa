@@ -764,7 +764,7 @@ require __DIR__ . '/../includes/header.php';
     <div class="card card--padded" style="margin: var(--sp-6) 0;">
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap: var(--sp-6);">
             <div>
-                <div class="muted" style="font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600;">Source <span class="badge badge--success" style="margin-left: var(--sp-1);">read</span></div>
+                <div class="muted" style="font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600;"><?= e((string)$source['name']) ?> <span class="badge badge--success" style="margin-left: var(--sp-1);">source — read only</span></div>
                 <div style="font-size: var(--fs-lg); font-weight: 700; margin: var(--sp-1) 0;">
                     <?= e((string)$source['name']) ?>
                     <code class="muted" style="font-weight:400; font-size: var(--fs-sm);">#<?= (int)$source['id'] ?></code>
@@ -772,7 +772,7 @@ require __DIR__ . '/../includes/header.php';
                 <div class="muted" style="font-size: var(--fs-sm);">slug: <code><?= e((string)$source['subdomain']) ?></code></div>
             </div>
             <div>
-                <div class="muted" style="font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600;">Target <span class="badge badge--error" style="margin-left: var(--sp-1);">will be wiped</span></div>
+                <div class="muted" style="font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600;"><?= e((string)$target['name']) ?> <span class="badge badge--error" style="margin-left: var(--sp-1);">will be wiped</span></div>
                 <div style="font-size: var(--fs-lg); font-weight: 700; margin: var(--sp-1) 0;">
                     <?= e((string)$target['name']) ?>
                     <code class="muted" style="font-weight:400; font-size: var(--fs-sm);">#<?= (int)$target['id'] ?></code>
@@ -787,8 +787,8 @@ require __DIR__ . '/../includes/header.php';
             <thead>
                 <tr>
                     <th>Table</th>
-                    <th style="text-align:right;">Source (will be cloned)</th>
-                    <th style="text-align:right;">Target (will be wiped)</th>
+                    <th style="text-align:right;"><?= e((string)$source['name']) ?> (will be cloned)</th>
+                    <th style="text-align:right;"><?= e((string)$target['name']) ?> (will be wiped)</th>
                 </tr>
             </thead>
             <tbody>
