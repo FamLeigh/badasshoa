@@ -860,7 +860,7 @@ function landing_social_icon(string $name): string {
             &copy; <?= (int)date('Y') ?> <?= e($assoc['name']) ?>. Established <?= e(date('Y', strtotime((string)$assoc['created_at']))) ?>.
         </div>
         <div class="muted" style="font-size: var(--fs-xs);">
-            Powered by <a href="/" style="color: var(--color-orange);">BadassHOA</a>
+            Powered by <a href="https://badasshoa.com" target="_blank" rel="noopener" style="color: var(--color-orange);">BadassHOA</a>
         </div>
     </div>
 </footer>
