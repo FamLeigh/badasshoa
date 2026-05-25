@@ -1,0 +1,41 @@
+CREATE TABLE amenities (
+    id                   INT UNSIGNED    NOT NULL AUTO_INCREMENT,
+    association_id       INT UNSIGNED    NOT NULL,
+    name                 VARCHAR(200)    NOT NULL,
+    description          TEXT            NULL,
+    location             VARCHAR(200)    NULL,
+    capacity             SMALLINT UNSIGNED NULL,
+    photo_path           VARCHAR(500)    NULL,
+    is_active            TINYINT(1)      NOT NULL DEFAULT 1,
+    max_advance_days     SMALLINT UNSIGNED NOT NULL DEFAULT 90,
+    max_duration_hours   TINYINT UNSIGNED  NOT NULL DEFAULT 4,
+    requires_approval    TINYINT(1)      NOT NULL DEFAULT 1,
+    deposit_cents        INT UNSIGNED    NULL DEFAULT NULL,
+    booking_instructions TEXT            NULL,
+    sort_order           TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    created_at           TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_amenity_assoc (association_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE amenity_bookings (
+    id              INT UNSIGNED    NOT NULL AUTO_INCREMENT,
+    association_id  INT UNSIGNED    NOT NULL,
+    amenity_id      INT UNSIGNED    NOT NULL,
+    user_id         INT             NOT NULL,
+    booking_date    DATE            NOT NULL,
+    start_time      TIME            NOT NULL,
+    end_time        TIME            NOT NULL,
+    purpose         VARCHAR(500)    NULL,
+    attendee_count  SMALLINT UNSIGNED NULL,
+    status          ENUM('pending','approved','denied','cancelled') NOT NULL DEFAULT 'pending',
+    board_notes     TEXT            NULL,
+    created_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_ab_assoc        (association_id),
+    KEY idx_ab_amenity_date (amenity_id, booking_date),
+    KEY idx_ab_user         (user_id),
+    CONSTRAINT fk_ab_amenity FOREIGN KEY (amenity_id) REFERENCES amenities(id) ON DELETE CASCADE,
+    CONSTRAINT fk_ab_user    FOREIGN KEY (user_id)    REFERENCES users(id)     ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

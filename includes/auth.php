@@ -47,6 +47,7 @@ function permission_defaults(): array
         'read_documents'      => 'renter',
         'manage_attractions'  => 'board_member',
         'submit_listing'      => 'owner',
+        'book_amenity'        => 'renter',
     ];
 }
 
