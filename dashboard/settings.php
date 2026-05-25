@@ -727,7 +727,10 @@ require __DIR__ . '/../includes/header.php';
         <div class="acc-body">
             <p class="muted" style="font-size: var(--fs-sm); margin: 0 0 var(--sp-5);">
                 What residents and prospective residents see at
-                <a href="/<?= e((string)$association['subdomain']) ?>/" target="_blank" rel="noopener">badasshoa.com/<?= e((string)$association['subdomain']) ?>/</a>.
+                <a href="/<?= e((string)$association['subdomain']) ?>/" target="_blank" rel="noopener">badasshoa.com/<?= e((string)$association['subdomain']) ?>/</a><?php
+                if (!empty($association['custom_domain'])):
+                    $_cd = (string)$association['custom_domain'];
+                ?> or <a href="https://<?= e($_cd) ?>/" target="_blank" rel="noopener"><?= e($_cd) ?></a><?php endif; ?>.
                 All fields optional — sections without content simply don't render.
             </p>
             <form method="post" class="form" enctype="multipart/form-data">
