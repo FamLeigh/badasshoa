@@ -606,6 +606,14 @@ require __DIR__ . '/../includes/header.php';
                 <div class="field__hint">
                     Enter the bare domain (no http:// or www.). Point the domain's A record at this server's IP, then add it as an addon domain in hPanel. Leave blank to use only the default <code>/<?= e((string)$editAssoc['subdomain']) ?>/</code> URL.
                 </div>
+                <?php if (!empty($editAssoc['custom_domain'])): ?>
+                    <div style="margin-top: var(--sp-2);">
+                        <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);"
+                           href="/admin/dns-instructions.php?id=<?= (int)$editAssoc['id'] ?>">
+                            📧 Preview &amp; send DNS instructions to board admins →
+                        </a>
+                    </div>
+                <?php endif; ?>
             </div>
 
             <fieldset style="border: 1px solid var(--color-border); border-radius: var(--r-md); padding: var(--sp-3) var(--sp-4); margin-bottom: var(--sp-4);">
