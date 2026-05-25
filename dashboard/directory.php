@@ -526,7 +526,7 @@ if (($_GET['action'] ?? '') === 'edit' && $canManage) {
     }
 }
 
-$page_title = 'Directory — ' . $association['name'];
+$page_title = 'Community Directory — ' . $association['name'];
 require __DIR__ . '/../includes/header.php';
 ?>
 
@@ -534,7 +534,7 @@ require __DIR__ . '/../includes/header.php';
 
     <div class="row row--between" style="margin-bottom: var(--sp-6);">
         <div>
-            <h1 style="font-size: var(--fs-3xl); margin: 0;">Directory</h1>
+            <h1 style="font-size: var(--fs-3xl); margin: 0;">Community Directory</h1>
             <p class="muted">Board members and residents.</p>
         </div>
         <?php if ($canManage): ?>
