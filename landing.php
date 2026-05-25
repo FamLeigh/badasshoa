@@ -156,9 +156,13 @@ $attrStmt = db()->prepare(
 $attrStmt->execute([(int)$assoc['id']]);
 $attractions = $attrStmt->fetchAll();
 
-// Property listings (active only)
+// Property listings (active only) — include first photo from listing_photos
 $propStmt = db()->prepare(
-    "SELECT * FROM property_listings WHERE association_id=? AND status='active' ORDER BY listing_type, created_at DESC"
+    "SELECT pl.*,
+        (SELECT lp.id FROM listing_photos lp WHERE lp.listing_id = pl.id ORDER BY lp.sort_order, lp.id LIMIT 1) AS first_photo_id
+     FROM property_listings pl
+     WHERE pl.association_id=? AND pl.status='active'
+     ORDER BY pl.listing_type, pl.created_at DESC"
 );
 $propStmt->execute([(int)$assoc['id']]);
 $propertyListings = $propStmt->fetchAll();
@@ -478,9 +482,17 @@ $_aLon = isset($assoc['longitude']) && $assoc['longitude'] !== null ? (float)$as
             if ($pl['sq_ft'] !== null) $specs[] = number_format((int)$pl['sq_ft']) . ' sq ft';
         ?>
             <div class="card" style="overflow: hidden;">
-                <?php if (!empty($pl['photo_path'])): ?>
+                <?php
+                    $photoSrc = null;
+                    if (!empty($pl['first_photo_id'])) {
+                        $photoSrc = '/public-listing.php?photo=' . (int)$pl['first_photo_id'] . '&aid=' . (int)$assoc['id'];
+                    } elseif (!empty($pl['photo_path'])) {
+                        $photoSrc = '/public-listing.php?id=' . (int)$pl['id'] . '&aid=' . (int)$assoc['id'];
+                    }
+                ?>
+                <?php if ($photoSrc): ?>
                     <div style="height: 200px; overflow: hidden; flex-shrink: 0;">
-                        <img src="/public-listing.php?id=<?= (int)$pl['id'] ?>&aid=<?= (int)$assoc['id'] ?>" alt=""
+                        <img src="<?= e($photoSrc) ?>" alt=""
                              style="width:100%; height:100%; object-fit:cover; display:block;">
                     </div>
                 <?php endif; ?>

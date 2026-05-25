@@ -106,6 +106,19 @@ if ($type === 'document') {
     $filename = 'listing-' . $id . '.' . pathinfo($relative, PATHINFO_EXTENSION);
     $ext      = strtolower(pathinfo($relative, PATHINFO_EXTENSION));
     $type_h   = match ($ext) { 'png' => 'image/png', 'gif' => 'image/gif', 'webp' => 'image/webp', default => 'image/jpeg' };
+} elseif ($type === 'listing_photo') {
+    $stmt = db()->prepare(
+        'SELECT lp.photo_path FROM listing_photos lp
+         JOIN property_listings pl ON pl.id = lp.listing_id
+         WHERE lp.id = ? AND pl.association_id = ?'
+    );
+    $stmt->execute([$id, $assocId]);
+    $row = $stmt->fetch();
+    if (!$row) { http_response_code(404); die('Not found'); }
+    $relative = 'uploads/' . $assocId . '/' . $row['photo_path'];
+    $filename = 'listing-photo-' . $id . '.' . pathinfo($relative, PATHINFO_EXTENSION);
+    $ext      = strtolower(pathinfo($relative, PATHINFO_EXTENSION));
+    $type_h   = match ($ext) { 'png' => 'image/png', 'gif' => 'image/gif', 'webp' => 'image/webp', default => 'image/jpeg' };
 } elseif ($type === 'minutes_signin') {
     if (!role_can_manage(viewing_role())) { http_response_code(403); die('Forbidden'); }
     $stmt = db()->prepare('SELECT * FROM meeting_minutes WHERE id = ? AND association_id = ?');

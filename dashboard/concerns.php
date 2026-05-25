@@ -12,12 +12,12 @@ $flashError = null;
 // --- Submit a new concern ---------------------------------------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'submit') {
     csrf_check();
-    $type     = $_POST['type'] ?? 'complaint';
+    $type     = $_POST['type'] ?? 'compliment';
     $cat      = trim((string)($_POST['category'] ?? ''));
     $subject  = trim((string)($_POST['subject'] ?? ''));
     $body     = trim((string)($_POST['body'] ?? ''));
     $anon     = isset($_POST['is_anonymous']) ? 1 : 0;
-    if (!in_array($type, ['complaint','compliment','suggestion'], true)) $type = 'complaint';
+    if (!in_array($type, ['complaint','compliment','suggestion'], true)) $type = 'compliment';
 
     // Optional structured targets — "who/what is this about?"
     $targetUserId = ($_POST['target_user_id'] ?? '') !== '' ? (int)$_POST['target_user_id'] : null;
@@ -535,22 +535,37 @@ function concern_status_badge(string $s): string {
 
     <?php if ($flashError): ?><div class="flash flash--error"><?= e($flashError) ?></div><?php endif; ?>
 
+    <style>
+    .type-seg { display: flex; border: 1px solid var(--color-border); border-radius: var(--radius); overflow: hidden; }
+    .type-seg__opt { flex: 1; position: relative; }
+    .type-seg__opt input[type="radio"] { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+    .type-seg__opt span { display: flex; align-items: center; justify-content: center; gap: .4em; padding: .6rem .75rem; font-size: var(--fs-sm); font-weight: 500; background: var(--color-surface); border-right: 1px solid var(--color-border); transition: background .15s, color .15s; white-space: nowrap; user-select: none; }
+    .type-seg__opt:last-child span { border-right: none; }
+    .type-seg__opt input:checked + span { background: var(--color-navy); color: #fff; }
+    </style>
+
     <form method="post" class="form card card--padded">
         <?= csrf_field() ?>
         <input type="hidden" name="form" value="submit">
-        <div class="form-row form-row--2">
-            <div class="field">
-                <label class="field__label" for="ct">Type</label>
-                <select class="select" id="ct" name="type">
-                    <option value="complaint">Concern</option>
-                    <option value="compliment">Complement</option>
-                    <option value="suggestion">Suggestion</option>
-                </select>
+        <div class="field" style="margin-bottom: var(--sp-4);">
+            <label class="field__label">Type</label>
+            <?php $formType = $_POST['type'] ?? 'compliment'; ?>
+            <div class="type-seg">
+                <?php foreach ([
+                    'compliment' => ['⭐', 'Complement'],
+                    'complaint'  => ['⚠️', 'Concern'],
+                    'suggestion' => ['💡', 'Suggestion'],
+                ] as $tval => [$ticon, $tlbl]): ?>
+                <label class="type-seg__opt">
+                    <input type="radio" name="type" value="<?= e($tval) ?>"<?= $formType === $tval ? ' checked' : '' ?>>
+                    <span><?= $ticon ?> <?= e($tlbl) ?></span>
+                </label>
+                <?php endforeach; ?>
             </div>
-            <div class="field">
-                <label class="field__label" for="cc">Category (optional)</label>
-                <input class="input" id="cc" name="category" placeholder="Noise · Common areas · Pets · …">
-            </div>
+        </div>
+        <div class="field" style="margin-bottom: var(--sp-4);">
+            <label class="field__label" for="cc">Category (optional)</label>
+            <input class="input" id="cc" name="category" placeholder="Noise · Common areas · Pets · …">
         </div>
         <div class="field">
             <label class="field__label" for="cs">Subject</label>
