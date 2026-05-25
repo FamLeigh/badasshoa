@@ -565,7 +565,7 @@ function concern_status_badge(string $s): string {
         </div>
         <div class="field" style="margin-bottom: var(--sp-4);">
             <label class="field__label" for="cc">Category (optional)</label>
-            <input class="input" id="cc" name="category" placeholder="Noise · Common areas · Pets · …">
+            <input class="input" id="cc" name="category" placeholder="Friendly neighbor · Clean grounds · Great event · …">
         </div>
         <div class="field">
             <label class="field__label" for="cs">Subject</label>
@@ -573,8 +573,38 @@ function concern_status_badge(string $s): string {
         </div>
         <div class="field">
             <label class="field__label" for="cb">Details</label>
-            <textarea class="textarea" id="cb" name="body" rows="6" required placeholder="What happened, when, where, and what would resolve it?"></textarea>
+            <textarea class="textarea" id="cb" name="body" rows="6" required placeholder="Tell us what happened — we'd love to share the good news."></textarea>
         </div>
+        <script>
+        (function () {
+            var cc   = document.getElementById('cc');
+            var cb   = document.getElementById('cb');
+            var radios = document.querySelectorAll('input[name="type"]');
+            var hints = {
+                compliment: {
+                    cat:  'Friendly neighbor · Clean grounds · Great event · Helpful staff ·…',
+                    body: 'Tell us what happened — we’d love to share the good news.'
+                },
+                complaint: {
+                    cat:  'Noise · Common areas · Pets · Parking · Rule violation ·…',
+                    body: 'What happened, when, where, and what would resolve it?'
+                },
+                suggestion: {
+                    cat:  'Landscaping · Amenities · Events · Communication ·…',
+                    body: 'Describe your idea — the more detail, the better.'
+                }
+            };
+            function update(val) {
+                var h = hints[val] || hints.complaint;
+                cc.placeholder = h.cat;
+                cb.placeholder = h.body;
+            }
+            radios.forEach(function (r) {
+                r.addEventListener('change', function () { if (r.checked) update(r.value); });
+                if (r.checked) update(r.value);
+            });
+        })();
+        </script>
 
         <!-- Optional structured targets — who/what is this about? -->
         <fieldset style="border: 1px solid var(--color-border); border-radius: var(--r-md); padding: var(--sp-3) var(--sp-4); margin-bottom: var(--sp-4);">
