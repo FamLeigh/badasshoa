@@ -397,6 +397,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'update'
             } elseif ($newLogoPath) {
                 $extraSql .= ', logo_path = ?'; $extraArgs[] = $newLogoPath;
             }
+            // Hero image lives on the content form (not profile), but if a
+            // hero arrived with a profile submit we still save it.
             if ($removeHero) {
                 $extraSql .= ', hero_image_path = NULL';
                 $existing = (string)($association['hero_image_path'] ?? '');
@@ -436,20 +438,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'update'
             ]);
             flash('success', 'Profile saved.');
         } else {
+            // Hero image is on this (content) form, so its handling lives here.
+            $heroSql = ''; $heroArgs = [];
+            if ($removeHero) {
+                $heroSql = ', hero_image_path = NULL';
+                $existing = (string)($association['hero_image_path'] ?? '');
+                if ($existing) { $abs = storage_path($existing); if (is_file($abs)) @unlink($abs); }
+            } elseif ($newHeroPath) {
+                $heroSql = ', hero_image_path = ?'; $heroArgs[] = $newHeroPath;
+            }
             db()->prepare(
                 "UPDATE associations
                  SET vision_statement = ?, about_text = ?, amenities_text = ?,
                      contact_email = ?, contact_phone = ?,
                      website_url = ?, facebook_url = ?, instagram_url = ?, twitter_url = ?, nextdoor_url = ?, youtube_url = ?,
-                     public_landing_enabled = ?
+                     public_landing_enabled = ? $heroSql
                  WHERE id = ?"
-            )->execute([
+            )->execute(array_merge([
                 $vision ?: null, $aboutText ?: null, $amenitiesText ?: null,
                 $contactEmail ?: null, $contactPhone ?: null,
                 $websiteUrl, $facebookUrl, $instagramUrl, $twitterUrl, $nextdoorUrl, $youtubeUrl,
-                $publicLanding, $assocId,
+                $publicLanding,
+            ], $heroArgs, [$assocId]));
+            audit('association.content_updated', [
+                'has_about'              => $aboutText !== '',
+                'has_vision'             => $vision !== '',
+                'public_landing_enabled' => (bool)$publicLanding,
+                'hero_changed'           => $newHeroPath !== null || $removeHero,
             ]);
-            audit('association.content_updated', ['has_about' => $aboutText !== '', 'has_vision' => $vision !== '', 'public_landing_enabled' => (bool)$publicLanding]);
             flash('success', 'Landing content saved.');
         }
         redirect('/dashboard/settings.php');
