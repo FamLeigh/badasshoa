@@ -196,6 +196,7 @@ $WIPE_ONLY = [
     'platform_messages',
     'broadcasts',
     'broadcast_attachments',
+    'broadcast_recipients',
     'login_attempts',
 ];
 
