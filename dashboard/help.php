@@ -1,21 +1,39 @@
 <?php
+declare(strict_types=1);
 require __DIR__ . '/_bootstrap.php';
-require __DIR__ . '/../includes/help_topics.php';
 
 $page_title = 'Help — ' . $association['name'];
 
-$all     = help_topics();
-$role    = viewing_role();
-$rank    = ROLE_RANK[$role] ?? 0;
+$role = viewing_role();
+$rank = ROLE_RANK[$role] ?? 0;
 
-// Filter topics to those the current role can see.
+// Load topics from DB, fall back to the PHP function if the table is empty or missing.
+$all = [];
+try {
+    $rows = db()->query(
+        'SELECT slug, title, category, min_role, body, youtube_url, images
+         FROM help_topics WHERE active = 1 ORDER BY sort_order, id'
+    )->fetchAll();
+    if (!empty($rows)) {
+        $all = $rows;
+    }
+} catch (Throwable $e) {
+    // Table not yet created — fall through to PHP fallback.
+}
+
+if (empty($all)) {
+    require_once __DIR__ . '/../includes/help_topics.php';
+    $all = help_topics();
+}
+
+// Filter by role.
 $visible = array_filter($all, function(array $t) use ($rank): bool {
     $minRank = ROLE_RANK[$t['min_role']] ?? PHP_INT_MAX;
     return $rank >= $minRank;
 });
 
-// Pick the active topic.
-$slug   = trim((string)($_GET['topic'] ?? ''));
+// Active topic.
+$slug        = trim((string)($_GET['topic'] ?? ''));
 $activeTopic = null;
 foreach ($visible as $t) {
     if ($t['slug'] === $slug) { $activeTopic = $t; break; }
@@ -24,10 +42,22 @@ if (!$activeTopic) {
     $activeTopic = array_values($visible)[0] ?? null;
 }
 
-// Group visible topics by category for the sidebar.
+// Group by category for sidebar.
 $grouped = [];
 foreach ($visible as $t) {
     $grouped[$t['category']][] = $t;
+}
+
+/** Extract a YouTube embed URL from a watch URL or share URL, or return null. */
+function help_youtube_embed(?string $url): ?string
+{
+    if (!$url) return null;
+    $url = trim($url);
+    $id  = null;
+    if (preg_match('~youtu\.be/([A-Za-z0-9_-]{11})~', $url, $m))                  $id = $m[1];
+    elseif (preg_match('~[?&/](?:v=|embed/)([A-Za-z0-9_-]{11})~', $url, $m))      $id = $m[1];
+    elseif (preg_match('~^[A-Za-z0-9_-]{11}$~', $url))                             $id = $url;
+    return $id ? 'https://www.youtube.com/embed/' . $id : null;
 }
 
 require __DIR__ . '/../includes/header.php';
@@ -108,6 +138,36 @@ require __DIR__ . '/../includes/header.php';
     border-radius: 4px; padding: 1px 5px; font-size: 0.9em;
 }
 
+/* YouTube embed */
+.help-video {
+    margin: var(--sp-8) 0;
+}
+.help-video-wrap {
+    position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;
+    border-radius: var(--radius-lg); background: #000;
+    max-width: 720px;
+}
+.help-video-wrap iframe {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    border: 0;
+}
+
+/* Images grid */
+.help-images {
+    display: flex; flex-wrap: wrap; gap: var(--sp-3);
+    margin: var(--sp-8) 0;
+}
+.help-images a {
+    display: block; border-radius: var(--radius-md);
+    overflow: hidden; border: 1px solid var(--color-border);
+    transition: box-shadow 120ms ease;
+}
+.help-images a:hover { box-shadow: 0 4px 16px rgba(0,0,0,.12); }
+.help-images img {
+    display: block; width: 200px; height: 140px;
+    object-fit: cover;
+}
+
 /* Mobile topic picker */
 .help-mobile-select {
     display: none; margin-bottom: var(--sp-5);
@@ -146,7 +206,9 @@ require __DIR__ . '/../includes/header.php';
             <?php foreach ($grouped as $category => $topics): ?>
             <optgroup label="<?= e($category) ?>">
                 <?php foreach ($topics as $t): ?>
-                <option value="<?= e($t['slug']) ?>"<?= $activeTopic && $activeTopic['slug'] === $t['slug'] ? ' selected' : '' ?>><?= e($t['title']) ?></option>
+                <option value="<?= e($t['slug']) ?>"<?= $activeTopic && $activeTopic['slug'] === $t['slug'] ? ' selected' : '' ?>>
+                    <?= e($t['title']) ?>
+                </option>
                 <?php endforeach; ?>
             </optgroup>
             <?php endforeach; ?>
@@ -159,7 +221,43 @@ require __DIR__ . '/../includes/header.php';
         <span class="help-category-tag"><?= e($activeTopic['category']) ?></span>
         <h1><?= e($activeTopic['title']) ?></h1>
         <hr style="border: 0; border-top: 1px solid var(--color-border); margin: var(--sp-4) 0 var(--sp-6);">
+
         <?= $activeTopic['body'] ?>
+
+        <?php
+        // YouTube embed
+        $embedUrl = help_youtube_embed($activeTopic['youtube_url'] ?? null);
+        if ($embedUrl):
+        ?>
+        <div class="help-video">
+            <div class="help-video-wrap">
+                <iframe src="<?= e($embedUrl) ?>?rel=0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowfullscreen loading="lazy" title="Help video"></iframe>
+            </div>
+        </div>
+        <?php endif; ?>
+
+        <?php
+        // Images grid
+        $imgs = [];
+        if (!empty($activeTopic['images'])) {
+            $imgs = is_array($activeTopic['images'])
+                ? $activeTopic['images']
+                : (json_decode((string)$activeTopic['images'], true) ?: []);
+        }
+        if ($imgs):
+        ?>
+        <div class="help-images">
+            <?php foreach ($imgs as $fn): ?>
+            <?php $fn = basename((string)$fn); ?>
+            <a href="/help-image.php?f=<?= e(urlencode($fn)) ?>" target="_blank" rel="noopener">
+                <img src="/help-image.php?f=<?= e(urlencode($fn)) ?>" alt="Help screenshot" loading="lazy">
+            </a>
+            <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
+
         <?php else: ?>
         <p class="muted">No help topics available for your role.</p>
         <?php endif; ?>
@@ -169,12 +267,12 @@ require __DIR__ . '/../includes/header.php';
 
 <script>
 (function () {
-    var input  = document.getElementById('help-search');
+    var input = document.getElementById('help-search');
     if (!input) return;
     input.addEventListener('input', function () {
         var q = this.value.trim().toLowerCase();
         document.querySelectorAll('[data-group]').forEach(function (group) {
-            var links = group.querySelectorAll('.help-sidebar__link');
+            var links     = group.querySelectorAll('.help-sidebar__link');
             var anyVisible = false;
             links.forEach(function (link) {
                 var match = !q || link.dataset.topicTitle.indexOf(q) !== -1;

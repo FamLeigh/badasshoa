@@ -55,38 +55,50 @@ function active_nav_key(): string
     if ($path === '') $path = '/';
 
     static $map = [
-        '/dashboard'                    => 'home',
-        '/dashboard/index.php'          => 'home',
-        '/dashboard/documents.php'      => 'documents',
-        '/dashboard/search.php'         => 'rules',
-        '/dashboard/directory.php'      => 'directory',
-        '/dashboard/committees.php'     => 'committees',
-        '/dashboard/events.php'         => 'events',
-        '/dashboard/communications.php' => 'communications',
-        '/dashboard/broadcasts.php'    => 'broadcasts',
-        '/dashboard/media.php'          => 'media',
-        '/dashboard/faq.php'            => 'faq',
-        '/dashboard/settings.php'       => 'settings',
-        '/dashboard/violations.php'     => 'violations',
-        '/dashboard/minutes.php'        => 'minutes',
-        '/dashboard/voting.php'         => 'voting',
-        '/dashboard/meetings.php'       => 'meetings',
-        '/dashboard/meeting-detail.php' => 'meetings',
-        '/dashboard/meeting-print.php'  => 'meetings',
-        '/dashboard/marketplace.php'    => 'marketplace',
-        '/dashboard/listings.php'       => 'listings',
-        '/dashboard/attractions.php'    => 'attractions',
-        '/dashboard/legal.php'          => 'legal',
-        '/admin/legal.php'              => 'legal',
-        '/dashboard/permissions.php'    => 'settings',
-        '/dashboard/locations.php'      => 'settings',
-        '/admin'                        => 'overview',
-        '/admin/index.php'              => 'overview',
-        '/admin/associations.php'       => 'associations',
-        '/admin/users.php'              => 'users',
-        '/admin/activity.php'           => 'activity',
-        '/admin/changelog.php'          => 'changelog',
-        '/dashboard/help.php'           => 'help',
+        '/dashboard'                       => 'home',
+        '/dashboard/index.php'             => 'home',
+        '/dashboard/documents.php'         => 'documents',
+        '/dashboard/forms.php'             => 'forms',
+        '/dashboard/search.php'            => 'rules',
+        '/dashboard/directory.php'         => 'directory',
+        '/dashboard/contacts.php'          => 'contacts',
+        '/dashboard/committees.php'        => 'committees',
+        '/dashboard/events.php'            => 'events',
+        '/dashboard/communications.php'    => 'communications',
+        '/dashboard/broadcasts.php'        => 'broadcasts',
+        '/dashboard/media.php'             => 'media',
+        '/dashboard/faq.php'               => 'faq',
+        '/dashboard/settings.php'          => 'settings',
+        '/dashboard/permissions.php'       => 'settings',
+        '/dashboard/locations.php'         => 'settings',
+        '/dashboard/profile.php'           => 'settings',
+        '/dashboard/violations.php'        => 'violations',
+        '/dashboard/minutes.php'           => 'minutes',
+        '/dashboard/voting.php'            => 'voting',
+        '/dashboard/meetings.php'          => 'meetings',
+        '/dashboard/meeting-detail.php'    => 'meetings',
+        '/dashboard/meeting-print.php'     => 'meetings',
+        '/dashboard/marketplace.php'       => 'marketplace',
+        '/dashboard/listings.php'          => 'listings',
+        '/dashboard/attractions.php'       => 'attractions',
+        '/dashboard/legal.php'             => 'legal',
+        '/dashboard/arc.php'               => 'arc',
+        '/dashboard/concerns.php'          => 'concerns',
+        '/dashboard/work-orders.php'       => 'work-orders',
+        '/dashboard/activity.php'          => 'activity',
+        '/dashboard/units.php'             => 'units',
+        '/dashboard/parking.php'           => 'parking',
+        '/dashboard/employees.php'         => 'employees',
+        '/dashboard/insurance.php'         => 'insurance',
+        '/admin/legal.php'                 => 'legal',
+        '/admin'                           => 'overview',
+        '/admin/index.php'                 => 'overview',
+        '/admin/associations.php'          => 'associations',
+        '/admin/users.php'                 => 'users',
+        '/admin/activity.php'              => 'activity',
+        '/admin/changelog.php'             => 'changelog',
+        '/admin/help.php'                  => 'help_admin',
+        '/dashboard/help.php'              => 'help',
     ];
     return $map[$path] ?? '';
 }
@@ -107,15 +119,51 @@ $userInitial = strtoupper(substr(trim((string)($_SESSION['name'] ?? $_SESSION['e
 
 // Map active page key → group id, so JS can force that group open even if the
 // user previously collapsed it.
-$_groupForActive = [
-    'home' => 'community', 'communications' => 'community', 'broadcasts' => 'community', 'events' => 'community', 'faq' => 'community', 'marketplace' => 'community', 'listings' => 'community', 'attractions' => 'community',
-    'documents' => 'resources', 'forms' => 'resources', 'rules' => 'resources',
-    'minutes' => 'resources', 'media' => 'resources', 'directory' => 'resources', 'contacts' => 'resources', 'legal' => 'resources',
-    'committees' => 'governance', 'concerns' => 'governance', 'arc' => 'governance',
-    'violations' => 'governance', 'work-orders' => 'governance', 'voting' => 'governance', 'meetings' => 'governance',
-    'units' => 'operations', 'parking' => 'operations', 'employees' => 'operations', 'insurance' => 'operations',
-    'activity' => 'configuration', 'settings' => 'configuration',
-][$active] ?? '';
+$_vRole  = function_exists('viewing_role') ? (string)viewing_role() : (string)($_SESSION['role'] ?? '');
+$_isBoard = function_exists('role_can_manage') && role_can_manage($_vRole);
+
+$_groupForActive = $_isBoard
+    ? [
+        'home'        => 'community',     'communications' => 'community',
+        'broadcasts'  => 'community',     'events'         => 'community',
+        'faq'         => 'community',     'marketplace'    => 'community',
+        'listings'    => 'community',     'attractions'    => 'community',
+        'documents'   => 'resources',     'forms'          => 'resources',
+        'rules'       => 'resources',     'minutes'        => 'resources',
+        'media'       => 'resources',     'directory'      => 'resources',
+        'contacts'    => 'resources',     'legal'          => 'resources',
+        'committees'  => 'governance',    'concerns'       => 'governance',
+        'arc'         => 'governance',    'violations'     => 'governance',
+        'work-orders' => 'governance',    'voting'         => 'governance',
+        'meetings'    => 'governance',
+        'units'       => 'operations',    'parking'        => 'operations',
+        'employees'   => 'operations',    'insurance'      => 'operations',
+        'activity'    => 'configuration', 'settings'       => 'configuration',
+    ][$active] ?? ''
+    : ($_vRole !== 'renter'
+        ? [
+            'home'        => 'community',   'communications' => 'community',
+            'events'      => 'community',   'marketplace'    => 'community',
+            'media'       => 'community',   'listings'       => 'community',
+            'documents'   => 'my-hoa',      'forms'          => 'my-hoa',
+            'rules'       => 'my-hoa',      'faq'            => 'my-hoa',
+            'legal'       => 'my-hoa',      'minutes'        => 'my-hoa',
+            'committees'  => 'participate', 'concerns'       => 'participate',
+            'arc'         => 'participate', 'voting'         => 'participate',
+            'directory'   => 'participate', 'contacts'       => 'participate',
+            'violations'  => 'participate', 'work-orders'    => 'participate',
+        ][$active] ?? ''
+        : [
+            'home'        => 'community',   'communications' => 'community',
+            'events'      => 'community',   'marketplace'    => 'community',
+            'media'       => 'community',
+            'documents'   => 'reference',   'forms'          => 'reference',
+            'rules'       => 'reference',   'faq'            => 'reference',
+            'legal'       => 'reference',
+            'concerns'    => 'participate', 'work-orders'    => 'participate',
+            'violations'  => 'participate',
+        ][$active] ?? ''
+    );
 
 // Active emergency announcements — queried once here, rendered as full-width
 // banner(s) before the nav so they're visible on every dashboard page.
@@ -537,22 +585,22 @@ if ($page_layout === 'app' && isset($association) && $association):
                    . '<div class="side-nav__group-links">' . $content . '</div>'
                    . '</div>';
             };
-            ob_start(); ?>
-                <?= nav_link('/dashboard/',                   'home',           'Home',          'home',           $active) ?>
-                <?= nav_link('/dashboard/communications.php', 'communications', 'Announcements', 'communications', $active) ?>
-                <?php if (role_can_manage(viewing_role())): ?>
-                    <?= nav_link('/dashboard/broadcasts.php', 'broadcasts', 'Email Broadcasts', 'broadcasts', $active) ?>
-                <?php endif; ?>
-                <?= nav_link('/dashboard/events.php',         'committees',     'Events',        'events',         $active) ?>
-                <?= nav_link('/dashboard/faq.php',         'rules',       'FAQ',         'faq',         $active) ?>
-                <?= nav_link('/dashboard/marketplace.php', 'marketplace', 'Marketplace',   'marketplace', $active) ?>
+            if (role_can_manage(viewing_role())): /* ── BOARD nav ── */ ?>
+
+            <?php ob_start(); ?>
+                <?= nav_link('/dashboard/',                   'home',           'Home',             'home',           $active) ?>
+                <?= nav_link('/dashboard/communications.php', 'communications', 'Announcements',    'communications', $active) ?>
+                <?= nav_link('/dashboard/broadcasts.php',     'broadcasts',     'Email Broadcasts', 'broadcasts',     $active) ?>
+                <?= nav_link('/dashboard/events.php',         'committees',     'Events',           'events',         $active) ?>
+                <?= nav_link('/dashboard/faq.php',            'rules',          'FAQ',              'faq',            $active) ?>
+                <?= nav_link('/dashboard/marketplace.php',    'marketplace',    'Marketplace',      'marketplace',    $active) ?>
                 <?php if (can_do('submit_listing')): ?>
                     <?= nav_link('/dashboard/listings.php', 'listings', 'Listings', 'listings', $active) ?>
                 <?php endif; ?>
                 <?php if (can_do('manage_attractions')): ?>
                     <?= nav_link('/dashboard/attractions.php', 'attractions', 'Area Attractions', 'attractions', $active) ?>
                 <?php endif; ?>
-                <?php if (role_can_manage(viewing_role()) && !empty($association['subdomain']) && !empty($association['tv_pin'])): ?>
+                <?php if (!empty($association['subdomain']) && !empty($association['tv_pin'])): ?>
                     <a class="side-nav__link" href="<?= e('https://badasshoa.com/tv?slug=' . rawurlencode((string)$association['subdomain']) . '&pin=' . rawurlencode((string)$association['tv_pin'])) ?>" target="_blank" rel="noopener noreferrer">
                         <?= nav_icon('tv') ?><span class="side-nav__label">Lobby TV ↗</span>
                     </a>
@@ -560,14 +608,14 @@ if ($page_layout === 'app' && isset($association) && $association):
             <?php $navGroup('community', 'Community', ob_get_clean()); ?>
 
             <?php ob_start(); ?>
-                <?= nav_link('/dashboard/documents.php', 'documents', 'Documents', 'documents', $active) ?>
-                <?= nav_link('/dashboard/forms.php',     'documents', 'Forms',     'forms',     $active) ?>
+                <?= nav_link('/dashboard/documents.php', 'documents', 'Documents',      'documents', $active) ?>
+                <?= nav_link('/dashboard/forms.php',     'documents', 'Forms',          'forms',     $active) ?>
                 <?= nav_link('/dashboard/search.php',    'rules',     'Rules & Bylaws', 'rules',     $active) ?>
-                <?= nav_link('/dashboard/legal.php',     'legal',     'Legal',     'legal',     $active) ?>
+                <?= nav_link('/dashboard/legal.php',     'legal',     'Legal',          'legal',     $active) ?>
                 <?php if (can_do('read_minutes')): ?>
                     <?= nav_link('/dashboard/minutes.php', 'minutes', 'Minutes', 'minutes', $active) ?>
                 <?php endif; ?>
-                <?= nav_link('/dashboard/media.php',     'media',     'Media',     'media',     $active) ?>
+                <?= nav_link('/dashboard/media.php',     'media',     'Media',          'media',     $active) ?>
                 <?php if (can_do('read_full_directory')): ?>
                     <?= nav_link('/dashboard/directory.php', 'directory', 'Owners / Renters', 'directory', $active) ?>
                 <?php endif; ?>
@@ -577,28 +625,15 @@ if ($page_layout === 'app' && isset($association) && $association):
             <?php $navGroup('resources', 'Resources', ob_get_clean()); ?>
 
             <?php ob_start(); ?>
-                <?php if (viewing_role() !== 'renter'): ?>
-                    <?= nav_link('/dashboard/committees.php', 'committees', 'Committees', 'committees', $active) ?>
-                <?php endif; ?>
-                <?= nav_link('/dashboard/concerns.php', 'concerns', 'Feedback', 'concerns', $active) ?>
-                <?php if (viewing_role() !== 'renter'): ?>
-                    <?= nav_link('/dashboard/arc.php', 'documents', 'Arch. review', 'arc', $active) ?>
-                <?php endif; ?>
-                <?php if (role_can_manage(viewing_role()) || can_do('read_violations')): ?>
-                    <?= nav_link('/dashboard/violations.php', 'violations', 'Violations', 'violations', $active) ?>
-                <?php endif; ?>
-                <?php if (role_can_manage(viewing_role()) || can_do('read_work_orders')): ?>
-                    <?= nav_link('/dashboard/work-orders.php', 'concerns', 'Work orders', 'work-orders', $active) ?>
-                <?php endif; ?>
-                <?php if (in_array(viewing_role(), ['board_admin','board_member','property_manager','super_admin'], true)): ?>
-                    <?= nav_link('/dashboard/meetings.php', 'meetings', 'Meetings', 'meetings', $active) ?>
-                <?php endif; ?>
-                <?php if (!in_array(viewing_role(), ['renter', 'staff'], true)): ?>
-                    <?= nav_link('/dashboard/voting.php', 'voting', 'Voting', 'voting', $active) ?>
-                <?php endif; ?>
+                <?= nav_link('/dashboard/committees.php',  'committees', 'Committees',   'committees',  $active) ?>
+                <?= nav_link('/dashboard/concerns.php',    'concerns',   'Feedback',     'concerns',    $active) ?>
+                <?= nav_link('/dashboard/arc.php',         'documents',  'Arch. review', 'arc',         $active) ?>
+                <?= nav_link('/dashboard/violations.php',  'violations', 'Violations',   'violations',  $active) ?>
+                <?= nav_link('/dashboard/work-orders.php', 'concerns',   'Work orders',  'work-orders', $active) ?>
+                <?= nav_link('/dashboard/meetings.php',    'meetings',   'Meetings',     'meetings',    $active) ?>
+                <?= nav_link('/dashboard/voting.php',      'voting',     'Voting',       'voting',      $active) ?>
             <?php $navGroup('governance', 'Governance', ob_get_clean()); ?>
 
-            <?php if (role_can_manage(viewing_role())): ?>
             <?php ob_start(); ?>
                 <?= nav_link('/dashboard/units.php',     'units',     'Units',     'units',     $active) ?>
                 <?= nav_link('/dashboard/parking.php',   'parking',   'Parking',   'parking',   $active) ?>
@@ -608,7 +643,7 @@ if ($page_layout === 'app' && isset($association) && $association):
 
             <?php ob_start(); ?>
                 <?= nav_link('/dashboard/activity.php', 'activity', 'Activity', 'activity', $active) ?>
-                <?= nav_link('/dashboard/settings.php',   'settings', 'Settings', 'settings', $active) ?>
+                <?= nav_link('/dashboard/settings.php', 'settings', 'Settings', 'settings', $active) ?>
                 <?php if (!empty($association['subdomain'])): ?>
                 <a class="side-nav__link" href="/<?= e((string)$association['subdomain']) ?>/" target="_blank" rel="noopener" title="Open the public community landing in a new tab">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
@@ -617,12 +652,83 @@ if ($page_layout === 'app' && isset($association) && $association):
                 <?php endif; ?>
             <?php $navGroup('configuration', 'Configuration', ob_get_clean()); ?>
 
-            <?php else: ?>
-            <?php if (viewing_role() !== 'renter'): ?>
+            <?php elseif (viewing_role() !== 'renter'): /* ── MEMBER (owner/staff) nav ── */ ?>
+
+            <?php ob_start(); ?>
+                <?= nav_link('/dashboard/',                   'home',        'Home',          'home',           $active) ?>
+                <?= nav_link('/dashboard/communications.php', 'communications', 'Announcements', 'communications', $active) ?>
+                <?= nav_link('/dashboard/events.php',         'committees',  'Events',        'events',         $active) ?>
+                <?= nav_link('/dashboard/marketplace.php',    'marketplace', 'Marketplace',   'marketplace',    $active) ?>
+                <?= nav_link('/dashboard/media.php',          'media',       'Media',         'media',          $active) ?>
+                <?php if (can_do('submit_listing')): ?>
+                    <?= nav_link('/dashboard/listings.php', 'listings', 'Listings', 'listings', $active) ?>
+                <?php endif; ?>
+            <?php $navGroup('community', 'Community', ob_get_clean()); ?>
+
+            <?php ob_start(); ?>
+                <?= nav_link('/dashboard/documents.php', 'documents', 'Documents',      'documents', $active) ?>
+                <?= nav_link('/dashboard/forms.php',     'documents', 'Forms',          'forms',     $active) ?>
+                <?= nav_link('/dashboard/search.php',    'rules',     'Rules & Bylaws', 'rules',     $active) ?>
+                <?= nav_link('/dashboard/faq.php',       'rules',     'FAQ',            'faq',       $active) ?>
+                <?= nav_link('/dashboard/legal.php',     'legal',     'Legal',          'legal',     $active) ?>
+                <?php if (can_do('read_minutes')): ?>
+                    <?= nav_link('/dashboard/minutes.php', 'minutes', 'Minutes', 'minutes', $active) ?>
+                <?php endif; ?>
+            <?php $navGroup('my-hoa', 'My HOA', ob_get_clean()); ?>
+
+            <?php ob_start(); ?>
+                <?= nav_link('/dashboard/committees.php', 'committees', 'Committees',   'committees', $active) ?>
+                <?= nav_link('/dashboard/concerns.php',   'concerns',   'Feedback',     'concerns',   $active) ?>
+                <?= nav_link('/dashboard/arc.php',        'documents',  'Arch. review', 'arc',        $active) ?>
+                <?php if (viewing_role() !== 'staff'): ?>
+                    <?= nav_link('/dashboard/voting.php', 'voting', 'Voting', 'voting', $active) ?>
+                <?php endif; ?>
+                <?php if (can_do('read_full_directory')): ?>
+                    <?= nav_link('/dashboard/directory.php', 'directory', 'Owners / Renters', 'directory', $active) ?>
+                <?php endif; ?>
+                <?php if (can_do('read_contacts')): ?>
+                    <?= nav_link('/dashboard/contacts.php', 'contacts', 'Contacts', 'contacts', $active) ?>
+                <?php endif; ?>
+                <?php if (can_do('read_violations')): ?>
+                    <?= nav_link('/dashboard/violations.php', 'violations', 'Violations', 'violations', $active) ?>
+                <?php endif; ?>
+                <?php if (can_do('read_work_orders')): ?>
+                    <?= nav_link('/dashboard/work-orders.php', 'concerns', 'Work orders', 'work-orders', $active) ?>
+                <?php endif; ?>
+            <?php $navGroup('participate', 'Participate', ob_get_clean()); ?>
+
             <div class="side-nav__group">
                 <?= nav_link('/dashboard/settings.php', 'settings', 'Settings', 'settings', $active) ?>
             </div>
-            <?php endif; ?>
+
+            <?php else: /* ── RENTER nav ── */ ?>
+
+            <?php ob_start(); ?>
+                <?= nav_link('/dashboard/',                   'home',        'Home',          'home',           $active) ?>
+                <?= nav_link('/dashboard/communications.php', 'communications', 'Announcements', 'communications', $active) ?>
+                <?= nav_link('/dashboard/events.php',         'committees',  'Events',        'events',         $active) ?>
+                <?= nav_link('/dashboard/marketplace.php',    'marketplace', 'Marketplace',   'marketplace',    $active) ?>
+                <?= nav_link('/dashboard/media.php',          'media',       'Media',         'media',          $active) ?>
+            <?php $navGroup('community', 'Community', ob_get_clean()); ?>
+
+            <?php ob_start(); ?>
+                <?= nav_link('/dashboard/documents.php', 'documents', 'Documents',      'documents', $active) ?>
+                <?= nav_link('/dashboard/forms.php',     'documents', 'Forms',          'forms',     $active) ?>
+                <?= nav_link('/dashboard/search.php',    'rules',     'Rules & Bylaws', 'rules',     $active) ?>
+                <?= nav_link('/dashboard/faq.php',       'rules',     'FAQ',            'faq',       $active) ?>
+                <?= nav_link('/dashboard/legal.php',     'legal',     'Legal',          'legal',     $active) ?>
+            <?php $navGroup('reference', 'Reference', ob_get_clean()); ?>
+
+            <?php ob_start(); ?>
+                <?= nav_link('/dashboard/concerns.php', 'concerns', 'Feedback', 'concerns', $active) ?>
+                <?php if (can_do('read_work_orders')): ?>
+                    <?= nav_link('/dashboard/work-orders.php', 'concerns', 'Work orders', 'work-orders', $active) ?>
+                <?php endif; ?>
+                <?php if (can_do('read_violations')): ?>
+                    <?= nav_link('/dashboard/violations.php', 'violations', 'Violations', 'violations', $active) ?>
+                <?php endif; ?>
+            <?php $navGroup('participate', 'Participate', ob_get_clean()); ?>
+
             <?php endif; ?>
         <?php else: /* admin */ ?>
             <?= nav_link('/admin/',                    'overview',       'Overview',       'overview',       $active) ?>
@@ -631,6 +737,7 @@ if ($page_layout === 'app' && isset($association) && $association):
             <?= nav_link('/admin/activity.php',        'activity',       'Activity',       'activity',       $active) ?>
             <?= nav_link('/admin/changelog.php',       'documents',      'Changelog',      'changelog',      $active) ?>
             <?= nav_link('/admin/legal.php',           'legal',          'Legal / Laws',   'legal',          $active) ?>
+            <?= nav_link('/admin/help.php',            'rules',          'Help Topics',    'help_admin',     $active) ?>
         <?php endif; ?>
         </div>
 
