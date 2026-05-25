@@ -9,7 +9,7 @@ require __DIR__ . '/includes/header.php';
 <section class="hero hero--video">
     <video class="hero__video" autoplay muted loop playsinline preload="auto"
            poster="/assets/images/hero-poster.png" aria-hidden="true">
-        <source src="/assets/videos/badasshoa_hero-2026.mp4" type="video/mp4">
+        <source src="/assets/videos/badasshoa_hero_2026b.mp4" type="video/mp4">
     </video>
     <div class="hero__overlay" aria-hidden="true"></div>
 
