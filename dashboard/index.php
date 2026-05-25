@@ -152,6 +152,48 @@ if ($canManage) {
 }
 
 $user = current_user();
+$isResidentView = in_array(viewing_role(), ['owner', 'renter']);
+
+// Resident-specific data — open concerns + open WOs for their unit + audience-filtered announcements.
+$residentOpenConcerns = 0;
+$residentOpenWOs = 0;
+$residentAnnouncements = [];
+if ($isResidentView) {
+    $rcStmt = db()->prepare(
+        "SELECT COUNT(*) FROM concerns
+          WHERE association_id = ? AND submitter_user_id = ?
+            AND status NOT IN ('closed','resolved')"
+    );
+    $rcStmt->execute([$assocId, $user['id']]);
+    $residentOpenConcerns = (int)$rcStmt->fetchColumn();
+
+    if (!empty($user['unit_number'])) {
+        $rwStmt = db()->prepare(
+            "SELECT COUNT(*) FROM work_orders wo
+               JOIN units u ON u.id = wo.unit_id
+              WHERE wo.association_id = ?
+                AND u.unit_number = ?
+                AND u.association_id = ?
+                AND wo.status NOT IN ('completed','closed')"
+        );
+        $rwStmt->execute([$assocId, $user['unit_number'], $assocId]);
+        $residentOpenWOs = (int)$rwStmt->fetchColumn();
+    }
+
+    // Audience-filtered: owners see 'all'+'owners', renters see 'all'+'renters'
+    $audList = viewing_role() === 'renter' ? ['all', 'renters'] : ['all', 'owners'];
+    $audPh   = implode(',', array_fill(0, count($audList), '?'));
+    $raStmt  = db()->prepare(
+        "SELECT a.id, a.title, a.body, a.type, a.audience, a.published_at,
+                CONCAT(IFNULL(u.first_name,''), ' ', IFNULL(u.last_name,'')) AS author
+           FROM announcements a LEFT JOIN users u ON u.id = a.author_id
+          WHERE a.association_id = ? AND a.audience IN ($audPh)
+          ORDER BY a.published_at DESC LIMIT 8"
+    );
+    $raStmt->execute(array_merge([$assocId], $audList));
+    $residentAnnouncements = $raStmt->fetchAll();
+}
+
 $hour = (int)date('G');
 $greet = $hour < 12 ? 'Good morning' : ($hour < 18 ? 'Good afternoon' : 'Good evening');
 
@@ -307,6 +349,7 @@ require __DIR__ . '/../includes/header.php';
         })();
     </script>
 
+    <?php if (!$isResidentView): ?>
     <style>
         /* 6-up tile grid that steps down gracefully on narrower viewports. */
         .dashboard-stats { display:grid; grid-template-columns: repeat(6, 1fr); gap: var(--sp-2); margin-bottom: var(--sp-8); }
@@ -438,7 +481,11 @@ require __DIR__ . '/../includes/header.php';
             </div>
         </a>
     </div>
+    <?php endif; /* !$isResidentView stats grid */ ?>
 
+    <?php if ($isResidentView): ?>
+    <?php include __DIR__ . '/partials/resident_dashboard.php'; ?>
+    <?php else: ?>
     <div class="dash-split" style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--sp-5); align-items: start;">
 
         <div class="card card--padded">
@@ -602,6 +649,8 @@ require __DIR__ . '/../includes/header.php';
         </div>
     </a>
     <?php endif; ?>
+
+    <?php endif; /* else: board layout */ ?>
 
 </div>
 
