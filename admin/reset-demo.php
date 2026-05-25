@@ -413,7 +413,7 @@ function demo_phone(): string
  * File copy helpers (PHP-only; shell_exec is disabled on Hostinger).
  * ------------------------------------------------------------------------- */
 
-function rcopy(string $src, string $dst): void
+function rcopy(string $src, string $dst, array $skipRelPaths = []): void
 {
     if (!is_dir($src)) return;
     if (!is_dir($dst) && !mkdir($dst, 0755, true)) {
@@ -425,6 +425,14 @@ function rcopy(string $src, string $dst): void
     );
     foreach ($it as $item) {
         $rel = substr($item->getPathname(), strlen($src) + 1);
+        // Skip anything inside one of the skip prefixes — e.g. "branding"
+        // skips both "branding" (the dir) and "branding/logo.png" (any file
+        // beneath it). Preserves whatever logo / hero the demo has on disk.
+        foreach ($skipRelPaths as $skip) {
+            if ($rel === $skip || str_starts_with($rel, $skip . '/')) {
+                continue 2;
+            }
+        }
         $to  = $dst . '/' . $rel;
         if ($item->isDir()) {
             if (!is_dir($to) && !mkdir($to, 0755, true)) {
@@ -468,8 +476,17 @@ function do_reset(int $sourceId, int $targetId, array $cloneOrder, array $wipeOn
 
     // 1. Pre-step: stage file copy outside the DB transaction. Idempotent —
     //    delete any leftover .new from a failed previous run.
+    //
+    //    Skip the source's branding/ subdir so the demo keeps whatever
+    //    logo/hero it currently has on disk (instead of inheriting the
+    //    source's). After we copy the rest from source, we lay the target's
+    //    EXISTING branding/ dir back on top of the staging directory so it
+    //    survives the swap-in below.
     if (is_dir($newDir)) rrmdir($newDir);
-    if (is_dir($srcDir)) rcopy($srcDir, $newDir);
+    if (is_dir($srcDir)) rcopy($srcDir, $newDir, ['branding']);
+    if (is_dir("$tgtDir/branding")) {
+        rcopy("$tgtDir/branding", "$newDir/branding");
+    }
 
     $counts = ['wiped' => [], 'cloned' => []];
 
