@@ -490,7 +490,7 @@ require __DIR__ . '/../includes/header.php';
         <div class="card__head">
             <h3 class="card__title">Edit association <code class="muted" style="font-weight:400; font-size: var(--fs-base);">#<?= (int)$editAssoc['id'] ?></code></h3>
             <div class="row" style="gap: var(--sp-3); align-items: center;">
-                <?php if (in_array((int)$editAssoc['id'], [4], true)): ?>
+                <?php if (in_array((int)$editAssoc['id'], [2], true)): ?>
                     <a class="btn btn--danger-ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);"
                        href="/admin/reset-demo.php?source=1&target=<?= (int)$editAssoc['id'] ?>">
                         Reset demo from Bellair →

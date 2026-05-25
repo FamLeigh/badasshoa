@@ -6,7 +6,7 @@ declare(strict_types=1);
 // randomized. Super-admin only. Destructive — wipes the target's existing
 // rows in every association-scoped table.
 //
-// Usage: /admin/reset-demo.php?source=1&target=4
+// Usage: /admin/reset-demo.php?source=1&target=2
 //
 // Add new demo / sandbox IDs to ALLOWED_TARGET_IDS to enable resetting them.
 //
@@ -19,7 +19,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/_bootstrap.php';
 
-const ALLOWED_TARGET_IDS = [4];
+const ALLOWED_TARGET_IDS = [2];
 
 /* ---------------------------------------------------------------------------
  * FK column → parent table. Any column matching one of these keys in any
@@ -269,7 +269,7 @@ $PII_SCRUB = [
  * ------------------------------------------------------------------------- */
 
 $sourceId = (int)($_GET['source'] ?? $_POST['source'] ?? 1);
-$targetId = (int)($_GET['target'] ?? $_POST['target'] ?? 4);
+$targetId = (int)($_GET['target'] ?? $_POST['target'] ?? 2);
 
 if ($sourceId === $targetId) {
     http_response_code(400);
