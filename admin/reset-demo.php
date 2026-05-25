@@ -701,8 +701,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $demoEmail    = trim((string)($_POST['demo_email'] ?? 'demo@badasshoa.com'));
     $demoPassword = (string)($_POST['demo_password'] ?? '');
 
-    if ($confirmSlug !== (string)$target['subdomain']) {
-        $flashError = 'You must type the target slug exactly: ' . $target['subdomain'];
+    if (strtolower(trim($confirmSlug)) !== strtolower((string)$target['subdomain'])) {
+        $flashError = 'You must type the target slug to confirm: ' . $target['subdomain'];
     } elseif (strlen($demoPassword) < 6) {
         $flashError = 'Demo password must be at least 6 characters.';
     } elseif (!filter_var($demoEmail, FILTER_VALIDATE_EMAIL)) {
@@ -854,8 +854,8 @@ require __DIR__ . '/../includes/header.php';
                     Type the target slug to confirm: <code><?= e((string)$target['subdomain']) ?></code>
                 </label>
                 <input class="input" id="confirm_slug" name="confirm_slug" autocomplete="off" required
-                       placeholder="<?= e((string)$target['subdomain']) ?>"
-                       oninput="document.getElementById('do-reset').disabled = (this.value !== <?= json_encode((string)$target['subdomain']) ?>);">
+                       placeholder="<?= e((string)$target['subdomain']) ?>">
+                <div id="confirm_slug_hint" class="field__hint" style="margin-top: var(--sp-1);">Match is case-insensitive and trims whitespace.</div>
             </div>
 
             <div class="row" style="justify-content: flex-end; gap: var(--sp-3); margin-top: var(--sp-4);">
@@ -865,6 +865,35 @@ require __DIR__ . '/../includes/header.php';
                     Wipe &amp; rebuild demo
                 </button>
             </div>
+
+            <script>
+            (function () {
+                var TARGET_SLUG = <?= json_encode(strtolower((string)$target['subdomain'])) ?>;
+                var input  = document.getElementById('confirm_slug');
+                var btn    = document.getElementById('do-reset');
+                var hint   = document.getElementById('confirm_slug_hint');
+
+                function evaluate() {
+                    var v = (input.value || '').trim().toLowerCase();
+                    var ok = (v === TARGET_SLUG);
+                    btn.disabled = !ok;
+                    if (v === '') {
+                        hint.textContent = 'Match is case-insensitive and trims whitespace.';
+                        hint.style.color = '';
+                    } else if (ok) {
+                        hint.textContent = '✓ Slug matches — ready to wipe & rebuild.';
+                        hint.style.color = 'var(--color-success, #1f7a4e)';
+                    } else {
+                        hint.textContent = '✗ Doesn’t match — expected "' + TARGET_SLUG + '".';
+                        hint.style.color = 'var(--color-error, #c0382b)';
+                    }
+                }
+
+                input.addEventListener('input', evaluate);
+                input.addEventListener('change', evaluate);
+                evaluate();
+            })();
+            </script>
         </form>
     </div>
 
