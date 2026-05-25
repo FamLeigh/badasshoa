@@ -161,6 +161,7 @@ $residentAnnouncements = [];
 $residentEmergencyAnn = null;
 $residentRecentConcerns = [];
 $residentUnit = null;
+$residentOccupants = [];
 $residentBoardContacts = [];
 if ($isResidentView) {
     $rcStmt = db()->prepare(
@@ -184,11 +185,32 @@ if ($isResidentView) {
         $residentOpenWOs = (int)$rwStmt->fetchColumn();
 
         $ruStmt = db()->prepare(
-            'SELECT id, unit_number, type, bedrooms, baths, square_footage
+            'SELECT id, unit_number, type, bedrooms, baths, square_footage,
+                    annual_hoa_assessment, annual_garage_assessment
                FROM units WHERE association_id = ? AND unit_number = ? LIMIT 1'
         );
         $ruStmt->execute([$assocId, $user['unit_number']]);
         $residentUnit = $ruStmt->fetch() ?: null;
+
+        // Occupants for the unit (owners, co-owners, tenants) so the unit
+        // ribbon shows "Owners: X, Y" instead of just the logged-in user's
+        // is_owner flag. Falls back to empty array if the unit isn't tracked
+        // in unit_occupants yet.
+        $residentOccupants = [];
+        if ($residentUnit) {
+            $oqStmt = db()->prepare(
+                "SELECT uo.role, uo.is_primary,
+                        u.first_name, u.last_name
+                   FROM unit_occupants uo
+                   JOIN users u ON u.id = uo.user_id
+                  WHERE uo.unit_id = ?
+                  ORDER BY FIELD(uo.role, 'owner','co_owner','tenant'),
+                           uo.is_primary DESC,
+                           u.last_name, u.first_name"
+            );
+            $oqStmt->execute([(int)$residentUnit['id']]);
+            $residentOccupants = $oqStmt->fetchAll();
+        }
     }
 
     // Audience-filtered: owners see 'all'+'owners', renters see 'all'+'renters'

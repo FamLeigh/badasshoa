@@ -3,8 +3,8 @@
 // Included from dashboard/index.php — shares its variable scope.
 // Available: $residentOpenConcerns, $residentOpenWOs, $residentAnnouncements,
 //            $residentEmergencyAnn, $residentRecentConcerns, $residentUnit,
-//            $residentBoardContacts, $upcomingEvents, $mkListings,
-//            $assocId, $user, $association, $stats
+//            $residentOccupants, $residentBoardContacts, $upcomingEvents,
+//            $mkListings, $assocId, $user, $association, $stats
 $hasMaintenance = $residentOpenWOs > 0;
 $newCutoff      = strtotime('-7 days');
 $concernLabels  = [
@@ -25,24 +25,6 @@ $concernBadge = function (string $s): string {
 ?>
 
 <style>
-    /* Top help search */
-    .res-help {
-        display: flex; gap: var(--sp-2); align-items: center;
-        max-width: 560px; margin: 0 0 var(--sp-5);
-    }
-    .res-help input {
-        flex: 1; padding: var(--sp-2) var(--sp-3);
-        border: 1px solid var(--color-border); border-radius: var(--r-md);
-        font-size: var(--fs-sm); background: var(--color-surface);
-    }
-    .res-help input:focus { outline: 2px solid var(--color-navy); outline-offset: 0; }
-    .res-help button {
-        padding: var(--sp-2) var(--sp-4);
-        background: var(--color-navy); color: #fff;
-        border: 0; border-radius: var(--r-md); cursor: pointer;
-        font-size: var(--fs-sm); font-weight: 600;
-    }
-
     /* Emergency lane */
     .res-emergency {
         display: flex; gap: var(--sp-3); align-items: flex-start;
@@ -189,12 +171,6 @@ $concernBadge = function (string $s): string {
     .res-board__all:hover { background: rgba(255,255,255,0.22); }
 </style>
 
-<!-- Help search -->
-<form class="res-help" action="/dashboard/help.php" method="get" role="search" aria-label="Search help">
-    <input type="search" name="q" placeholder="Search help — &ldquo;guest pass&rdquo;, &ldquo;pool hours&rdquo;, &ldquo;dues&rdquo;…" autocomplete="off">
-    <button type="submit">Help</button>
-</form>
-
 <?php if ($residentEmergencyAnn):
     $emTs = strtotime((string)$residentEmergencyAnn['published_at']);
 ?>
@@ -224,13 +200,38 @@ $concernBadge = function (string $s): string {
 </div>
 <?php endif; ?>
 
-<?php if (!empty($user['unit_number'])): ?>
+<?php if (!empty($user['unit_number'])):
+    // Split occupants into owners (owner + co_owner) and tenants for the ribbon.
+    $occOwners  = [];
+    $occTenants = [];
+    foreach (($residentOccupants ?? []) as $_occ) {
+        $_nm = trim(((string)$_occ['first_name']) . ' ' . ((string)$_occ['last_name']));
+        if ($_nm === '') continue;
+        if (in_array($_occ['role'], ['owner','co_owner'], true)) {
+            $occOwners[] = $_nm;
+        } else {
+            $occTenants[] = $_nm;
+        }
+    }
+    $monthlyHoa = null;
+    if ($residentUnit && !empty($residentUnit['annual_hoa_assessment'])) {
+        $monthlyHoa = ((float)$residentUnit['annual_hoa_assessment']) / 12.0;
+    }
+?>
 <div class="res-myunit">
     <div class="res-myunit__num">
         <small>Your unit</small><?= e((string)$user['unit_number']) ?>
     </div>
     <div class="res-myunit__facts">
-        <span><?= !empty($user['is_owner']) ? 'Owner' : 'Renter' ?></span>
+        <?php if ($occOwners): ?>
+            <span title="Owners on file"><strong>Owner<?= count($occOwners) > 1 ? 's' : '' ?>:</strong> <?= e(implode(', ', $occOwners)) ?></span>
+        <?php endif; ?>
+        <?php if ($occTenants): ?>
+            <span title="Tenants on file"><strong>Tenant<?= count($occTenants) > 1 ? 's' : '' ?>:</strong> <?= e(implode(', ', $occTenants)) ?></span>
+        <?php endif; ?>
+        <?php if (!$occOwners && !$occTenants): /* fall back if unit_occupants is empty for this unit */ ?>
+            <span><?= !empty($user['is_owner']) ? 'Owner' : 'Renter' ?></span>
+        <?php endif; ?>
         <?php if ($residentUnit && !empty($residentUnit['type'])): ?>
             <span><?= e(ucfirst(str_replace('_',' ',(string)$residentUnit['type']))) ?></span>
         <?php endif; ?>
@@ -242,6 +243,9 @@ $concernBadge = function (string $s): string {
         <?php endif; ?>
         <?php if ($residentUnit && !empty($residentUnit['square_footage'])): ?>
             <span><?= number_format((int)$residentUnit['square_footage']) ?> sq ft</span>
+        <?php endif; ?>
+        <?php if ($monthlyHoa !== null): ?>
+            <span title="Monthly HOA assessment (annual ÷ 12)"><strong>$<?= number_format($monthlyHoa, 2) ?>/mo</strong> HOA</span>
         <?php endif; ?>
     </div>
 </div>

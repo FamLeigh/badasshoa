@@ -13,6 +13,7 @@ $canManage = role_can_manage(viewing_role());
 $q = trim((string)($_GET['q'] ?? ''));
 
 $results = [
+    'help'          => [],
     'rules'         => [],
     'documents'     => [],
     'announcements' => [],
@@ -211,6 +212,32 @@ if ($q !== '' && strlen($q) >= 2) {
     );
     $fStmt->execute([$assocId, $like, $like]);
     $results['faqs'] = $fStmt->fetchAll();
+
+    // Help topics — global table, filtered by min_role.
+    // ROLE_RANK gates which topics are visible to the viewer's current role.
+    $roleRank = [
+        'renter' => 1, 'staff' => 2, 'owner' => 3, 'property_manager' => 4,
+        'board_member' => 5, 'board_admin' => 6, 'super_admin' => 7,
+    ];
+    $viewRank = $roleRank[viewing_role()] ?? 1;
+    $allowedMinRoles = [];
+    foreach ($roleRank as $r => $rk) {
+        if ($rk <= $viewRank) $allowedMinRoles[] = $r;
+    }
+    if ($allowedMinRoles) {
+        $minPh = implode(',', array_fill(0, count($allowedMinRoles), '?'));
+        $hStmt = db()->prepare(
+            "SELECT id, slug, title, category
+               FROM help_topics
+              WHERE active = 1
+                AND min_role IN ($minPh)
+                AND (title LIKE ? OR body LIKE ? OR category LIKE ?)
+              ORDER BY category, sort_order, title
+              LIMIT 15"
+        );
+        $hStmt->execute(array_merge($allowedMinRoles, [$like, $like, $like]));
+        $results['help'] = $hStmt->fetchAll();
+    }
 }
 
 $totalHits = array_sum(array_map('count', $results));
@@ -223,13 +250,13 @@ require __DIR__ . '/../includes/header.php';
 
     <form method="get" class="search-bar" style="margin-bottom: var(--sp-5);">
         <span aria-hidden="true">🔎</span>
-        <input type="search" name="q" autofocus placeholder="Search everything — rules, documents, members, events, concerns…" value="<?= e($q) ?>" required minlength="2">
+        <input type="search" name="q" autofocus placeholder="Search everything — help, rules, documents, members, events…" value="<?= e($q) ?>" required minlength="2">
         <button class="btn btn--primary" type="submit">Search</button>
     </form>
 
     <?php if ($q === ''): ?>
         <div class="card card--padded center" style="padding: var(--sp-8) var(--sp-6);">
-            <p class="muted">Type at least two characters to search across rules, documents, announcements, events, concerns, ARC requests, and members.</p>
+            <p class="muted">Type at least two characters to search across help topics, rules, documents, announcements, events, concerns, ARC requests, and members.</p>
         </div>
     <?php elseif (strlen($q) < 2): ?>
         <p class="muted">Type at least two characters.</p>
@@ -245,6 +272,7 @@ require __DIR__ . '/../includes/header.php';
 
         <?php
         $sections = [
+            'help'          => ['label' => '❔ Help topics',      'href' => fn($r) => '/dashboard/help.php?topic=' . urlencode((string)$r['slug'])],
             'rules'         => ['label' => '📜 Rules',           'href' => fn($r) => '/dashboard/rule.php?id=' . (int)$r['id']],
             'documents'     => ['label' => '📄 Documents',       'href' => fn($r) => !empty($r['file_path']) ? '/dashboard/file.php?type=document&id=' . (int)$r['id'] : '/dashboard/document.php?id=' . (int)$r['id']],
             'announcements' => ['label' => '📣 Announcements',   'href' => fn($r) => '/dashboard/communications.php?id=' . (int)$r['id']],
@@ -329,6 +357,9 @@ require __DIR__ . '/../includes/header.php';
                             </div>
                         <?php elseif ($key === 'faqs'): ?>
                             <a href="<?= e($href) ?>"><strong><?= e((string)$r['question']) ?></strong></a>
+                        <?php elseif ($key === 'help'): ?>
+                            <a href="<?= e($href) ?>"><strong><?= e((string)$r['title']) ?></strong></a>
+                            <?php if (!empty($r['category'])): ?><span class="muted" style="font-size: var(--fs-xs);"> · <?= e((string)$r['category']) ?></span><?php endif; ?>
                         <?php endif; ?>
                     </li>
                 <?php endforeach; ?>

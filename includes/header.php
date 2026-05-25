@@ -44,6 +44,7 @@ function nav_icon(string $name): string
         case 'menu':           return "<svg $base><line x1='3' y1='12' x2='21' y2='12'/><line x1='3' y1='6' x2='21' y2='6'/><line x1='3' y1='18' x2='21' y2='18'/></svg>";
         case 'collapse':       return "<svg $base><rect x='3' y='3' width='18' height='18' rx='2' ry='2'/><line x1='9' y1='3' x2='9' y2='21'/></svg>";
         case 'logout':         return "<svg $base><path d='M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4'/><polyline points='16 17 21 12 16 7'/><line x1='21' y1='12' x2='9' y2='12'/></svg>";
+        case 'help':           return "<svg $base><circle cx='12' cy='12' r='10'/><path d='M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3'/><line x1='12' y1='17' x2='12.01' y2='17'/></svg>";
     }
     return '';
 }
@@ -475,7 +476,7 @@ if ($page_layout === 'app' && isset($association) && $association):
     <?php if ($page_layout === 'app'): ?>
     <form action="/dashboard/find.php" method="get" class="topbar-search" role="search">
         <span class="topbar-search__icon" aria-hidden="true">🔎</span>
-        <input type="search" name="q" placeholder="Search everything…" autocomplete="off" minlength="2" required value="<?= e((string)($_GET['q'] ?? '')) ?>">
+        <input type="search" name="q" placeholder="Search everything — help, rules, docs, members…" autocomplete="off" minlength="2" required value="<?= e((string)($_GET['q'] ?? '')) ?>">
     </form>
     <?php endif; ?>
 
@@ -524,41 +525,7 @@ if ($page_layout === 'app' && isset($association) && $association):
     <?php endif; ?>
 
     <div class="topbar-user">
-        <?php
-        $_tbRealRole = (string)($_SESSION['role'] ?? '');
-        $_tbBack     = e((string)($_SERVER['REQUEST_URI'] ?? '/dashboard/'));
-        if (in_array($_tbRealRole, ['board_admin', 'board_member'], true)):
-            if (is_viewing_as()): // currently in member view — offer board view
-        ?>
-        <form class="topbar-mode-switch" method="post" action="/dashboard/view-as.php" style="margin:0;display:flex;align-items:center;gap:var(--sp-2);">
-            <?= csrf_field() ?>
-            <input type="hidden" name="role" value="exit">
-            <input type="hidden" name="back" value="<?= $_tbBack ?>">
-            <span class="topbar-view-as__label" style="font-size:var(--fs-sm);opacity:.7;">Member view</span>
-            <button class="btn btn--sm btn--primary" type="submit" title="Switch to board admin view">
-                Board view →
-            </button>
-        </form>
-        <?php   else: // currently in board view — offer member view ?>
-        <form class="topbar-mode-switch" method="post" action="/dashboard/view-as.php" style="margin:0;display:flex;align-items:center;gap:var(--sp-2);">
-            <?= csrf_field() ?>
-            <input type="hidden" name="back" value="<?= $_tbBack ?>">
-            <span class="topbar-view-as__label" style="font-size:var(--fs-sm);opacity:.7;">Board view</span>
-            <button class="btn btn--sm btn--ghost" type="submit" name="role" value="owner" title="Switch to member view">
-                ← Member view
-            </button>
-        </form>
-        <?php   endif;
-        elseif (role_can_manage($_tbRealRole) && !is_viewing_as()): // PM / super_admin
-        ?>
-        <form class="topbar-view-as" method="post" action="/dashboard/view-as.php">
-            <?= csrf_field() ?>
-            <input type="hidden" name="back" value="<?= $_tbBack ?>">
-            <span class="topbar-view-as__label">View as</span>
-            <button class="topbar-view-as__btn" type="submit" name="role" value="owner">Owner</button>
-            <button class="topbar-view-as__btn" type="submit" name="role" value="renter">Renter</button>
-        </form>
-        <?php endif; ?>
+        <?php /* View-as switcher moved to the top of the left sidebar (see side-nav__viewas). */ ?>
         <a class="topbar-user__profile" href="/dashboard/profile.php" title="Edit profile">
             <span class="topbar-user__avatar">
                 <?php if ($_tbAvatar): ?>
@@ -602,6 +569,82 @@ if ($page_layout === 'app' && isset($association) && $association):
         <div class="side-nav__brand-sub">
             <span class="side-nav__brand-tag">Admin</span>
         </div>
+        <?php endif; ?>
+
+        <?php
+        // ── View-as switcher (top of sidebar) ──────────────────────────────
+        // For anyone with manage capability (board_admin, board_member,
+        // property_manager, super_admin), show a 3-way toggle: Board /
+        // Member / Renter. "Board" = real role (exit view-as). "Member" =
+        // view_as=owner. "Renter" = view_as=renter.
+        $_vaRealRole = (string)($_SESSION['role'] ?? '');
+        $_vaShow     = ($page_layout === 'app') && role_can_manage($_vaRealRole);
+        if ($_vaShow):
+            $_vaCurrent = is_viewing_as()
+                ? (($_SESSION['view_as_role'] ?? '') === 'renter' ? 'renter' : 'member')
+                : 'board';
+            $_vaBack = e((string)($_SERVER['REQUEST_URI'] ?? '/dashboard/'));
+        ?>
+        <div class="side-nav__viewas">
+            <div class="side-nav__viewas-label">Viewing as</div>
+            <form method="post" action="/dashboard/view-as.php" class="side-nav__viewas-group">
+                <?= csrf_field() ?>
+                <input type="hidden" name="back" value="<?= $_vaBack ?>">
+                <button type="submit" name="role" value="exit"
+                        class="side-nav__viewas-btn<?= $_vaCurrent === 'board'  ? ' is-active' : '' ?>"
+                        title="See the portal as a board admin">Board</button>
+                <button type="submit" name="role" value="owner"
+                        class="side-nav__viewas-btn<?= $_vaCurrent === 'member' ? ' is-active' : '' ?>"
+                        title="See the portal as an owner / member">Member</button>
+                <button type="submit" name="role" value="renter"
+                        class="side-nav__viewas-btn<?= $_vaCurrent === 'renter' ? ' is-active' : '' ?>"
+                        title="See the portal as a renter">Renter</button>
+            </form>
+        </div>
+        <style>
+            .side-nav__viewas {
+                padding: var(--sp-3) var(--sp-4) var(--sp-2);
+                border-bottom: 1px solid var(--color-border);
+                margin-bottom: var(--sp-2);
+            }
+            .side-nav__viewas-label {
+                font-size: var(--fs-xs);
+                text-transform: uppercase;
+                letter-spacing: 0.08em;
+                color: var(--color-text-soft);
+                margin-bottom: var(--sp-2);
+                font-weight: 600;
+            }
+            .side-nav__viewas-group {
+                display: flex;
+                gap: 0;
+                background: var(--color-surface);
+                border: 1px solid var(--color-border);
+                border-radius: var(--r-md);
+                overflow: hidden;
+                padding: 0;
+                margin: 0;
+            }
+            .side-nav__viewas-btn {
+                flex: 1;
+                padding: var(--sp-1) var(--sp-2);
+                background: transparent;
+                color: var(--color-text-soft);
+                border: 0;
+                border-right: 1px solid var(--color-border);
+                font-size: var(--fs-xs);
+                font-weight: 600;
+                cursor: pointer;
+                transition: background 0.1s, color 0.1s;
+            }
+            .side-nav__viewas-btn:last-child { border-right: 0; }
+            .side-nav__viewas-btn:hover { background: rgba(15,31,61,0.06); color: var(--color-text); }
+            .side-nav__viewas-btn.is-active {
+                background: var(--color-navy);
+                color: #fff;
+            }
+            .side-nav.is-collapsed .side-nav__viewas { display: none; }
+        </style>
         <?php endif; ?>
 
         <div class="side-nav__links">
@@ -651,6 +694,7 @@ if ($page_layout === 'app' && isset($association) && $association):
                 <?= nav_link('/dashboard/forms.php',     'documents', 'Forms',          'forms',     $active) ?>
                 <?= nav_link('/dashboard/search.php',    'rules',     'Rules & Bylaws', 'rules',     $active) ?>
                 <?= nav_link('/dashboard/legal.php',     'legal',     'Legal',          'legal',     $active) ?>
+                <?= nav_link('/dashboard/help.php',      'help',      'Help',           'help',      $active) ?>
                 <?php if (can_do('read_minutes')): ?>
                     <?= nav_link('/dashboard/minutes.php', 'minutes', 'Minutes', 'minutes', $active) ?>
                 <?php endif; ?>
@@ -713,6 +757,7 @@ if ($page_layout === 'app' && isset($association) && $association):
                 <?= nav_link('/dashboard/search.php',    'rules',     'Rules & Bylaws', 'rules',     $active) ?>
                 <?= nav_link('/dashboard/faq.php',       'rules',     'FAQ',            'faq',       $active) ?>
                 <?= nav_link('/dashboard/legal.php',     'legal',     'Legal',          'legal',     $active) ?>
+                <?= nav_link('/dashboard/help.php',      'help',      'Help',           'help',      $active) ?>
                 <?php if (can_do('read_minutes')): ?>
                     <?= nav_link('/dashboard/minutes.php', 'minutes', 'Minutes', 'minutes', $active) ?>
                 <?php endif; ?>
@@ -762,6 +807,7 @@ if ($page_layout === 'app' && isset($association) && $association):
                 <?= nav_link('/dashboard/search.php',    'rules',     'Rules & Bylaws', 'rules',     $active) ?>
                 <?= nav_link('/dashboard/faq.php',       'rules',     'FAQ',            'faq',       $active) ?>
                 <?= nav_link('/dashboard/legal.php',     'legal',     'Legal',          'legal',     $active) ?>
+                <?= nav_link('/dashboard/help.php',      'help',      'Help',           'help',      $active) ?>
             <?php $navGroup('reference', 'Reference', ob_get_clean()); ?>
 
             <?php ob_start(); ?>
