@@ -1,5 +1,14 @@
 [
     {
+        "id": "cl-20260525-pricing-simplified",
+        "at": "2026-05-25T20:30:00-04:00",
+        "type": "content",
+        "title": "Pricing page simplified — two plans, clearer Starter label",
+        "description": "The Enterprise card has been removed from the public pricing page. We now show two plans side by side: Starter (small HOAs) for up to 20 units at $20/mo flat, and Growth for 21+ units at $20 base plus $0.50 per unit over 20. Every plan still includes every feature — there is no tier-gating. The custom-domain add-on at $99/year continues to sit below the plan grid.",
+        "author": "Reboooot",
+        "link": "/pricing.php"
+    },
+    {
         "id": "cl-20260525-custom-domain-pricing",
         "at": "2026-05-25T19:30:00-04:00",
         "type": "content",

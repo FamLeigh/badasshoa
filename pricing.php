@@ -65,10 +65,10 @@ require __DIR__ . '/includes/header.php';
 <section class="section">
     <div class="container">
         <h2 class="center" style="margin-bottom: var(--sp-10);">Plans &amp; features</h2>
-        <div class="grid grid--3">
+        <div class="grid grid--2" style="max-width: 880px; margin: 0 auto;">
 
             <?php
-            // Same feature list rendered under all three cards — every plan
+            // Same feature list rendered under both cards — every plan
             // includes everything; the price card is just about unit count.
             $featureList = <<<HTML
                 <li>✍️ <strong>Electronic signatures</strong> — E-SIGN/UETA audit trail, 14 built-in form types</li>
@@ -89,7 +89,7 @@ require __DIR__ . '/includes/header.php';
             ?>
 
             <div class="price-card">
-                <div class="price-card__name">Starter</div>
+                <div class="price-card__name">Starter <small style="font-weight:500; color:var(--color-text-soft);">(small HOAs)</small></div>
                 <div class="price-card__price">$20<small>/mo</small></div>
                 <div class="price-card__limit">Up to 20 units</div>
                 <ul><?= $featureList ?></ul>
@@ -104,19 +104,11 @@ require __DIR__ . '/includes/header.php';
                 <a class="btn btn--primary" href="/signup.php?plan=growth">Start free trial</a>
             </div>
 
-            <div class="price-card">
-                <div class="price-card__name">Enterprise</div>
-                <div class="price-card__price">Custom</div>
-                <div class="price-card__limit">Multi-property &amp; volume</div>
-                <ul><?= $featureList ?></ul>
-                <a class="btn btn--dark" href="mailto:sales@badasshoa.com?subject=Enterprise%20pricing">Contact sales</a>
-            </div>
-
         </div>
     </div>
 </section>
 
-<section class="section section--tight">
+<section class="section section--tight" id="add-ons">
     <div class="container">
         <div class="center" style="max-width: 680px; margin: 0 auto;">
             <span class="badge">Optional add-on</span>
@@ -163,9 +155,6 @@ require __DIR__ . '/includes/header.php';
             </ul>
         </div>
 
-        <p class="muted center" style="margin-top: var(--sp-10); font-size: var(--fs-sm); max-width: 560px; margin-left: auto; margin-right: auto;">
-            <strong>Enterprise</strong> exists for multi-property portfolios and volume contracts &mdash; same features, custom pricing and onboarding.
-        </p>
     </div>
 </section>
 
