@@ -3,11 +3,11 @@ declare(strict_types=1);
 require __DIR__ . '/_bootstrap.php';
 require_login();
 $canManage = role_can_manage(viewing_role());
-if (!$canManage) { http_response_code(403); die('Access denied'); }
+if (!can_do('submit_listing')) { http_response_code(403); die('Access denied'); }
 
 $assocId  = (int)$_SESSION['association_id'];
 $myUserId = (int)$_SESSION['user_id'];
-$canEdit  = can_do('edit_content');
+$canEdit  = can_do('submit_listing');
 $errors   = [];
 
 $STATUSES = ['active' => 'Active', 'pending' => 'Pending', 'sold' => 'Sold', 'rented' => 'Rented'];

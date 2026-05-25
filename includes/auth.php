@@ -45,6 +45,8 @@ function permission_defaults(): array
         'submit_arc'          => 'owner',
         'read_full_directory' => 'owner',
         'read_documents'      => 'renter',
+        'manage_attractions'  => 'board_member',
+        'submit_listing'      => 'owner',
     ];
 }
 

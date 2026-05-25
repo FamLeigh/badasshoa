@@ -178,6 +178,13 @@ $FEATURES = [
             'submit_arc'          => ['label' => 'Submit ARC requests',     'desc' => 'Who can file an architectural review request.'],
         ],
     ],
+    'community_content' => [
+        'label'    => 'Community content',
+        'features' => [
+            'manage_attractions'  => ['label' => 'Manage area attractions', 'desc' => 'Who can add, edit, and remove entries in the Area Attractions directory. Viewing on the public landing is always open.'],
+            'submit_listing'      => ['label' => 'Post property listings',  'desc' => 'Who can create and manage property listings (for sale / for rent). Board admins can always edit any listing.'],
+        ],
+    ],
 ];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'save_permissions') {

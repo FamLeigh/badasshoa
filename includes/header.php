@@ -546,8 +546,12 @@ if ($page_layout === 'app' && isset($association) && $association):
                 <?= nav_link('/dashboard/events.php',         'committees',     'Events',        'events',         $active) ?>
                 <?= nav_link('/dashboard/faq.php',         'rules',       'FAQ',         'faq',         $active) ?>
                 <?= nav_link('/dashboard/marketplace.php', 'marketplace', 'Marketplace',   'marketplace', $active) ?>
-                <?= nav_link('/dashboard/listings.php',    'listings',    'Listings',       'listings',    $active) ?>
-                <?= nav_link('/dashboard/attractions.php', 'attractions', 'Area Attractions','attractions', $active) ?>
+                <?php if (can_do('submit_listing')): ?>
+                    <?= nav_link('/dashboard/listings.php', 'listings', 'Listings', 'listings', $active) ?>
+                <?php endif; ?>
+                <?php if (can_do('manage_attractions')): ?>
+                    <?= nav_link('/dashboard/attractions.php', 'attractions', 'Area Attractions', 'attractions', $active) ?>
+                <?php endif; ?>
                 <?php if (role_can_manage(viewing_role()) && !empty($association['subdomain']) && !empty($association['tv_pin'])): ?>
                     <a class="side-nav__link" href="<?= e('https://badasshoa.com/tv?slug=' . rawurlencode((string)$association['subdomain']) . '&pin=' . rawurlencode((string)$association['tv_pin'])) ?>" target="_blank" rel="noopener noreferrer">
                         <?= nav_icon('tv') ?><span class="side-nav__label">Lobby TV ↗</span>
