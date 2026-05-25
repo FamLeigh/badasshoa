@@ -646,7 +646,7 @@ function concern_status_badge(string $s): string {
             </div>
 
             <div class="field" style="position: relative;">
-                <label class="field__label" for="c-rule-search">Cite rule(s)</label>
+                <label class="field__label" for="c-rule-search">Cite rule(s) <span class="muted" style="font-weight:400;">(optional)</span></label>
                 <?php
                 $ruleTypeahead = [];
                 foreach ($rulesForPicker as $r) {
