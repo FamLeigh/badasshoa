@@ -332,12 +332,26 @@ $_isDefaultMemberView = is_viewing_as()
 </div>
 <?php endforeach; ?>
 
-<?php if ($page_layout === 'public'): ?>
+<?php
+if ($page_layout === 'public'):
+    // Custom-domain visitors (e.g. bellaircondos.com) shouldn't see the
+    // BadassHOA marketing nav (Features / Pricing / FAQ / Sign in / Get
+    // started) — those are for prospects shopping the platform, not for
+    // a community's own residents. Hide on any non-badasshoa.com host.
+    $_navHost = strtolower(preg_replace('/:\d+$/', '', (string)($_SERVER['HTTP_HOST'] ?? '')));
+    $_navHost = preg_replace('/^www\./', '', $_navHost);
+    $_isBadasshoaHost = $_navHost === ''
+        || $_navHost === 'badasshoa.com'
+        || $_navHost === 'localhost'
+        || str_starts_with($_navHost, '127.')
+        || str_ends_with($_navHost, '.badasshoa.com');
+?>
 <header class="site-nav">
     <div class="container site-nav__inner">
         <a class="brand" href="/" aria-label="BadassHOA home">
             <img src="/assets/images/logo.png" alt="BadassHOA" class="brand__logo" width="200" height="50">
         </a>
+        <?php if ($_isBadasshoaHost): ?>
         <button class="nav-toggle" type="button" aria-label="Toggle menu" aria-expanded="false">
             <span></span><span></span><span></span>
         </button>
@@ -353,6 +367,7 @@ $_isDefaultMemberView = is_viewing_as()
                 <a class="btn btn--primary" href="/signup.php">Get started</a>
             <?php endif; ?>
         </nav>
+        <?php endif; ?>
     </div>
 </header>
 <?php elseif ($page_layout === 'app' || $page_layout === 'admin'): ?>
