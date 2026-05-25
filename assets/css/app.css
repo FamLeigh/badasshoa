@@ -805,13 +805,15 @@
 .topbar-user__help {
     display: flex; align-items: center; justify-content: center;
     width: 32px; height: 32px;
-    color: var(--color-text-soft);
-    border-radius: var(--r-sm);
+    color: var(--color-orange);
+    border: 1.5px solid var(--color-orange);
+    border-radius: 50%;
     text-decoration: none;
     transition: background var(--t-fast), color var(--t-fast);
     flex-shrink: 0;
+    opacity: 0.85;
 }
-.topbar-user__help:hover { background: var(--color-surface); color: var(--color-navy); text-decoration: none; }
+.topbar-user__help:hover { background: var(--color-orange); color: #fff; opacity: 1; text-decoration: none; }
 
 /* Alerts bell */
 .topbar-alerts { position: relative; flex: 0 0 auto; }
@@ -1107,6 +1109,15 @@ html[data-nav-collapsed="1"] .side-nav__edge-toggle svg { transform: rotate(180d
 }
 .side-nav__link svg { flex: 0 0 18px; }
 .side-nav__label { min-width: 0; }
+
+.side-nav__help-link {
+    color: var(--color-orange);
+    background: rgba(240,90,40,0.10);
+}
+.side-nav__help-link:hover {
+    background: rgba(240,90,40,0.22);
+    color: var(--color-orange);
+}
 
 .side-nav__bottom {
     border-top: 1px solid var(--color-navy-700);

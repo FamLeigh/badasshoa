@@ -1,5 +1,23 @@
 [
     {
+        "id": "cl-20260525-custom-domain-pricing",
+        "at": "2026-05-25T19:30:00-04:00",
+        "type": "content",
+        "title": "Pricing page now lists the custom-domain add-on ($99/year)",
+        "description": "Associations that want to run their community on their own domain (e.g. yourassociation.com) instead of badasshoa.com/{slug}/ can add that to any plan for $99/year. We provide DNS instructions, provision the SSL certificate, and handle the routing. Currently available by request via the waitlist link on the pricing page while the routing layer is finished.",
+        "author": "Reboooot",
+        "link": "/pricing.php"
+    },
+    {
+        "id": "cl-20260525-amenity-events",
+        "at": "2026-05-25T18:00:00-04:00",
+        "type": "feature",
+        "title": "Amenity bookings now post to the community calendar — open or private",
+        "description": "When a member books an amenity (clubhouse, pool deck, BBQ area, etc.) they pick whether the gathering is 'Open to members' or a 'Private event / party'. As soon as the booking is approved (or instantly if the amenity allows auto-approval), an event is added to the community calendar so neighbors can see the space is reserved. Open events show the purpose so people can join; private events only show 'reserved — private event' so the space isn't accidentally double-booked. Denying or cancelling a booking automatically removes the event.",
+        "author": "Reboooot",
+        "link": "/dashboard/amenities.php"
+    },
+    {
         "id": "cl-20260525-resident-dashboard",
         "at": "2026-05-25T17:00:00-04:00",
         "type": "design",

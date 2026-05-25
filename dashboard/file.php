@@ -97,6 +97,15 @@ if ($type === 'document') {
     $filename = 'attraction-' . $id . '.' . pathinfo($relative, PATHINFO_EXTENSION);
     $ext      = strtolower(pathinfo($relative, PATHINFO_EXTENSION));
     $type_h   = match ($ext) { 'png' => 'image/png', 'gif' => 'image/gif', 'webp' => 'image/webp', default => 'image/jpeg' };
+} elseif ($type === 'amenity_photo') {
+    $stmt = db()->prepare('SELECT * FROM amenities WHERE id = ? AND association_id = ?');
+    $stmt->execute([$id, $assocId]);
+    $row = $stmt->fetch();
+    if (!$row || empty($row['photo_path'])) { http_response_code(404); die('Not found'); }
+    $relative = 'uploads/' . $assocId . '/' . $row['photo_path'];
+    $filename = 'amenity-' . $id . '.' . pathinfo($relative, PATHINFO_EXTENSION);
+    $ext      = strtolower(pathinfo($relative, PATHINFO_EXTENSION));
+    $type_h   = match ($ext) { 'png' => 'image/png', 'gif' => 'image/gif', 'webp' => 'image/webp', default => 'image/jpeg' };
 } elseif ($type === 'listing') {
     $stmt = db()->prepare('SELECT * FROM property_listings WHERE id = ? AND association_id = ?');
     $stmt->execute([$id, $assocId]);

@@ -116,6 +116,22 @@ require __DIR__ . '/includes/header.php';
     </div>
 </section>
 
+<section class="section section--tight">
+    <div class="container">
+        <div class="center" style="max-width: 680px; margin: 0 auto;">
+            <span class="badge">Optional add-on</span>
+            <h2 class="mt-2">Use your own domain &mdash; <span style="color:var(--color-orange);">$99/year</span></h2>
+            <p class="muted" style="font-size: var(--fs-lg);">
+                Run your community on <code>yourassociation.com</code> instead of <code>badasshoa.com/{slug}/</code>.
+                We provide DNS instructions, provision the SSL certificate, and handle the routing. Add it to any plan at any time.
+            </p>
+            <p class="muted" style="font-size: var(--fs-sm); margin-top: var(--sp-3);">
+                Available soon &mdash; <a href="mailto:sales@badasshoa.com?subject=Custom%20domain%20add-on">email us</a> to join the waitlist and we&rsquo;ll turn it on for your association as soon as it&rsquo;s live.
+            </p>
+        </div>
+    </div>
+</section>
+
 <section class="section section--alt">
     <div class="container">
         <div class="center" style="max-width: 680px; margin: 0 auto var(--sp-10);">
