@@ -457,16 +457,52 @@ function do_reset(int $sourceId, int $targetId, array $cloneOrder, array $wipeOn
 
     $counts = ['wiped' => [], 'cloned' => []];
 
+    // Tables we never touch (system / auth / global, no tenancy).
+    $systemTables = [
+        'sessions', 'password_resets', 'login_attempts', 'signups',
+        'audit_log', 'help_topics', 'statutes', 'help_topic_images',
+        'associations',
+    ];
+
     db()->beginTransaction();
     try {
-        // 2. Wipe target — clone-order children first.
+        // 2a. SCOPED wipe of child tables WITHOUT association_id. Must run
+        //     BEFORE we wipe their parents, since the WHERE-IN subquery
+        //     resolves through parent.association_id = $targetId. This is
+        //     what guarantees we never touch another association's data,
+        //     even if there's a pre-existing orphan row sitting around.
+        $allTables = db()->query(
+            "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE()"
+        )->fetchAll(PDO::FETCH_COLUMN);
+        foreach ($allTables as $t) {
+            if (has_assoc_col($t)) continue;          // handled in 2b
+            if (in_array($t, $wipeOnly, true)) continue;
+            if (in_array($t, $systemTables, true)) continue;
+            $cols = table_columns($t);
+            foreach ($cols as $c) {
+                if (!isset($fkRules[$c])) continue;
+                $parent = $fkRules[$c];
+                if (!has_assoc_col($parent)) continue;
+                $stmt = db()->prepare(
+                    "DELETE FROM `$t` WHERE `$c` IN
+                     (SELECT id FROM `$parent` WHERE association_id = ?)"
+                );
+                $stmt->execute([$targetId]);
+                if ($stmt->rowCount() > 0) $counts['wiped'][$t] = $stmt->rowCount();
+                break; // one scoping parent per child is enough
+            }
+        }
+
+        // 2b. Wipe assoc-scoped tables — every DELETE is scoped to
+        //     association_id = $targetId, so it can only touch the demo.
         foreach (array_reverse($cloneOrder) as $t) {
             if (!has_assoc_col($t)) continue;
             $stmt = db()->prepare("DELETE FROM `$t` WHERE association_id = ?");
             $stmt->execute([$targetId]);
             if ($stmt->rowCount() > 0) $counts['wiped'][$t] = $stmt->rowCount();
         }
-        // Wipe-only tables.
+
+        // 2c. Wipe-only tables. Also association_id-scoped.
         foreach ($wipeOnly as $t) {
             if (!table_exists($t)) continue;
             $cols = table_columns($t);
@@ -530,24 +566,16 @@ function do_reset(int $sourceId, int $targetId, array $cloneOrder, array $wipeOn
             if ($cloned > 0) $counts['cloned'][$t] = $cloned;
         }
 
-        // 4. Now handle child tables WITHOUT association_id. They need to be
-        //    selected via their parent FK in the now-populated idMap, then
-        //    inserted with FK columns rewritten. We discover candidates by
-        //    looking for tables that have an FK column referencing a parent
-        //    we already cloned, AND that don't have association_id.
-        $allTables = array_keys(array_flip(
-            db()->query("SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE()")
-                ->fetchAll(PDO::FETCH_COLUMN)
-        ));
+        // 4. Clone child tables WITHOUT association_id. Target rows for
+        //    these were already wiped in phase 2a via parent.association_id.
+        //    Here we select source rows via the source's parent IDs and
+        //    re-insert with FK columns rewritten through $idMap.
         foreach ($allTables as $t) {
-            if (has_assoc_col($t)) continue;                          // already cloned above
+            if (has_assoc_col($t)) continue;
             if (in_array($t, $wipeOnly, true)) continue;
-            // Skip system / auth / global tables.
-            if (in_array($t, ['sessions', 'password_resets', 'login_attempts',
-                              'signups', 'audit_log', 'help_topics', 'statutes',
-                              'help_topic_images'], true)) continue;
+            if (in_array($t, $systemTables, true)) continue;
             $cols = table_columns($t);
-            if (!in_array('id', $cols, true)) continue;               // need an id col for the map
+            if (!in_array('id', $cols, true)) continue;
 
             // Find a parent fk that's been cloned.
             $parentCol = null; $parent = null;
@@ -560,16 +588,6 @@ function do_reset(int $sourceId, int $targetId, array $cloneOrder, array $wipeOn
 
             $parentOldIds = array_keys($idMap[$parent]);
             if (!$parentOldIds) continue;
-
-            // Wipe target's rows in this child table first, then clone.
-            // For wipe, we match where parent_col references the *target*'s
-            // already-deleted parent rows — but parents are gone now, so
-            // every row in this child with parent_col IN (target's parents)
-            // is already orphaned. Safer: wipe any row whose parent_col
-            // value is no longer a valid id in $parent (orphan cleanup).
-            db()->prepare(
-                "DELETE FROM `$t` WHERE `$parentCol` NOT IN (SELECT id FROM `$parent`)"
-            )->execute();
 
             // Pull source rows.
             $in = implode(',', array_map('intval', $parentOldIds));
@@ -802,13 +820,14 @@ require __DIR__ . '/../includes/header.php';
         </div>
 
         <div style="background: var(--color-surface); border: 1px solid var(--color-border); border-left: 3px solid var(--color-warning, #c47f00); padding: var(--sp-3) var(--sp-4); border-radius: var(--r-sm); margin-top: var(--sp-4); font-size: var(--fs-sm);">
-            <strong>What this does:</strong>
+            <strong>What this does — strictly scoped to association <code>#<?= (int)$target['id'] ?></code>:</strong>
             <ul style="margin: var(--sp-2) 0 0; padding-left: var(--sp-5);">
-                <li>Deletes every row in the target association's tables above.</li>
-                <li>Re-clones each row from the source. All user first/last names are randomized; emails become <code>demo+&lt;hex&gt;@badasshoa.com</code>; phones become <code>555-01xx</code>; passwords are reset to the password below.</li>
-                <li>Physically copies <code>storage/uploads/<?= (int)$source['id'] ?>/</code> over to <code>storage/uploads/<?= (int)$target['id'] ?>/</code> so the demo's documents and photos are independent of the source.</li>
+                <li><strong>Every DELETE is filtered by <code>association_id = <?= (int)$target['id'] ?></code></strong> (or, for child tables without that column, by parent IDs whose <code>association_id = <?= (int)$target['id'] ?></code>). No row belonging to any other association is ever touched.</li>
+                <li>Re-clones each row from association <code>#<?= (int)$source['id'] ?></code>. All user first/last names are randomized; emails become <code>demo+&lt;hex&gt;@badasshoa.com</code>; phones become <code>555-01xx</code>; passwords are reset to the password below.</li>
+                <li>Physically copies <code>storage/uploads/<?= (int)$source['id'] ?>/</code> over to <code>storage/uploads/<?= (int)$target['id'] ?>/</code>. Only the target's upload directory is replaced.</li>
                 <li>Wipes <code>audit_log</code>, <code>platform_messages</code>, and <code>broadcasts</code> for the target (not cloned — too noisy and may contain real PII in bodies).</li>
                 <li>Guarantees a known demo login exists at the email below with the password below.</li>
+                <li>Target ID is gated by the <code>ALLOWED_TARGET_IDS</code> constant — currently <code>[<?= implode(',', ALLOWED_TARGET_IDS) ?>]</code>.</li>
             </ul>
         </div>
 
