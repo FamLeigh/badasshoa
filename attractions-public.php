@@ -6,15 +6,29 @@ require_once __DIR__ . '/includes/auth.php';
 $slug = trim((string)($_GET['slug'] ?? ''));
 $slug = preg_replace('/[^a-z0-9-]/', '', strtolower($slug));
 
+// Detect custom domain
+$_reqHost = strtolower(preg_replace('/:\d+$/', '', (string)($_SERVER['HTTP_HOST'] ?? '')));
+$_reqHost = preg_replace('/^www\./', '', $_reqHost);
+$_isBadasshoa = $_reqHost === 'badasshoa.com'
+    || $_reqHost === 'localhost'
+    || str_starts_with($_reqHost, '127.')
+    || str_ends_with($_reqHost, '.badasshoa.com');
+
 $assoc = null;
-if ($slug !== '') {
+if (!$_isBadasshoa && $slug === '') {
+    $stmt = db()->prepare('SELECT * FROM associations WHERE custom_domain = ? LIMIT 1');
+    $stmt->execute([$_reqHost]);
+    $assoc = $stmt->fetch() ?: null;
+} elseif ($slug !== '') {
     $stmt = db()->prepare('SELECT * FROM associations WHERE subdomain = ? LIMIT 1');
     $stmt->execute([$slug]);
     $assoc = $stmt->fetch() ?: null;
 }
 
+$_landingUrl = $slug !== '' ? '/' . $slug . '/' : '/';
+
 if (!$assoc || $assoc['status'] === 'inactive' || (int)$assoc['public_landing_enabled'] !== 1) {
-    redirect('/' . $slug);
+    redirect($slug !== '' ? '/' . $slug : '/');
 }
 
 $primary = preg_match('/^#[0-9a-f]{6}$/i', (string)$assoc['primary_color']) ? $assoc['primary_color'] : '#0f1f3d';
@@ -28,7 +42,7 @@ $stmt->execute([$aid]);
 $attractions = $stmt->fetchAll();
 
 if (!$attractions) {
-    redirect('/' . $slug . '#attractions');
+    redirect($_landingUrl . '#attractions');
 }
 
 $assocLat = isset($assoc['latitude'])  && $assoc['latitude']  !== null ? (float)$assoc['latitude']  : null;
@@ -189,7 +203,7 @@ $cssDir = __DIR__ . '/assets/css';
             <img class="attr-topbar__logo" src="/branding.php?id=<?= $aid ?>&kind=logo" alt="<?= e($assoc['name']) ?>">
         <?php endif; ?>
         <span class="attr-topbar__name"><?= e($assoc['name']) ?></span>
-        <a class="attr-topbar__back" href="/<?= e($slug) ?>">← Community page</a>
+        <a class="attr-topbar__back" href="<?= e($_landingUrl) ?>">← Community page</a>
     </div>
 </nav>
 

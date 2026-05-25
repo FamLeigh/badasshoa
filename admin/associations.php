@@ -200,6 +200,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit_as
     $color     = trim((string)($_POST['primary_color'] ?? '#0f1f3d'));
     $publicLanding = isset($_POST['public_landing_enabled']) ? 1 : 0;
     $paidGb    = max(0, (int)($_POST['storage_paid_extra_gb'] ?? 0));
+    $customDomain = strtolower(trim((string)($_POST['custom_domain'] ?? '')));
+    $customDomain = preg_replace('/^www\./', '', $customDomain);
+    $customDomain = preg_replace('/^https?:\/\//', '', $customDomain);
+    $customDomain = rtrim($customDomain, '/');
+    $customDomain = $customDomain !== '' && preg_match('/^[a-z0-9.-]+\.[a-z]{2,}$/', $customDomain) ? $customDomain : null;
 
     if (!in_array($plan, ['starter','growth','professional','enterprise'], true))              $plan = 'starter';
     if (!in_array($status, ['active','inactive','trial','gifted'], true))                     $status = 'trial';
@@ -220,17 +225,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'edit_as
         $dupe->execute([$subdomain, $aid]);
         if ($dupe->fetchColumn()) {
             $flashError = "Slug \"$subdomain\" is already taken by another association.";
-        } else {
+        } elseif ($customDomain !== null) {
+            $dupeDomain = db()->prepare('SELECT id FROM associations WHERE custom_domain = ? AND id <> ?');
+            $dupeDomain->execute([$customDomain, $aid]);
+            if ($dupeDomain->fetchColumn()) {
+                $flashError = "Custom domain \"$customDomain\" is already in use by another association.";
+            }
+        }
+        if (!$flashError) {
             db()->prepare(
                 'UPDATE associations
                  SET name = ?, subdomain = ?, address = ?, city = ?, state_region = ?, postal_code = ?, country = ?,
                      unit_count = ?, plan = ?, status = ?, primary_color = ?, public_landing_enabled = ?,
-                     storage_paid_extra_gb = ?
+                     storage_paid_extra_gb = ?, custom_domain = ?
                  WHERE id = ?'
             )->execute([
                 $name, $subdomain,
                 $address ?: null, $city ?: null, $stateReg ?: null, $postal ?: null, $country,
-                $units, $plan, $status, $color, $publicLanding, $paidGb, $aid,
+                $units, $plan, $status, $color, $publicLanding, $paidGb, $customDomain, $aid,
             ]);
             audit('association.edited', ['name' => $name, 'plan' => $plan, 'status' => $status, 'public_landing' => $publicLanding, 'paid_extra_gb' => $paidGb], $aid, 'association');
             flash('success', "Association \"$name\" updated.");
@@ -576,6 +588,18 @@ require __DIR__ . '/../includes/header.php';
                         <div class="muted" style="font-size: var(--fs-sm);">When enabled, an unauthenticated visitor at <a href="/<?= e((string)$editAssoc['subdomain']) ?>/" target="_blank" rel="noopener">/<?= e((string)$editAssoc['subdomain']) ?>/</a> sees a branded landing page with a sign-in CTA. Otherwise the URL bounces to /login.php.</div>
                     </div>
                 </label>
+            </div>
+
+            <div class="field">
+                <label class="field__label" for="ea-custom-domain">Custom domain <span class="muted" style="font-weight:400; font-size: var(--fs-xs);">(optional)</span></label>
+                <input class="input" id="ea-custom-domain" name="custom_domain"
+                       value="<?= e((string)($editAssoc['custom_domain'] ?? '')) ?>"
+                       placeholder="bellaircondos.com"
+                       pattern="[a-z0-9.\-]+"
+                       autocomplete="off">
+                <div class="field__hint">
+                    Enter the bare domain (no http:// or www.). Point the domain's A record at this server's IP, then add it as an addon domain in hPanel. Leave blank to use only the default <code>/<?= e((string)$editAssoc['subdomain']) ?>/</code> URL.
+                </div>
             </div>
 
             <fieldset style="border: 1px solid var(--color-border); border-radius: var(--r-md); padding: var(--sp-3) var(--sp-4); margin-bottom: var(--sp-4);">

@@ -15,8 +15,20 @@ ErrorDocument 404 /404.php
     RewriteEngine On
     # /tv and /tv/ → tv.php (must come before the slug catch-all)
     RewriteRule ^tv/?$ /tv.php [QSA,L]
+    # Custom domain: /attractions → public attractions page (host identifies the assoc, no slug)
+    RewriteCond %{HTTP_HOST} !^(www\.)?badasshoa\.com(:\d+)?$ [NC]
+    RewriteRule ^attractions/?$  /attractions-public.php  [QSA,L]
     # /{slug}/attractions → dedicated attractions page
     RewriteRule ^([a-z0-9][a-z0-9-]*)/attractions/?$  /attractions-public.php?slug=$1  [QSA,L]
+    # Custom domain: root (/) → landing.php (host-based assoc lookup in PHP)
+    RewriteCond %{HTTP_HOST} !^(www\.)?badasshoa\.com(:\d+)?$ [NC]
+    RewriteRule ^$  /landing.php  [QSA,L]
+    # Custom domain: non-file, non-directory paths → landing.php
+    RewriteCond %{HTTP_HOST} !^(www\.)?badasshoa\.com(:\d+)?$ [NC]
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^  /landing.php  [QSA,L]
+    # badasshoa.com slug catch-all: /{slug}/ → landing.php?slug={slug}
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_URI}      !^/(landing|branding|public-media|public-document|contact|user-avatar|newsletter-signup|newsletter-unsubscribe|unsubscribe|tv|public-attraction|public-listing)\.php

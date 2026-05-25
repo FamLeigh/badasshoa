@@ -7,11 +7,21 @@ require_once __DIR__ . '/includes/auth.php';
 $slug = trim((string)($_GET['slug'] ?? ''));
 $slug = preg_replace('/[^a-z0-9-]/', '', strtolower($slug));
 
+// Detect custom domain (host != badasshoa.com or local dev variants)
+$_reqHost = strtolower(preg_replace('/:\d+$/', '', (string)($_SERVER['HTTP_HOST'] ?? '')));
+$_reqHost = preg_replace('/^www\./', '', $_reqHost);
+$_isBadasshoa = $_reqHost === 'badasshoa.com'
+    || $_reqHost === 'localhost'
+    || str_starts_with($_reqHost, '127.')
+    || str_ends_with($_reqHost, '.badasshoa.com');
+
 $assoc = null;
-if ($slug !== '') {
-    $stmt = db()->prepare(
-        'SELECT * FROM associations WHERE subdomain = ? LIMIT 1'
-    );
+if (!$_isBadasshoa && $slug === '') {
+    $stmt = db()->prepare('SELECT * FROM associations WHERE custom_domain = ? LIMIT 1');
+    $stmt->execute([$_reqHost]);
+    $assoc = $stmt->fetch() ?: null;
+} elseif ($slug !== '') {
+    $stmt = db()->prepare('SELECT * FROM associations WHERE subdomain = ? LIMIT 1');
     $stmt->execute([$slug]);
     $assoc = $stmt->fetch() ?: null;
 }
@@ -382,7 +392,8 @@ if ($hasContact)               $_navSections['contact']      = 'Contact';
 <?php
 $_attrPreview = array_slice($attractions, 0, 4);
 $_attrMore    = count($attractions) - count($_attrPreview);
-$_attrUrl     = '/' . $slug . '/attractions';
+$_landingUrl  = $slug !== '' ? '/' . $slug . '/' : '/';
+$_attrUrl     = $slug !== '' ? '/' . $slug . '/attractions' : '/attractions';
 $ATTR_CATS_EM = ['dining'=>'🍽️','shopping'=>'🛍️','entertainment'=>'🎭','outdoor'=>'🌿','culture'=>'🎨','services'=>'🔧','other'=>'📍'];
 $_aLat = isset($assoc['latitude'])  && $assoc['latitude']  !== null ? (float)$assoc['latitude']  : null;
 $_aLon = isset($assoc['longitude']) && $assoc['longitude'] !== null ? (float)$assoc['longitude'] : null;
@@ -785,7 +796,7 @@ $_aLon = isset($assoc['longitude']) && $assoc['longitude'] !== null ? (float)$as
         <form method="post" action="/newsletter-signup.php" style="display:flex; flex-direction:column; gap: var(--sp-3); max-width: 420px; margin: 0 auto;">
             <?= csrf_field() ?>
             <input type="hidden" name="association_id" value="<?= (int)$assoc['id'] ?>">
-            <input type="hidden" name="back_url" value="/<?= e($slug) ?>/">
+            <input type="hidden" name="back_url" value="<?= e($_landingUrl) ?>">
             <!-- Honeypot -->
             <input type="text" name="website" style="display:none;" tabindex="-1" autocomplete="off">
             <input class="input" type="text" name="name" placeholder="Your name (optional)" style="background:#fff;">
