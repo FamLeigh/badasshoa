@@ -261,7 +261,16 @@ This file (CLAUDE.md) keeps an internal-only summary in the section below for cr
 
 ## Where we left off (resume here next session)
 
-**Last session ended:** 2026-05-24 (session 16) — **directory edit bug fix + admin-send password reset.**
+**Last session ended:** 2026-05-25 (session 17) — **help system overhaul: DB-backed topics + admin WYSIWYG manager.**
+
+**What got built this session (17):**
+
+- **Help system overhaul** — `help_topics` table (migration 097) replaces the hardcoded PHP function. 37 comprehensive topics covering every feature in the portal, properly role-gated (renter/owner/board_member/board_admin tiers).
+- **Admin WYSIWYG manager** — `/admin/help.php`: full CRUD with Quill rich-text editor, YouTube URL field (auto-embedded in viewer), multi-image upload with preview/delete. Topics grouped by category in the list view. "Help Topics" added to admin sidebar.
+- **Image handling** — `admin/upload-help-image.php` (super_admin only, stores to `storage/uploads/help/`). `help-image.php` at web root serves them with auth check (any logged-in session).
+- **Help viewer updated** — `dashboard/help.php` reads from DB (falls back to PHP function if table empty), renders YouTube iframes and clickable image grids below topic body.
+- **Seeder** — `migrations/seed_help_topics.php` runs via `php migrations/seed_help_topics.php`. Requires `config.php` symlink in the repo dir on prod (already done: `~/badasshoa/config.php → ~/domains/badasshoa.com/public_html/config.php`). Safe to re-run (INSERT IGNORE).
+- **Deployed to prod** — migration 097 run, seeder run, all 37 topics live.
 
 **What got built this session (16):**
 
@@ -308,7 +317,7 @@ This file (CLAUDE.md) keeps an internal-only summary in the section below for cr
 - Directory opt-out (migration 066)
 
 **Production state in DB:**
-- Migrations through **092** applied to `u535581001_badassHOA` (089–092 run 2026-05-24)
+- Migrations through **097** applied to `u535581001_badassHOA` (097 run 2026-05-25; seeder populated 37 help topics)
 - 232 FL statutes in the `statutes` table (chapters 718, 719, 720, 553)
 - 37 Bellair tenants imported (migration 070)
 - 8 rental agents + 14 unit links (migration 069)
@@ -341,7 +350,12 @@ This file (CLAUDE.md) keeps an internal-only summary in the section below for cr
 - Settings page forms each need their own `form=` section value — adding a third form without one will overwrite all columns on save.
 - `gifted` is an association `status`, not a `plan` — don't conflate the two.
 
-**Known gotchas added this session:**
+**Known gotchas added this session (17):**
+- `migrations/seed_help_topics.php` requires `config.php` at `__DIR__/../config.php`. Locally that's the project root (fine). On prod it resolves to `~/badasshoa/config.php` which is a symlink to `~/domains/badasshoa.com/public_html/config.php` (symlink created 2026-05-25 — already in place).
+- Help topic body HTML is rendered raw (not escaped). The admin/help.php WYSIWYG is super_admin only — trust is intentional, same pattern as the rule editor.
+- `shell_exec()` is disabled on Hostinger CloudLinux. Use PDO or PHP CLI for any migration work that needs DB access — do not try to invoke `mysql` CLI from PHP on the server.
+
+**Known gotchas added this session (16):**
 - Never nest a `<form>` inside another `<form>`. The "Send invite" panel was previously nested inside the main edit form — fixed in session 16. If adding more out-of-band action panels (reset, deactivate, etc.) to any edit page, keep them as sibling elements after the main `</form>`, not inside it.
 
 **Candidates for next session:**
@@ -412,6 +426,13 @@ All four share a `broadcasts` table (kind / audience / subject / body / schedule
 ---
 
 ## Changelog
+
+- **2026-05-25 (session 17) — help system overhaul.**
+    - `help_topics` DB table (migration 097). 37 topics covering every feature, role-gated.
+    - `/admin/help.php`: CRUD with Quill WYSIWYG, YouTube embed URL, multi-image upload/delete.
+    - `/help-image.php` (image server) + `admin/upload-help-image.php` (upload endpoint).
+    - `dashboard/help.php` updated to read from DB, render video + image grids.
+    - Admin nav: "Help Topics" link added. Config.php symlinked in repo dir on prod for seeder access.
 
 - **2026-05-24 (session 16) — directory edit fix + admin password reset sender.**
     - Bug fix: "Send invite" form was nested inside main edit form (invalid HTML), breaking Save and Change password. Moved invite panel outside the `<form>`.
