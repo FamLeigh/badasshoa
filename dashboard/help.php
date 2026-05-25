@@ -184,7 +184,7 @@ require __DIR__ . '/../includes/header.php';
     <aside class="help-sidebar" aria-label="Help topics">
         <div class="help-sidebar__search">
             <span style="color: var(--color-text-soft); font-size: 14px;">🔎</span>
-            <input type="search" id="help-search" placeholder="Search help…" autocomplete="off">
+            <input type="search" id="help-search" placeholder="Search help…" autocomplete="off" value="<?= e((string)($_GET['q'] ?? '')) ?>">
         </div>
         <?php foreach ($grouped as $category => $topics): ?>
         <div class="help-sidebar__group" data-group>
@@ -269,8 +269,8 @@ require __DIR__ . '/../includes/header.php';
 (function () {
     var input = document.getElementById('help-search');
     if (!input) return;
-    input.addEventListener('input', function () {
-        var q = this.value.trim().toLowerCase();
+    function runFilter() {
+        var q = input.value.trim().toLowerCase();
         document.querySelectorAll('[data-group]').forEach(function (group) {
             var links     = group.querySelectorAll('.help-sidebar__link');
             var anyVisible = false;
@@ -281,7 +281,9 @@ require __DIR__ . '/../includes/header.php';
             });
             group.style.display = anyVisible ? '' : 'none';
         });
-    });
+    }
+    input.addEventListener('input', runFilter);
+    if (input.value.trim()) runFilter();
 })();
 </script>
 

@@ -158,6 +158,10 @@ $isResidentView = in_array(viewing_role(), ['owner', 'renter']);
 $residentOpenConcerns = 0;
 $residentOpenWOs = 0;
 $residentAnnouncements = [];
+$residentEmergencyAnn = null;
+$residentRecentConcerns = [];
+$residentUnit = null;
+$residentBoardContacts = [];
 if ($isResidentView) {
     $rcStmt = db()->prepare(
         "SELECT COUNT(*) FROM concerns
@@ -178,6 +182,13 @@ if ($isResidentView) {
         );
         $rwStmt->execute([$assocId, $user['unit_number'], $assocId]);
         $residentOpenWOs = (int)$rwStmt->fetchColumn();
+
+        $ruStmt = db()->prepare(
+            'SELECT id, unit_number, type, bedrooms, baths, square_footage
+               FROM units WHERE association_id = ? AND unit_number = ? LIMIT 1'
+        );
+        $ruStmt->execute([$assocId, $user['unit_number']]);
+        $residentUnit = $ruStmt->fetch() ?: null;
     }
 
     // Audience-filtered: owners see 'all'+'owners', renters see 'all'+'renters'
@@ -192,6 +203,43 @@ if ($isResidentView) {
     );
     $raStmt->execute(array_merge([$assocId], $audList));
     $residentAnnouncements = $raStmt->fetchAll();
+
+    // Pinned emergency: the most recent emergency announcement within 30 days
+    // gets a dedicated banner at the very top of the resident view.
+    $emStmt = db()->prepare(
+        "SELECT id, title, body, published_at
+           FROM announcements
+          WHERE association_id = ? AND type = 'emergency'
+            AND audience IN ($audPh)
+            AND published_at >= (NOW() - INTERVAL 30 DAY)
+          ORDER BY published_at DESC LIMIT 1"
+    );
+    $emStmt->execute(array_merge([$assocId], $audList));
+    $residentEmergencyAnn = $emStmt->fetch() ?: null;
+
+    // Last 3 concerns this user submitted — read-only status surface so they
+    // can see what's open / resolved without being nagged.
+    $rrcStmt = db()->prepare(
+        'SELECT id, subject, status, created_at
+           FROM concerns
+          WHERE association_id = ? AND submitter_user_id = ?
+          ORDER BY created_at DESC LIMIT 3'
+    );
+    $rrcStmt->execute([$assocId, $user['id']]);
+    $residentRecentConcerns = $rrcStmt->fetchAll();
+
+    // Up to 3 board admins for the "Reach your board" footer.
+    $bcStmt = db()->prepare(
+        "SELECT id, first_name, last_name, email, phone, role
+           FROM users
+          WHERE association_id = ?
+            AND status = 'active'
+            AND role IN ('board_admin','property_manager')
+          ORDER BY (role = 'board_admin') DESC, last_name ASC, first_name ASC
+          LIMIT 3"
+    );
+    $bcStmt->execute([$assocId]);
+    $residentBoardContacts = $bcStmt->fetchAll();
 }
 
 $hour = (int)date('G');

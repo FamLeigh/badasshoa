@@ -1,5 +1,14 @@
 [
     {
+        "id": "cl-20260525-resident-dashboard",
+        "at": "2026-05-25T17:00:00-04:00",
+        "type": "design",
+        "title": "Resident dashboard rebuilt for everyday homeowners",
+        "description": "The dashboard residents land on after logging in has been redesigned for non-board users. Removed the nag-style 'Needs your attention' banner. New layout: a help search bar at the top, a pinned emergency notice (when one is active), a 'My Unit' ribbon with your unit details, four clear shortcut tiles (Feedback to the Board, Rules & Bylaws, My Documents, Marketplace), announcements with color-coded type accents and a 'New' pill for items posted in the last week, upcoming events with thumbnails, a marketplace strip, your own recent activity, and a 'Reach your board' footer with board admin names and a link to the full contacts page.",
+        "author": "Reboooot",
+        "link": "/dashboard/"
+    },
+    {
         "id": "cl-20260523-pdf-sign",
         "at": "2026-05-23T22:00:00-04:00",
         "type": "feature",
@@ -13,7 +22,7 @@
         "at": "2026-05-23T20:00:00-04:00",
         "type": "feature",
         "title": "Platform messages — BadassHOA team can push banners to association dashboards",
-        "description": "Super admins can now post messages directly to any association's dashboard from the admin panel. Messages appear as a navy banner labeled "From BadassHOA" at the top of every dashboard page. Each message can target all members or board-only roles, carry an optional expiry date, and be paused or deleted at any time.",
+        "description": "Super admins can now post messages directly to any association's dashboard from the admin panel. Messages appear as a navy banner labeled \"From BadassHOA\" at the top of every dashboard page. Each message can target all members or board-only roles, carry an optional expiry date, and be paused or deleted at any time.",
         "author": "Reboooot",
         "link": "/admin/associations.php"
     },
@@ -40,7 +49,7 @@
         "at": "2026-05-23T17:00:00-04:00",
         "type": "improvement",
         "title": "Directory: last login date visible per member row",
-        "description": "Board admins and managers can now see when each member last logged in directly from the directory. Members who have never logged in but have a real email on file show a red "Never" label alongside the invite button, making it easy to spot who still needs onboarding.",
+        "description": "Board admins and managers can now see when each member last logged in directly from the directory. Members who have never logged in but have a real email on file show a red \"Never\" label alongside the invite button, making it easy to spot who still needs onboarding.",
         "author": "Reboooot",
         "link": "/dashboard/directory.php"
     },
