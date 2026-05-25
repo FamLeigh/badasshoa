@@ -261,9 +261,20 @@ This file (CLAUDE.md) keeps an internal-only summary in the section below for cr
 
 ## Where we left off (resume here next session)
 
-**Last session ended:** 2026-05-25 (session 18) — **amenity booking finished: open/private + auto-event creation.**
+**Last session ended:** 2026-05-25 (session 18) — **amenity booking finished + admin demo-reset tool.**
 
-**What got built this session (18):**
+**Also built this session — admin demo reset (Bellair → assoc #4):**
+
+- **Show association ID on admin side.** `/admin/associations.php` now has an `ID` column in the all-associations table and the edit-association card title shows `#<id>` next to "Edit association".
+- **New `/admin/reset-demo.php`** (super_admin only). Wipes every association-scoped row in the demo target (assoc #4 — gated by `ALLOWED_TARGET_IDS = [4]` const at the top of the file) and re-clones from Bellair (#1) with all user first/last names randomized, emails replaced with `demo+<hex>@badasshoa.com`, phones replaced with `555-01xx`. Operator types a demo password on the form which is applied to every cloned user so anyone can be logged in as for demo purposes. Also copies `storage/uploads/1/` → `storage/uploads/4/` so demo files are independent of Bellair's.
+- **Architecture:** auto-discovers association-scoped tables via `information_schema.COLUMNS WHERE COLUMN_NAME = 'association_id'`, so prod-only tables (work_orders, violations, employees, concerns, marketplace_listings, vote_questions, board_notes, unit_occupants, etc.) get cloned automatically without a hardcoded manifest. FK rewrites use a global `$FK_RULES` dictionary keyed by column name (`user_id` → users, `meeting_id` → board_meetings, etc.) — any future table that follows the project's column-naming convention picks up FK remapping for free. Tables without `association_id` (committee_members, resolution_votes) are caught in a second pass via parent FK + idMap.
+- **Safety rails:** target ID must be in `ALLOWED_TARGET_IDS`, super_admin-only via `_bootstrap.php`, confirm-by-typing target slug, CSRF token, single DB transaction with rollback on any error, file copy staged in `storage/uploads/4.new/` and only swapped in on commit. Audit-logged as `demo.reset` with row counts.
+- **Wiped-but-not-cloned tables** (too noisy / may contain real PII in bodies): `audit_log`, `platform_messages`, `broadcasts`, `broadcast_attachments`, `login_attempts`.
+- **To deploy:** `bash push.sh`. No new migration. Reset is opt-in via the "Reset demo from Bellair →" button that appears on the edit page for any association in `ALLOWED_TARGET_IDS`.
+- **Local testing limited** — local DB has only assoc #1 + #3, no #4, so the GET confirm screen 404s locally. Validated via `php -l` and code review. First real test happens on prod after deploy; recommend running it once with a throwaway demo password to confirm row counts before relying on the output.
+- **Known cosmetic limitation:** signed PDF physical files have the original signer's name baked into the rendered signature image. The DB row is scrubbed (signer_ip / sign_token nulled), the FK points at a renamed demo user, but the rendered PDF still shows the original name visually. Acceptable for a demo — flag if true scrub of signed PDFs ever becomes required.
+
+**What got built this session (18 — amenity booking):**
 
 - **Amenity booking → calendar integration.** Existing amenity booking (committed d819f25) only put requests in front of the board; it didn't tell the rest of the community the space was reserved. Finished it:
     - **`event_kind` ENUM('open','private') on `amenity_bookings`** (migration 099, also adds `event_id INT UNSIGNED NULL` + index). Defaults to `private` (safer fallback for the 0 existing rows).

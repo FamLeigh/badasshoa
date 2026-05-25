@@ -488,8 +488,14 @@ require __DIR__ . '/../includes/header.php';
     <?php if ($editAssoc): ?>
     <div class="card card--padded" style="margin: var(--sp-6) 0;">
         <div class="card__head">
-            <h3 class="card__title">Edit association</h3>
+            <h3 class="card__title">Edit association <code class="muted" style="font-weight:400; font-size: var(--fs-base);">#<?= (int)$editAssoc['id'] ?></code></h3>
             <div class="row" style="gap: var(--sp-3); align-items: center;">
+                <?php if (in_array((int)$editAssoc['id'], [4], true)): ?>
+                    <a class="btn btn--danger-ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);"
+                       href="/admin/reset-demo.php?source=1&target=<?= (int)$editAssoc['id'] ?>">
+                        Reset demo from Bellair →
+                    </a>
+                <?php endif; ?>
                 <a class="btn btn--ghost" style="padding: 0.4rem 0.75rem; font-size: var(--fs-xs);"
                    href="/admin/users.php?action=new&association_id=<?= (int)$editAssoc['id'] ?>">
                     + Invite a user to this association
@@ -779,10 +785,11 @@ require __DIR__ . '/../includes/header.php';
     <?php else: ?>
     <div style="overflow-x:auto;">
     <table class="table">
-        <thead><tr><th>Name</th><th>Slug</th><th>Units</th><th>Users</th><th>Plan</th><th>Status</th><th>Created</th><th style="text-align:right;">Actions</th></tr></thead>
+        <thead><tr><th>ID</th><th>Name</th><th>Slug</th><th>Units</th><th>Users</th><th>Plan</th><th>Status</th><th>Created</th><th style="text-align:right;">Actions</th></tr></thead>
         <tbody>
         <?php foreach ($assocs as $a): ?>
             <tr>
+                <td><code class="muted">#<?= (int)$a['id'] ?></code></td>
                 <td>
                     <strong><?= e((string)$a['name']) ?></strong>
                     <?php if ($a['address']): ?>
