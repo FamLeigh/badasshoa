@@ -515,9 +515,14 @@ function do_reset(int $sourceId, int $targetId, array $cloneOrder, array $wipeOn
 
         // 3. Clone source rows into target. Build $idMap[table][oldId]=newId
         //    incrementally so child tables can rewrite FKs through it.
+        //    Skip WIPE_ONLY tables — those are wiped from target but never
+        //    cloned (cloning them would leave NOT NULL FK columns dangling
+        //    when their parents weren't in idMap, e.g. broadcast_attachments
+        //    pointing at a broadcast_id with no entry in idMap['broadcasts']).
         $idMap = [];
         foreach ($cloneOrder as $t) {
             if (!has_assoc_col($t)) continue;
+            if (in_array($t, $wipeOnly, true)) continue;
             $cols = table_columns($t);
             $stmt = db()->prepare("SELECT * FROM `$t` WHERE association_id = ?");
             $stmt->execute([$sourceId]);
