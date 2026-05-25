@@ -224,6 +224,11 @@ function login_user(array $user): void
     $_SESSION['role']           = $user['role'];
     $_SESSION['email']          = $user['email'];
     $_SESSION['name']           = trim(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? ''));
+    // Board members are homeowners first — default them to member view on login.
+    // They can switch to board view via the topbar toggle.
+    if (in_array($user['role'], ['board_admin', 'board_member'], true)) {
+        $_SESSION['view_as_role'] = 'owner';
+    }
     db()->prepare('UPDATE users SET last_login_at = NOW() WHERE id = ?')->execute([$user['id']]);
 }
 

@@ -264,11 +264,19 @@ if ($_envProd && $_mailDriver === 'log' && ($_SESSION['role'] ?? '') === 'super_
 </div>
 <?php endif; ?>
 
-<?php if (is_viewing_as()): ?>
+<?php
+// Board members who land in their default member view (view_as_role=owner) don't
+// need the generic "manage controls hidden" banner — the topbar toggle is enough.
+// Keep the banner for PM/super_admin who manually chose a view-as mode.
+$_isDefaultMemberView = is_viewing_as()
+    && ($_SESSION['view_as_role'] ?? '') === 'owner'
+    && in_array(($_SESSION['role'] ?? ''), ['board_admin', 'board_member'], true);
+?>
+<?php if (is_viewing_as() && !$_isDefaultMemberView): ?>
 <div class="view-as-banner" role="status">
     <div class="container row row--between" style="gap: var(--sp-3); flex-wrap: wrap; align-items: center;">
         <div>
-            <strong>👁 Viewing as <?= e($_SESSION['view_as_role'] === 'owner' ? 'an owner' : 'a renter') ?></strong>
+            <strong>👁 Viewing as <?= e(($_SESSION['view_as_role'] ?? '') === 'owner' ? 'an owner' : 'a renter') ?></strong>
             <span style="opacity: 0.85; font-size: var(--fs-sm);">
                 ·  manage controls hidden ·  your real role is <?= e(str_replace('_', ' ', (string)($_SESSION['role'] ?? ''))) ?>
             </span>
@@ -514,10 +522,36 @@ if ($page_layout === 'app' && isset($association) && $association):
     <?php endif; ?>
 
     <div class="topbar-user">
-        <?php if (role_can_manage((string)($_SESSION['role'] ?? '')) && !is_viewing_as()): ?>
+        <?php
+        $_tbRealRole = (string)($_SESSION['role'] ?? '');
+        $_tbBack     = e((string)($_SERVER['REQUEST_URI'] ?? '/dashboard/'));
+        if (in_array($_tbRealRole, ['board_admin', 'board_member'], true)):
+            if (is_viewing_as()): // currently in member view — offer board view
+        ?>
+        <form class="topbar-mode-switch" method="post" action="/dashboard/view-as.php" style="margin:0;display:flex;align-items:center;gap:var(--sp-2);">
+            <?= csrf_field() ?>
+            <input type="hidden" name="role" value="exit">
+            <input type="hidden" name="back" value="<?= $_tbBack ?>">
+            <span class="topbar-view-as__label" style="font-size:var(--fs-sm);opacity:.7;">Member view</span>
+            <button class="btn btn--sm btn--primary" type="submit" title="Switch to board admin view">
+                Board view →
+            </button>
+        </form>
+        <?php   else: // currently in board view — offer member view ?>
+        <form class="topbar-mode-switch" method="post" action="/dashboard/view-as.php" style="margin:0;display:flex;align-items:center;gap:var(--sp-2);">
+            <?= csrf_field() ?>
+            <input type="hidden" name="back" value="<?= $_tbBack ?>">
+            <span class="topbar-view-as__label" style="font-size:var(--fs-sm);opacity:.7;">Board view</span>
+            <button class="btn btn--sm btn--ghost" type="submit" name="role" value="owner" title="Switch to member view">
+                ← Member view
+            </button>
+        </form>
+        <?php   endif;
+        elseif (role_can_manage($_tbRealRole) && !is_viewing_as()): // PM / super_admin
+        ?>
         <form class="topbar-view-as" method="post" action="/dashboard/view-as.php">
             <?= csrf_field() ?>
-            <input type="hidden" name="back" value="<?= e((string)($_SERVER['REQUEST_URI'] ?? '/dashboard/')) ?>">
+            <input type="hidden" name="back" value="<?= $_tbBack ?>">
             <span class="topbar-view-as__label">View as</span>
             <button class="topbar-view-as__btn" type="submit" name="role" value="owner">Owner</button>
             <button class="topbar-view-as__btn" type="submit" name="role" value="renter">Renter</button>
