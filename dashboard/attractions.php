@@ -268,8 +268,27 @@ require_once __DIR__ . '/../includes/header.php';
 <?php endif; ?>
 
 <?php if ($attractions): ?>
+
+<?php
+// Build list of categories that actually exist in this association's attractions
+$_usedCats = [];
+foreach ($attractions as $_a) { $_usedCats[$_a['category']] = true; }
+?>
+<div style="margin-bottom: var(--sp-3); display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap;">
+    <input type="search" id="attr-search" class="input" placeholder="Search name or address…"
+           style="max-width: 260px; font-size: var(--fs-sm);"
+           oninput="filterAttrTable()">
+    <div style="display: flex; gap: var(--sp-2); flex-wrap: wrap;" id="attr-cat-btns">
+        <button class="btn btn--xs btn--primary" data-cat="all" onclick="setAttrCat(this,'all')">All <span id="attr-count">(<?= count($attractions) ?>)</span></button>
+        <?php foreach ($CATEGORIES as $catKey => $catLabel):
+            if (!isset($_usedCats[$catKey])) continue; ?>
+            <button class="btn btn--xs btn--ghost" data-cat="<?= e($catKey) ?>" onclick="setAttrCat(this,'<?= e($catKey) ?>')"><?= e($catLabel) ?></button>
+        <?php endforeach; ?>
+    </div>
+</div>
+
 <div class="card">
-    <table class="table">
+    <table class="table" id="attr-table">
         <thead>
             <tr>
                 <th style="width:64px;"></th>
@@ -281,6 +300,9 @@ require_once __DIR__ . '/../includes/header.php';
             </tr>
         </thead>
         <tbody>
+        <tr id="attr-no-results" style="display:none;">
+            <td colspan="6" style="text-align:center; padding: var(--sp-8); color: var(--color-text-muted);">No attractions match this filter.</td>
+        </tr>
         <?php foreach ($attractions as $a): ?>
             <?php
             $distLabel = '';
@@ -295,7 +317,7 @@ require_once __DIR__ . '/../includes/header.php';
                 $mapUrl = 'https://maps.google.com/?q=' . rawurlencode((string)$a['address']);
             }
             ?>
-            <tr>
+            <tr data-cat="<?= e($a['category']) ?>" data-name="<?= e(strtolower((string)$a['name'] . ' ' . (string)$a['address'])) ?>">
                 <td style="padding: var(--sp-2);">
                     <?php if (!empty($a['photo_path'])): ?>
                         <img src="/dashboard/file.php?type=attraction&id=<?= (int)$a['id'] ?>" alt=""
@@ -371,5 +393,33 @@ require_once __DIR__ . '/../includes/header.php';
 <?php endif; ?>
 
 </div><?php /* /container */ ?>
+
+<script>
+var _attrCat = 'all';
+
+function setAttrCat(btn, cat) {
+    _attrCat = cat;
+    document.querySelectorAll('#attr-cat-btns button').forEach(function(b) {
+        b.classList.toggle('btn--primary', b.dataset.cat === cat);
+        b.classList.toggle('btn--ghost',   b.dataset.cat !== cat);
+    });
+    filterAttrTable();
+}
+
+function filterAttrTable() {
+    var q   = (document.getElementById('attr-search').value || '').toLowerCase().trim();
+    var rows = document.querySelectorAll('#attr-table tbody tr[data-cat]');
+    var vis  = 0;
+    rows.forEach(function(row) {
+        var catOk  = _attrCat === 'all' || row.dataset.cat === _attrCat;
+        var nameOk = q === '' || row.dataset.name.indexOf(q) !== -1;
+        var show   = catOk && nameOk;
+        row.style.display = show ? '' : 'none';
+        if (show) vis++;
+    });
+    document.getElementById('attr-no-results').style.display = vis === 0 ? '' : 'none';
+    document.getElementById('attr-count').textContent = '(' + vis + ')';
+}
+</script>
 
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
