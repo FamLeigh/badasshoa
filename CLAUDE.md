@@ -261,7 +261,36 @@ This file (CLAUDE.md) keeps an internal-only summary in the section below for cr
 
 ## Where we left off (resume here next session)
 
-**Last session ended:** 2026-05-25 (session 18) — **amenity booking finished + admin demo-reset tool.**
+**Last session ended:** 2026-05-25 (session 19) — **custom-domain branded login, demo reset tool, DNS instructions email, dashboard polish, marketing-site features grid refresh.**
+
+**What got built this session (19 — after the amenity-booking commit):**
+
+- **Reset Demo tool** (`/admin/reset-demo.php`) — super_admin-only, gated by `ALLOWED_TARGET_IDS = [2]` const. Auto-discovers association-scoped tables via `information_schema`, uses a global `$FK_RULES` column-name dictionary for FK remapping. Multi-pass child-table cloning so chains like `votes → vote_questions → vote_options` resolve regardless of `information_schema` ordering. Per-table readiness check: ALL of a child's FK columns must have their parents in `$idMap` before INSERT, so NOT NULL columns (e.g. `vote_responses.question_id`) never get NULLed mid-clone. Composite-key junction tables (`vote_participants`) clone fine — they just don't contribute to idMap. Wipes BUT does NOT clone `WIPE_ONLY` tables (`broadcasts`, `broadcast_attachments`, `broadcast_recipients`, `platform_messages`, `audit_log`, `login_attempts`) — too noisy + carry real PII. **Preserves the demo's own branding** across resets (`branding/` subdir is excluded from the file copy then layered back over the staging dir before swap). Strictly scoped: every DELETE is parameterized by `$targetId` or a parent subquery scoped by `association_id = $targetId` — no codepath can reach another association's rows. Confirm-by-typing-slug + case-insensitive forgiving slug match with live ✓/✗ feedback. Audit-logged as `demo.reset`.
+- **DNS Instructions email + preview** (`/admin/dns-instructions.php?id=<assoc>`) — super_admin-only. Renders a board-friendly HTML email with the two A records to add (`@` and `www` → `77.37.59.82`) plus step-by-step for GoDaddy, Squarespace, Hover, Hostinger. Preview lives in a sandboxed iframe; plain-text fallback in a `<details>`. Pre-checked recipient list is all active `board_admin` users (placeholders excluded). Operator can uncheck any and add extra emails. `send_mail()` (HTML + text) per recipient, failures collected, audit-logged as `dns.instructions_sent`. Linked from the assoc edit page under the Custom Domain field when one is set.
+- **Custom-domain branded login** (`login.php`) — when host is not `badasshoa.com`/`localhost`/`*.badasshoa.com`, look up `associations.custom_domain` and brand the page. Hero image = full-page background with navy gradient overlay; association logo above the sign-in card; H1 = "Sign in to <name>"; "← Back to <name>" link below the form. Falls back to the generic look on any unmatched host.
+- **Custom-domain nav cleanup** — public-layout header hides `Features / Pricing / FAQ / Sign in / Get started` on non-badasshoa.com hosts. Logo still renders. `landing.php` and `footer.php` "Powered by BadassHOA" now point to absolute `https://badasshoa.com` (was a relative `/` which on a custom domain pointed back at itself) — opens in new tab so visitors stay on the customer's portal.
+- **3-way view-as switcher** at the top of the left sidebar (Board / Member / Renter) for anyone with manage capability. Old 2-mode topbar toggle removed. Active state highlights the current viewing role.
+- **Help in main nav** — `Help` link added to the Resources / My HOA / Reference group depending on role. Bottom-pinned Help link rescued from the invisible scroll-hint button that was swallowing its clicks (root cause was duplicated `margin-top` in the inline style plus `pointer-events: none` not set on the hint when invisible — fixed both).
+- **Global search covers help topics** — `find.php` now searches `help_topics` table (role-gated by `min_role`). The dedicated help search bar on the resident dashboard removed.
+- **Unit ribbon: real occupants + monthly HOA** — `My Unit` block lists owners + tenants from `unit_occupants` joined with `users` (instead of just the logged-in user's `is_owner` flag), plus `units.annual_hoa_assessment / 12` as a `$X/mo HOA` line.
+- **Settings: hero banner upload now actually saves** — the file was uploading correctly but the DB column update was scoped to `section=profile` while the field lives in `section=content`. Moved the `hero_image_path` UPDATE into the content branch.
+- **Settings: landing helper text mentions the custom domain when set** — "What residents see at badasshoa.com/demo/ **or badassdemo.com**".
+- **Show association ID on admin side** — `#<id>` shown in the associations list and in the edit-page heading.
+- **Community Directory rename** — sidebar nav entry was "Owners / Renters" → now "Community Directory". Page title + H1 match.
+- **Home-page hero video** swapped to `badasshoa_hero_2026b.mp4` (17.6 MB).
+- **Marketing features grid on `index.php`** refreshed — added Board Meetings & Minutes, Voting & Ballots, Sign Any PDF, Email Broadcasts, Amenity Booking, Your Own Domain to the main grid; added Lobby TV, Marketplace, Property Listings, Area Attractions, Newsletter Signup, Violations Workflow, In-App Help, Florida Statutes to the compact strip.
+
+**Custom-domain prod setup done:**
+- `bellaircondos.com` parked on the Hostinger account → renders Bellair's landing. SSL provisioned. Branded login at `bellaircondos.com/login.php` ✓.
+- `badassdemo.com` similarly parked → renders the demo association.
+- `associations.custom_domain` column already wired in `landing.php` host lookup (commit precedes this session). `.htaccess` already routes non-badasshoa.com hosts to `landing.php` for `/` and for any non-file path.
+
+**Internal notes / gotchas added this session:**
+- Hostinger LiteSpeed returns 403 for any hostname that isn't on the account, even when DNS resolves correctly. Adding a custom domain requires **parking it on the existing hosting plan** (NOT "addon domain" — that creates an empty doc root). hPanel's domain-portfolio UI uses different wording across plans ("Connect to existing website" / "Park" / "Alias").
+- `content/changelog.json` is excluded from `push.sh` per CLAUDE.md gotcha. To bridge today's entries to prod I `scp`'d the file directly. The repo copy and prod copy can drift if board uses `/admin/changelog.php` to add entries on prod — always check prod's top entry before bridging.
+- The demo's `logo_path` was cleared on prod and the Bellair-cloned logo files removed from `storage/uploads/2/branding/`. Reset-demo now preserves whatever logo/hero is currently on the demo (see Reset Demo tool bullet above).
+
+**Previously this session (18 — amenity booking commit `d819f25` and follow-ups):**
 
 **Also built this session — admin demo reset (Bellair #1 → Badass Demo Association #2):**
 
@@ -453,6 +482,24 @@ All four share a `broadcasts` table (kind / audience / subject / body / schedule
 ---
 
 ## Changelog
+
+- **2026-05-25 (session 19) — custom-domain branded login, demo reset tool, DNS instructions email, dashboard polish, marketing grid refresh.**
+    - `/admin/reset-demo.php`: gated by `ALLOWED_TARGET_IDS = [2]`, auto-discovers assoc-scoped tables, multi-pass child-table cloning with per-table FK-readiness check, PII-scrubs all users (random names, `demo+<hex>@badasshoa.com`, `555-01xx` phones, bcrypt of operator-supplied password). Preserves the demo's own `branding/` across resets. Strictly scoped DELETEs.
+    - `/admin/dns-instructions.php`: super-admin email preview + send for custom-domain DNS setup. GoDaddy / Squarespace / Hover / Hostinger walkthroughs in a sandboxed iframe. Pre-checked recipients = active board_admins of the assoc.
+    - `login.php` brands the page (hero background, logo, "Sign in to <name>") when host matches `associations.custom_domain`.
+    - Public-layout header hides BadassHOA marketing nav (Features / Pricing / FAQ / Sign in / Get started) on non-badasshoa.com hosts.
+    - "Powered by BadassHOA" links to absolute `https://badasshoa.com` (was relative `/`).
+    - 3-way view-as switcher (Board / Member / Renter) at top of left sidebar replaces the old topbar 2-mode toggle. Visible to anyone with manage capability.
+    - Help link added to main sidebar nav (Resources / My HOA / Reference depending on role). Bottom-pinned Help click-target rescued from invisible scroll-hint overlay.
+    - `find.php` now searches `help_topics` (role-gated by min_role). Dashboard help-search bar removed.
+    - Unit ribbon shows actual owners + tenants from `unit_occupants` plus monthly HOA (`annual_hoa_assessment / 12`).
+    - Hero banner upload save bug fixed (was uploading but not writing the DB column — section=content vs section=profile).
+    - Settings landing helper text now mentions the custom domain ("…see at badasshoa.com/demo/ or badassdemo.com.").
+    - Admin associations list + edit page now show `#<id>`. "Reset demo from Bellair →" button on assoc-#2 edit page when in `ALLOWED_TARGET_IDS`.
+    - Directory renamed to "Community Directory" (sidebar + page title + H1).
+    - Home-page hero video swapped to `badasshoa_hero_2026b.mp4` (17.6 MB, baked into repo).
+    - Marketing features grid on `index.php` refreshed — added 6 marquee cards (Board Meetings & Minutes, Voting & Ballots, Sign Any PDF, Email Broadcasts, Amenity Booking, Your Own Domain) and 8 compact cards (Lobby TV, Marketplace, Property Listings, Area Attractions, Newsletter Signup, Violations Workflow, In-App Help, Florida Statutes).
+    - Custom domains parked on prod: `bellaircondos.com` and `badassdemo.com` both routing to the right associations with auto-provisioned SSL.
 
 - **2026-05-25 (session 18) — amenity booking → community-calendar integration.**
     - Migration 099: `event_kind` ENUM('open','private') + `event_id` (nullable, indexed) on `amenity_bookings`. Additive only.

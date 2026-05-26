@@ -94,6 +94,42 @@ require __DIR__ . '/includes/header.php';
             </div>
 
             <div class="feature">
+                <div class="feature__icon" aria-hidden="true">📋</div>
+                <h3>Board Meetings &amp; Minutes</h3>
+                <p>Build an agenda from proposed items, run the meeting from the screen, record motions and resolutions with per-member yes / no / abstain votes, and print a Florida §718-compliant notice + minutes in one click.</p>
+            </div>
+
+            <div class="feature">
+                <div class="feature__icon" aria-hidden="true">🗳</div>
+                <h3>Voting &amp; Ballots</h3>
+                <p>Run elections, bylaw amendments, and budget approvals. Owners and renters cast ballots from the dashboard; results reveal after the deadline or as soon as quorum is met. Anonymous or attributed, your choice.</p>
+            </div>
+
+            <div class="feature">
+                <div class="feature__icon" aria-hidden="true">✒️</div>
+                <h3>Sign Any PDF</h3>
+                <p>Drop a contract, addendum, or notice into Documents and members sign it directly in the browser &mdash; place the signature, save the PDF. Full audit certificate for every signed copy. Required-signer tracking with one-click email nudges.</p>
+            </div>
+
+            <div class="feature">
+                <div class="feature__icon" aria-hidden="true">📧</div>
+                <h3>Email Broadcasts</h3>
+                <p>Compose, audience-target, and send mass emails to your community with PDF attachments. Track who got it, who bounced, who unsubscribed &mdash; per-recipient delivery in the activity log.</p>
+            </div>
+
+            <div class="feature">
+                <div class="feature__icon" aria-hidden="true">🎉</div>
+                <h3>Amenity Booking</h3>
+                <p>Members reserve the clubhouse, pool deck, BBQ pavilion, or any common space the board defines. Open events show on the community calendar so neighbors can join; private events keep the occasion hidden but still reserve the space.</p>
+            </div>
+
+            <div class="feature">
+                <div class="feature__icon" aria-hidden="true">🌍</div>
+                <h3>Your Own Domain</h3>
+                <p>Run your community on <code>yourassociation.com</code> instead of <code>badasshoa.com/{slug}/</code>. Branded sign-in page with your logo and hero image, your domain in the address bar. $99/year add-on with DNS instructions we email straight to the board.</p>
+            </div>
+
+            <div class="feature">
                 <div class="feature__icon" aria-hidden="true">🤝</div>
                 <h3>Committees</h3>
                 <p>Standing committees with chairs and members. Owners self-join from a card, board assigns directly. Print a one-page flyer to recruit. Description editor with inline formatting.</p>
@@ -167,6 +203,38 @@ require __DIR__ . '/includes/header.php';
                 <div class="feature feature--compact">
                     <strong>🖨 Print everything</strong>
                     <p class="muted" style="font-size: var(--fs-sm); margin: var(--sp-1) 0 0;">Letterhead + footer on every printable view: rules, contacts, parking, events, ARC decisions.</p>
+                </div>
+                <div class="feature feature--compact">
+                    <strong>📺 Lobby TV</strong>
+                    <p class="muted" style="font-size: var(--fs-sm); margin: var(--sp-1) 0 0;">A bookmarkable URL that turns any TV into a live community display &mdash; announcements, events, marketplace. Light or dark, columns or ticker, Tizen-compatible.</p>
+                </div>
+                <div class="feature feature--compact">
+                    <strong>🛒 Marketplace</strong>
+                    <p class="muted" style="font-size: var(--fs-sm); margin: var(--sp-1) 0 0;">Members buy and sell within the community &mdash; furniture, baby gear, kayaks. Photos, price, contact in one card.</p>
+                </div>
+                <div class="feature feature--compact">
+                    <strong>🏷 Property Listings</strong>
+                    <p class="muted" style="font-size: var(--fs-sm); margin: var(--sp-1) 0 0;">Units for sale or rent surface on the public landing. Beds, baths, square footage, photos, contact &mdash; ready for prospects to browse.</p>
+                </div>
+                <div class="feature feature--compact">
+                    <strong>🏙 Area Attractions</strong>
+                    <p class="muted" style="font-size: var(--fs-sm); margin: var(--sp-1) 0 0;">Dining, shopping, outdoor, culture &mdash; a curated &ldquo;what&rsquo;s nearby&rdquo; section the board controls. Great for selling the neighborhood.</p>
+                </div>
+                <div class="feature feature--compact">
+                    <strong>📰 Newsletter Signup</strong>
+                    <p class="muted" style="font-size: var(--fs-sm); margin: var(--sp-1) 0 0;">Prospective owners and neighbors subscribe from your public landing. One-click unsubscribe. Build the list before they move in.</p>
+                </div>
+                <div class="feature feature--compact">
+                    <strong>📝 Violations Workflow</strong>
+                    <p class="muted" style="font-size: var(--fs-sm); margin: var(--sp-1) 0 0;">Formal violation tracking with print-ready notice letters. Open / sent / resolved status with photos and rule citations.</p>
+                </div>
+                <div class="feature feature--compact">
+                    <strong>📚 In-App Help</strong>
+                    <p class="muted" style="font-size: var(--fs-sm); margin: var(--sp-1) 0 0;">37 role-gated help topics with images and embedded videos. Searchable from the same global search bar that finds everything else.</p>
+                </div>
+                <div class="feature feature--compact">
+                    <strong>⚖️ Florida Statutes</strong>
+                    <p class="muted" style="font-size: var(--fs-sm); margin: var(--sp-1) 0 0;">All 232 sections of FL Ch. 718, 719, 720, and 553 indexed and full-text searchable from inside the portal. No more PDF hunting.</p>
                 </div>
             </div>
         </div>

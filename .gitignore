@@ -14,3 +14,6 @@
 /.env.local
 /config.php
 /config.local.php
+
+# Camtasia project bundles next to source mp4 hero videos
+/assets/videos/*.cmproj/
