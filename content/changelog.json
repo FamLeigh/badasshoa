@@ -1,5 +1,50 @@
 [
     {
+        "id": "cl-20260525-branded-login",
+        "at": "2026-05-25T22:30:00-04:00",
+        "type": "feature",
+        "title": "Custom-domain sign-in page now wears your community's branding",
+        "description": "Associations on a custom domain (e.g. bellaircondos.com) now get a fully branded sign-in page. Visitors who go to bellaircondos.com/login.php see the community's logo above the sign-in card and its hero image as the full-page background, with a navy gradient overlay for legibility. The page title and headline read 'Sign in to <association name>'. A '← Back to <association>' link below the form returns to the community's landing. The BadassHOA marketing nav (Features / Pricing / FAQ / Get started) is hidden on custom-domain visits — only the 'Powered by BadassHOA' credit in the footer links back to the platform.",
+        "author": "Reboooot",
+        "link": "/login.php"
+    },
+    {
+        "id": "cl-20260525-community-directory",
+        "at": "2026-05-25T22:00:00-04:00",
+        "type": "content",
+        "title": "\"Owners / Renters\" renamed to \"Community Directory\"",
+        "description": "The sidebar entry, page title, and heading have all been renamed from \"Directory\" / \"Owners / Renters\" to \"Community Directory\" — clearer about who's listed and consistent with how boards refer to it.",
+        "author": "Reboooot",
+        "link": "/dashboard/directory.php"
+    },
+    {
+        "id": "cl-20260525-dashboard-polish",
+        "at": "2026-05-25T21:45:00-04:00",
+        "type": "improvement",
+        "title": "Dashboard polish — unit ribbon, view switcher, help in global search",
+        "description": "Three connected upgrades to the resident dashboard. (1) The My Unit ribbon now lists the actual owners and tenants on the unit (pulled from the occupants roster) instead of just the logged-in user's role, plus the monthly HOA assessment derived from the unit's annual fee. (2) Board admins, board members, property managers, and super admins get a 3-way Board / Member / Renter view-as switcher pinned to the top of the left sidebar — easier to preview what each role sees without leaving the page. (3) The dedicated help search bar on the dashboard has been replaced by integrating help topics into the global 'Search everything' bar in the top right, and a Help link has been added to the main sidebar nav so it's always one click away.",
+        "author": "Reboooot",
+        "link": "/dashboard/"
+    },
+    {
+        "id": "cl-20260525-hero-save-fix",
+        "at": "2026-05-25T21:30:00-04:00",
+        "type": "fix",
+        "title": "Settings — hero banner upload now actually saves",
+        "description": "Uploading a hero banner image via Settings was silently failing — the file got written to disk but the database column was never updated, so the page reloaded without the banner. The form submission now writes the new hero path properly.",
+        "author": "Reboooot",
+        "link": "/dashboard/settings.php"
+    },
+    {
+        "id": "cl-20260525-help-link-fix",
+        "at": "2026-05-25T21:15:00-04:00",
+        "type": "fix",
+        "title": "Help link in the sidebar is clickable again",
+        "description": "The 'Help' link at the bottom of the sidebar (and the admin Sign-out link too) was being silently swallowed by an invisible scroll-hint overlay sitting on top of it. Clicks now register correctly whether the hint is visible or not.",
+        "author": "Reboooot",
+        "link": "/dashboard/help.php"
+    },
+    {
         "id": "cl-20260525-pricing-simplified",
         "at": "2026-05-25T20:30:00-04:00",
         "type": "content",
